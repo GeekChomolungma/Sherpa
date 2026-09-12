@@ -1,0 +1,19 @@
+金融面板数据的本质是一个 三维张量（3D Tensor）：Time（时间轴） × Asset/Symbol（资产标的轴） × Feature/Field（特征字段：OHLCV等）
+
+一、 三种主流内存数据结构形态形态内存表现形式适用场景优势与劣势
+1. 字典矩阵流（Dict of 2D DataFrames）{'close': df_close, 'open': df_open, ...}每个 DataFrame 行是 Time，列是 Symbol。世坤 101 等截面 Alpha 因子批量回测（极力推荐）优：完美契合公式向量化。比如算截面 rank 只需要 df_close.pct_change().rank(axis=1)。劣：如果只有单币种策略，这种做法显得冗余。
+2. 展平长表（Long-form DataFrame）复合索引（start_time, symbol）作为 MultiIndex，后接 open, high, low, close, volume 列。ClickHouse 批量读出后初步载入，或使用 Polars 做并行计算优：与 ClickHouse 的扁平行记录天然对齐；Polars 处理几千万行长表速度极快。  劣：做复杂的跨资产截面算子（如截面中性化、行业暴露对比）时需要频繁 pivot，有转换开销。
+3. 3D 张量（NumPy 3D Array / PyTorch Tensor）形状为 (n_time, n_symbols, n_features) 的纯连续内存数组。高频截面打分、量化深度学习/ML 因子计算优：零对象开销，SIMD 矢量计算性能天花板。劣：丢失了字符串 symbol 和 Datetime 的原生索引，需要业务外壳维护 index 映射字典。
+
+
+你的系统既有 历史全量回测，又有 1m / 实时 Redis 滑窗消费，建议定义一个轻量的数据容器类（如 BarPanel 或 MarketFrame），统一对指标库暴露
+
+1. 批量/回测场景（对齐 ClickHouse）输入：从 ClickHouse 查出的原始长表 DataFrame。  组织方式：内部解构成 Dict[str, DataFrame]。Python# 容器内部维护：
+panel.open   # shape: (T, N)，行=start_time, 列=symbols
+panel.high   # shape: (T, N)
+panel.low    # shape: (T, N)
+panel.close  # shape: (T, N)
+panel.volume # shape: (T, N)
+计算收益：写 Alpha 101 公式时极其符合数学直觉。例如 Alpha 6（ts_corr(open, volume, 10)），直接将 panel.open 与 panel.volume 传入算子即可并发计算所有标的。
+
+2. 实时滑窗场景（对齐 Redis kline:SYM:1m 的 200 根）输入：从 Redis 读回的全市场最近 200 根紧凑数组。  组织方式：直接转成形状为 (200, N_symbols, 9) 的 NumPy 三维浮点张量，或者构建最新一个截面的 BarFrame。计算收益：指标库无需实例化庞大的 DataFrame，直接在连续内存上运行 Numba 或 Cython 预编译的时序切片，毫秒内产出全市场最新的截面打分。

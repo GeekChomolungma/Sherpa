@@ -1,0 +1,114 @@
+一、 整体系统架构蓝图Sherpa 的核心使命是“从数据到信号的转换器（Data-to-Signal Engine）”。无论是历史回放还是实时推流，系统内部应保持“同一套策略代码、两套驱动方式（回放驱动 vs 事件驱动）”。Plaintext               
+               ┌────────────────────────────────────────────────────────┐
+               │              上游数据基建 (ChomoSyncer-go)              │
+               └────────────┬─────────────────────────────┬─────────────┘
+                            │ (历史落档 / 粗周期)          │ (实时滑窗 / 截面Ready)
+                            ▼                             ▼
+                    [ ClickHouse ]                    [ Redis ]
+                            │                             │
+════════════════════════════╪═════════════════════════════╪═════════════════════════════════
+【Sherpa 策略与信号系统】    │                             │
+                            ▼                             ▼
+               ┌────────────────────────────────────────────────────────┐
+               │ 1. Data Feed Layer (数据接入层)                        │
+               │    - CH Batch Reader (历史/粗周期批量、自动对齐、补全)    │
+               │    - Redis Live Listener (Stream监听、200根滑窗、Livebar)│
+               └────────────────────────────┬───────────────────────────┘
+                                            │ 标准化 MarketEvent / BarFrame
+                                            ▼
+               ┌────────────────────────────────────────────────────────┐
+               │ 2. Feature / Alpha Engine (指标与算子层)               │
+               │    - Math & TS Operators (ts_rank, ts_corr, decay_linear)│
+               │    - 101 Alpha 算子库                                  │
+               │    - TradingView / TA-Lib 社区指标复刻                 │
+               └────────────────────────────┬───────────────────────────┘
+                                            │ 特征矩阵 / 指标数值
+                                            ▼
+               ┌────────────────────────────────────────────────────────┐
+               │ 4. Strategy & Pipeline (业务外壳 / 编排调度器)         │
+               │    - 定义 Universe、消费周期、触发条件                   │
+               │    - 生成标准交易意图 (SignalEvent / TargetPosition)    │
+               └─────────────┬────────────────────────────┬─────────────┘
+                             │ (回测模式)                  │ (实时模式)
+                             ▼                             ▼
+               ┌───────────────────────────┐ ┌───────────────────────────┐
+               │ 3. Backtest Engine (回测) │ │ 5. Live Dispatcher (执行) │
+               │    - 撮合模拟 (Slippage/Fee)│ │    - 信号格式化/签名/幂等    │
+               │    - 净值曲线 & PnL 追踪   │ │    - 旁路推流/重试/心跳     │
+               │    - 报告 (Drawdown, Sharpe)│ │    - HTTP / gRPC 派发   │
+               └───────────────────────────┘ └─────────────┬─────────────┘
+                                                           │
+═══════════════════════════════════════════════════════════╪═════════════════════════════════
+                                                           ▼
+                                             ┌───────────────────────────┐
+                                             │ 下游系统 (Webhooker)       │
+                                             │ - 真实下单/撤单 (OM)      │
+                                             │ - 仓位对齐/资金清算 (PMS)  │
+                                             └───────────────────────────┘
+二、 五大核心模块设计落地
+1. 数据接入层 (sherpa.data)根据你的消费指南，数据层严格隔离底层细节，对业务策略层只暴露标准结构：  
+ClickHouse 客户端封装 (CHReader)：
+  Universe 感知：提供 get_all_symbols()（查 DISTINCT symbol），同时也支持传入 universe.txt 本地文件覆盖白名单。  
+  区间序列拉取：封装 fetch_history(symbols, interval, start_time, end_time, lookback_bars)。
+  关键防坑内置：在拼接 ClickHouse SQL 时强制内置 FINAL（消除 ReplacingMergeTree 的未合并重复），且强制统一时间为 UTC 时区。  
+  
+Redis 客户端封装 (RedisStreamer / RedisReader)：
+  截面触发器：监听 stream:market:kline_ready。收到 interval="1m" 且 symbols_count 到齐率达标后，通知调度层触发截面计算。  
+  特征拉取：对 1m 的高频截面，提供 Pipeline 一键批量拿所有币种 kline:{SYM}:1m 200 根滑窗的方法，并自动转为紧凑张量或 DataFrame。  
+  Livebar 支持：提供 get_livebar(symbol) 供盘中盯盘或止损策略读取。  
+
+2. 指标与 Alpha 库 (sherpa.alpha / sherpa.indicators)
+分层设计：
+
+Base Primitives (基础时序算子)：实现截面算子（rank, scale, indneutralize）和时序算子（ts_argmax, decay_linear, ts_corr, stddev, delay）。
+
+Alpha 101 库：基于基础算子复刻世坤 101 公式，入参统一为全市场截面矩阵 (time, symbol, feature)。
+
+TradingView 社区指标迁移：封装 RSI, SuperTrend, ATR, Bollinger Bands, KDJ, Chaikin Money Flow 等。
+
+统一输出规范：每个指标类均实现统一接口 calculate(data: BarFrame) -> Series / DataFrame，支持流式增量计算（实时模式）与向量化批量计算（回测模式）。
+
+3. 回测评估库 (sherpa.backtest)
+事件/向量混合回测：
+
+对于简单的 TV 策略或多因子截面打分，走向量化回测（极速验证）；
+
+对于涉及盯盘止盈止损、挂单未成交模拟的，走逐 Bar 事件驱动回测（Bar-driven Engine）。
+
+标准风控指标：不仅算累积收益率、胜率、最大回撤（MaxDrawdown），还要输出夏普比率（Sharpe）、卡玛比率（Calmar）、盈亏比（Profit Factor）、换手率（Turnover）以及滑点与手续费敏感性测试表。
+
+4. 业务总外壳 / 流程编排器 (sherpa.core.pipeline)
+业务层只写纯策略逻辑（继承 BaseStrategy），外壳负责调度：
+
+Python
+# 业务策略定义范例
+class MyTrendStrategy(BaseStrategy):
+    def setup(self):
+        self.universe = self.data.load_universe("top50.txt")
+        self.alpha = Alpha101(self.data)
+
+    def on_bar(self, bar_frame):
+        # 1. 调指标
+        score = self.alpha.alpha_054(bar_frame)
+        # 2. 生成买卖意图（做多排名前 5 的币种）
+        longs = score.top_k(5)
+        return TargetPosition(longs)
+策略写好后，通过命令行或 Config 配置运行模式：
+
+Runner.run_backtest(strategy, start="2025-01-01", end="2026-01-01")
+
+Runner.run_live(strategy, redis_stream="stream:market:kline_ready")
+
+5. 实时执行旁路 (sherpa.execution)
+当策略运行在 Live 模式下，策略吐出的不是虚拟撮合指令，而是进入 Dispatcher 管道：
+
+信号标准化 (Schema)：格式化为下游统一的 JSON 结构（包含：event_id 唯一ID、strategy_id、symbol、signal_type 买/卖/平/目标仓位、target_percent、limit_price、timestamp 等）。
+
+防重与幂等处理：防止同一分钟截面重复触发同一方向的信号。
+
+派发器：开一个轻量 Worker，通过 HTTP POST（或后续 gRPC）把消息推到 Webhooker。若超时则记录告警或按策略进行 1-2 次指数退避重试。
+
+三、 工业界推荐的“黏合机制”与模块独立性为了保证五个模块“既能独立开发/测试，又能无缝串联”，建议引入以下两个工业界成熟设计模式：
+统一事件驱动总线 (Event-Driven Bus / Port-Adapter 模式)指标库不要强依赖网络连接：指标计算函数的输入参数必须是标准内存结构（如 pandas.DataFrame / polars.DataFrame / numpy.ndarray），坚决不要把 ClickHouse 连接实例传给指标函数。回测库和实时派发库实现同一个抽象接口（例如 IOrderSink 或 ISignalReceiver）。对于策略外壳而言，它只需要往 Sink 丢信号；回测时注入 BacktestOrderSink，实盘时注入 WebhookOrderSink。
+
+避免前视偏差（Lookahead Bias）的时间网格严格对齐在实盘中，Redis 收到 10:05 的 kline_ready 通知时，代表 10:04 ~ 10:05 的这根 Bar 刚刚收盘完毕。  在回测中，必须严格模拟这一延迟：计算 t 时刻信号，必须仅使用 <= t 的历史行情；生成的买卖订单必须在 t + 1 的 Bar 开盘价或盘中撮合成交，绝不能在当根 Bar 用未来收盘价直接无损入场。
