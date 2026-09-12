@@ -1,12 +1,14 @@
-# Sherpa 策略引擎设计文档（初稿 v0.3）
+# Sherpa 策略引擎设计文档（初稿 v0.4）
 
-> 本文档用于讨论，不是最终版。重点是把「数据接入层 → 指标/Alpha 层」之间的数据契约定清楚，其余模块先给出接口轮廓，细节留到对应阶段再展开。
+> 本文档用于讨论，不是最终版。第5章数据契约和第6章 Alpha 引擎已经在代码里落地，其余模块先给出接口轮廓，细节留到对应阶段再展开。
 >
 > 范围声明：本仓库（Sherpa）只负责「从数据到交易意图（信号）」这一段。下单执行、撮合、仓位感知、资金清算属于下游 Webhooker（尚未实现），本设计里只保留一个对接用的抽象接口（`ISignalReceiver`），不涉及其内部实现。
 >
 > **v0.2 变更**：上游 `DATA_CONSUMER_GUIDE.md` 已更新——`kline:{SYM}:1m` 的紧凑数组从 9 元素改为 10 元素，`trades_count` 现已随 `[9]` 一起下发，Redis/ClickHouse 三处来源的核心字段已完全对齐。相应地，v0.1 里"`trades_count` 在实时窗口缺失"这条约束已解决，本版做了同步修正（详见 §3、§5.2.1、§5.4、§5.7）。第 5 章的数据契约（`BarPanel`/`MarketEvent`/`CHReader`/`RedisReader`/`Normalizer`/`WindowCache`/`IPanelSource`）已经在 `sherpa/data/` 落地并跑通了对真实 ClickHouse/Redis 环境的烟雾测试。
 >
 > **v0.3 变更**：`MarketEvent.bar_end_time` 的推导公式修正为对齐 Binance kline 的 close_time 惯例（`bar_start_time + interval_duration - 1ms`，不是直接等于下一根的 `bar_start_time`），详见 §5.4。
+>
+> **v0.4 变更**：第6章从接口占位改写成完整设计并在 `sherpa/alpha/` 落地——`Alpha` 基类、`AlphaEngine`、世坤101/TradingView/自定义三大家族、算子库 `ops.py`。确认了两条关键决策：多输出指标拆成多个单输出子类；`indneutralize` 因缺少行业分类数据暂不实现，占位报错。世坤101按经济含义分类到子模块（动量/反转/量价/波动率/形态/跨截面），已实现 8 个核实过的公式，其余待后续核对补充。
 
 ---
 
@@ -251,15 +253,127 @@ for event in panel_source:
 
 ---
 
-## 6. 指标 / Alpha 层接口规范
+## 6. 指标 / Alpha 层设计（`sherpa.alpha`）
+
+代码已经按本节落地在 `sherpa/alpha/` 下，本节是设计说明，代码是权威实现，两者应保持同步。
+
+### 6.1 `BarPanel` 怎么被这一层消费、输出是什么结构
+
+Alpha 层不知道 `MarketEvent`/`IPanelSource`/ClickHouse/Redis 的存在，唯一输入是第 5 章定义的 `BarPanel`；Pipeline 层负责把 `event.panel` 递给它：
 
 ```python
-class IIndicator(Protocol):
-    def calculate(self, panel: BarPanel) -> pd.DataFrame | pd.Series: ...
+for event in panel_source:                       # 第5章：回测/实盘统一驱动
+    features = alpha_engine.compute(event.panel)   # 第6章：本节
+    intents = strategy.on_bar(event, features)      # 第7章
+    sink.submit(intents)
 ```
 
-- 分层：`Base Primitives`（`ts_rank` / `ts_corr` / `decay_linear` / `rank` / `scale` / `indneutralize` 等算子）→ `Alpha101` 复刻（组合 primitives，输入统一是 `BarPanel`）→ TradingView/TA-Lib 社区指标迁移（RSI/ATR/BOLL/KDJ/CMF...）。
-- v1 只要求实现向量化批量 `calculate(panel)`，靠"每次传入最新滚动窗口"重算即可满足实时场景；滚动窗口类算子（`ts_corr` 等）如果性能不够，再补一个可选的增量接口 `update(event) -> pd.Series` 维护滑动统计状态，不作为 v1 强制要求。
+三层输出结构，分别对应三个不同粒度的使用场景：
+
+| 谁调用 | 方法 | 输出 | 用途 |
+| :-- | :-- | :-- | :-- |
+| 单个 `Alpha` | `compute(panel)` | `(T, N)` DataFrame，index/columns 跟 `panel` 完全对齐 | 向量化回测、因子研究要看完整历史 |
+| 单个 `Alpha` | `latest(panel)` | `pd.Series`，index=symbol | 只要当前这根截面的分数，`compute()` 的最后一行 |
+| `AlphaEngine` | `compute(panel)` | `(symbol × alpha名)` DataFrame | **喂给 `strategy.on_bar` 的 `features`**，每个 alpha 一列，行是 symbol |
+| `AlphaEngine` | `compute_history(panel)` | `dict[qualified_name, (T,N) DataFrame]` | 向量化回测/因子研究，一次性拿所有 alpha 的完整历史 |
+
+为什么 `compute()` 要返回完整 `(T,N)` 历史而不是只算最新一行：向量化回测（第8章）需要因子的整段历史去算 IC/分层收益，只在事件循环里算最后一行喂给实时策略是"够用但不完整"的子集，所以把"算完整历史"定为唯一契约，"只要最后一行"退化成一个便捷方法（`.latest()`），而不是反过来。
+
+### 6.2 `Alpha` 基类契约
+
+```python
+class Alpha:
+    name: str = ""
+    family: str = "custom"      # "worldquant" | "tradingview" | "custom"
+    min_lookback: int = 1        # 这个因子至少要多少根K线才可能有非NaN值
+
+    def compute(self, panel: BarPanel) -> pd.DataFrame: ...
+    def latest(self, panel: BarPanel) -> pd.Series: ...   # 默认实现 = compute(panel).iloc[-1]
+
+    @property
+    def qualified_name(self) -> str:
+        return f"{self.family}.{self.name}"                # 如 "worldquant.alpha006"
+```
+
+**已确认的设计决策（跟你讨论后拍板的）**：
+
+1. **一个 `Alpha` 只产出一条分数序列，不支持多输出。** 布林带/MACD/KDJ 这类天生有好几条线的指标，拆成多个单输出子类分别注册（比如 `BollingerUpper`/`BollingerMid`/`BollingerLower` 各自是一个 `Alpha`）。好处是任何 alpha 之间都能自由组合、被 `AlphaEngine` 统一拼进同一张特征矩阵，不需要为"这个因子是不是多输出"写特殊分支；代价是三个子类可能重复计算共享的中间量（比如都要重新算一次 rolling mean/std），先不处理，真出现性能问题再考虑"同一次 compute 周期内的中间量缓存"。
+2. **`indneutralize`（行业中性化）v1 不实现。** crypto 永续市场没有天然的"行业"分类维度，`BarPanel` 也没有这个字段。带这个算子的世坤101公式全部先跳过——不拿代理维度（比如按上线时间/报价币种分组）硬凑，错的因子比没有因子更危险。落地方式：`ops.indneutralize()` 和 `worldquant.cross_sectional.IndustryNeutralPlaceholder` 都是直接 `raise NotImplementedError`，作为以后真有分类数据时的统一接入点。
+3. **`min_lookback` 是因子自己声明的保守上界，不是精确边界。** 用来提醒 Pipeline/Runner 层（第7章）在配置 `panel_source` 的 `lookback_bars` 时至少要给多少——`AlphaEngine.required_lookback` = 引擎里所有 alpha 的 `min_lookback` 最大值。它是"上界"是因为个别公式的实际 warmup 可能比声明值短（见 6.5 Alpha001 的例子），但绝不会比声明值长，这个方向的保守是安全的。
+4. **注册机制用显式装饰器 `@register_alpha`，不用 `__init_subclass__` 暗中注册。** 显式好于隐式：谁被注册、什么时候被注册一眼能看到，测试里定义的临时 Alpha 子类也不会污染全局 registry。`qualified_name` 强制带家族前缀（`"worldquant.alpha006"` / `"tradingview.rsi_14"` / `"custom.my_momentum"`），避免 101 个 + 一堆 TA 指标 + 用户自定义互相之间撞名。
+
+### 6.3 三大家族
+
+```text
+sherpa/alpha/
+  ops.py                 # 无状态算子库：rank/scale/indneutralize（横截面），
+                          # delay/delta/ts_sum/ts_min/ts_max/stddev/ts_rank/
+                          # ts_argmax/ts_argmin/ts_corr/ts_cov/decay_linear（时序），
+                          # signed_power/sign/log（逐元素），adv/vwap（常见子表达式）
+  base.py                 # Alpha / AlphaRegistry / register_alpha / custom_alpha
+  engine.py               # AlphaEngine
+  worldquant/             # 世坤101风格因子，按经济含义分类到子模块：
+    momentum.py            动量类：押注趋势延续                    Alpha009
+    reversal.py             反转/均值回归类：押注极端表现会被修正        Alpha004
+    volume_price.py          量价关系类：volume 和 price 的联动/背离     Alpha002/003/006/012
+    volatility.py            波动率类：用价格离散度构造信号            Alpha001
+    pattern.py               价格形态类：K线内部结构/形状              Alpha101
+    cross_sectional.py        跨截面/行业中性类：依赖 indneutralize，占位不实现
+  tradingview/            # TA 指标复刻：RSI、ATR（先两个打样，其余按需补）
+  custom/                 # 用户自定义：CustomAlpha 子类 或 @custom_alpha 装饰函数
+```
+
+三个家族共用同一个基类，区别只是 `family` 字段和"公式的经济含义/出处"：
+
+```python
+class WorldQuantAlpha(Alpha):   family = "worldquant"
+class TradingViewIndicator(Alpha):  family = "tradingview"
+class CustomAlpha(Alpha):       family = "custom"
+```
+
+**世坤101已实现子集**（8/101，都不依赖 `indneutralize`/市值）：
+
+| 分类 | Alpha | 公式 | 一句话含义 |
+| :-- | :-- | :-- | :-- |
+| 动量 | Alpha#9 | 连续5根同向延续，否则反转当根变动 | 趋势确认 |
+| 反转 | Alpha#4 | `-1 * ts_rank(rank(low), 9)` | 低价持续偏低的做反向 |
+| 量价 | Alpha#2 | 成交量变化率与实体涨跌幅的横截面负相关 | 量价背离 |
+| 量价 | Alpha#3 | `-1 * correlation(rank(open), rank(volume), 10)` | 开盘价-成交量背离 |
+| 量价 | Alpha#6 | `-1 * correlation(open, volume, 10)` | 同上，不做横截面排名 |
+| 量价 | Alpha#12 | `sign(delta(volume,1)) * -delta(close,1)` | 放量时价格反转 |
+| 波动率 | Alpha#1 | 下跌用波动率/上涨用收盘价，找5根内极值位置 | 波动聚集 + 反转 |
+| 形态 | Alpha#101 | `(close-open)/((high-low)+.001)` | 收盘强弱 |
+
+**其余 ~93 个公式暂未实现**——101 篇公式全部逐条核实工作量很大，没有把握的宁可先留空，也不往交易系统里塞没核实过的公式。新增一个因子的流程：找经济含义最接近的分类文件（没有合适的就新建一个），继承 `WorldQuantAlpha`，用 `@register_alpha` 注册，公式本身对着原始论文核对，不要凭印象默写。
+
+**TradingView 家族**目前实现 `RSI`、`ATR` 两个打样，模式相同：继承 `TradingViewIndicator`，参数化的指标（比如 `RSI(period=14)`）在 `__init__` 里把 `self.name` 改成带参数后缀的形式（`"rsi_14"`），避免同一个引擎里放两个不同 period 的 RSI 时 `qualified_name` 撞车。
+
+**自定义家族**给两种写法：需要参数/状态的继承 `CustomAlpha` 写类；"一个纯函数就是一个因子"的用 `@custom_alpha("name", min_lookback=N)` 装饰一个 `(panel) -> DataFrame` 函数，装饰器会自动包成一个 `CustomAlpha` 子类并注册。
+
+### 6.4 `AlphaEngine`
+
+```python
+class AlphaEngine:
+    def __init__(self, alphas: Sequence[Alpha]): ...
+    def compute(self, panel: BarPanel) -> pd.DataFrame: ...          # (symbol × alpha名)，喂给 on_bar
+    def compute_history(self, panel: BarPanel) -> dict[str, pd.DataFrame]: ...  # 向量化回测用
+    @property
+    def required_lookback(self) -> int: ...                          # max(a.min_lookback for a in alphas)
+```
+
+构造时按 `qualified_name` 查重，同一个引擎里不能放两个 `qualified_name` 相同的 alpha 实例（比如两个都没改名的 `RSI()`）——这也是 6.2 决策3 强调"参数化指标要把参数编进 name"的原因。
+
+### 6.5 一个真实踩到的坑：pandas 的 `NaN` 比较陷阱
+
+实现 Alpha#9（`(0 < ts_min(delta(close,1),5)) ? d : ...`）时踩到一个值得记录的通用陷阱：pandas/numpy 里 `NaN > 0` 直接算 `False`（不是 `NaN`），所以滚动窗口还没攒够 5 根、`ts_min`/`ts_max` 本身还是 `NaN` 的阶段，`(ts_min > 0) | (ts_max < 0)` 这个布尔条件会被悄悄判成 `False`，导致 `d.where(trending, -d)` 在 warmup 阶段冒出一个"看起来正常但没有意义"的数值，而不是老老实实地是 `NaN`。
+
+修法是显式拿 `ts_min.notna()` 把这部分重新盖成 NaN（`sherpa/alpha/worldquant/momentum.py`）。这条经验对所有"用布尔比较模拟三元表达式"的公式都适用，写新公式时要留意：**凡是条件里出现滚动聚合结果，warmup 阶段的 NaN 传播不能只靠"公式看起来会自然产出 NaN"来保证，要显式检查。**
+
+### 6.6 v1 范围内不做的事（明确排除，避免过度设计）
+
+- **增量计算**：`Alpha.compute()` 每次都是对整个传入的 `panel` 重新做向量化计算，不维护跨调用的状态。如果之后 `ts_corr` 这类滚动窗口算子在高频截面场景下性能不够，再考虑给 `Alpha` 加一个可选的 `update(event) -> pd.Series` 增量接口，v1 不做。
+- **跨 alpha 的中间量缓存**：6.2 决策1 提到的"布林带三个子类重复算 rolling mean/std"，v1 先接受这个重复计算成本。
+- **行业中性化**：见 6.2 决策2，等有可信的分类数据源再回来做。
 
 ## 7. 策略编排层
 
