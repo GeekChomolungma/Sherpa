@@ -9,6 +9,8 @@
 > **v0.3 变更**：`MarketEvent.bar_end_time` 的推导公式修正为对齐 Binance kline 的 close_time 惯例（`bar_start_time + interval_duration - 1ms`，不是直接等于下一根的 `bar_start_time`），详见 §5.4。
 >
 > **v0.4 变更**：第6章从接口占位改写成完整设计并在 `sherpa/alpha/` 落地——`Alpha` 基类、`AlphaEngine`、世坤101/TradingView/自定义三大家族、算子库 `ops.py`。确认了两条关键决策：多输出指标拆成多个单输出子类；`indneutralize` 因缺少行业分类数据暂不实现，占位报错。世坤101按经济含义分类到子模块（动量/反转/量价/波动率/形态/跨截面），已实现 8 个核实过的公式，其余待后续核对补充。
+>
+> **v0.5 变更**：第7章从接口占位改写成完整设计并在 `sherpa/strategy/` 落地——`TargetPosition`/`SignalIntent` 契约、`BaseStrategy`、`Runner`（`run_backtest`/`run_live` 都是 `run()` 的薄别名），以及下游对接子模块 `sherpa/strategy/sink/`（`ISignalReceiver` 协议 + `LogSink` 已实现，`BacktestSink`/`WebhookSink` 占位报错）。原第9章"下游对接"内容并入 §7.5，第9章改为指向 §7.5 的指引。第8章（回测引擎）仍是占位，未落地。
 
 ---
 
@@ -375,15 +377,138 @@ class AlphaEngine:
 - **跨 alpha 的中间量缓存**：6.2 决策1 提到的"布林带三个子类重复算 rolling mean/std"，v1 先接受这个重复计算成本。
 - **行业中性化**：见 6.2 决策2，等有可信的分类数据源再回来做。
 
-## 7. 策略编排层
+## 7. 策略编排层（`sherpa.strategy`）
+
+代码已按本节落地在 `sherpa/strategy/` 下，本节是设计说明，代码是权威实现，两者应保持同步。
+
+### 7.1 职责边界
+
+`Runner` 是整个引擎的编排核心，串起第5章数据契约、第6章特征层和下游 sink：
+
+```python
+for event in panel_source:                             # 第5章：回测/实盘统一驱动
+    features = alpha_engine.compute(event.panel)        # 第6章：特征矩阵
+    target = strategy.on_bar(event, features)            # 本章 §7.3：纯策略逻辑
+    intents = self._to_intents(event, target)             # 本章 §7.4：标准化
+    sink.submit(intents)                                   # 本章 §7.5：下游对接
+```
+
+`BaseStrategy` 只负责"这根 bar 我要什么仓位"这一件事，不知道自己是被回测还是实盘调用；
+把 `TargetPosition` 标准化成携带 `event_id`/`generated_at` 等元数据的 `SignalIntent` 是
+`Runner` 的职责——这样回测和实盘复用同一个 `on_bar` 时，策略代码不会被"造ID"这类编排细节
+污染。
+
+**与第2节架构图的对应关系**：图中④a `Backtest Engine` 内部会调用 `BacktestSink`；
+④b `Live Dispatcher` 标注的"信号标准化 / 幂等 / 派发"三项职责，v1 里"标准化"由
+`Runner._to_intents` 承担，"派发"由 `WebhookSink` 承担（占位未实现），"幂等"目前完全没有
+实现，见 §7.6。
+
+### 7.2 `TargetPosition` / `SignalIntent` 契约（`sherpa/strategy/schema.py`）
+
+```python
+@dataclass(frozen=True)
+class TargetPosition:
+    weights: Mapping[str, float] = field(default_factory=dict)   # symbol -> 目标仓位百分比
+    def items(self): ...
+
+@dataclass(frozen=True)
+class SignalIntent:
+    event_id: str
+    strategy_id: str
+    symbol: str
+    signal_type: str          # v1 固定 "target_percent"
+    target_percent: float
+    bar_end_time: pd.Timestamp
+    generated_at: pd.Timestamp
+```
+
+**已确认的设计决策**：
+
+1. `TargetPosition` 只装权重字典，不做归一化/裁剪校验（比如权重总和是否超过1、单 symbol
+   是否超过仓位上限）——那是回测撮合/风控的职责，不是信号契约的职责，本层只负责如实传递
+   策略给出的数字。
+2. `signal_type` 目前只有一种取值 `"target_percent"`（对应 `design.txt` 提到的"买/卖/平/
+   目标仓位"里最通用的一种）。如果以后要支持相对下单（比如"减仓10%"而非"到X%"），在这里
+   加新的 `signal_type` 取值，`TargetPosition` 的结构不用变。
+
+### 7.3 `BaseStrategy`（`sherpa/strategy/base.py`）
 
 ```python
 class BaseStrategy:
-    def setup(self): ...
-    def on_bar(self, event: MarketEvent, features: FeatureSet) -> TargetPosition: ...
+    strategy_id: str = ""      # 默认取类名，可覆写
+
+    def __init__(self, **params): ...
+    def setup(self) -> None: ...      # Runner 主循环开始前调用一次，默认空实现
+    def on_bar(self, event: MarketEvent, features: pd.DataFrame) -> TargetPosition: ...
 ```
 
-`Runner.run_backtest(strategy, ...)` 和 `Runner.run_live(strategy, ...)` 只是分别注入 `HistoricalPanelSource`/`LivePanelSource` 和 `BacktestSink`/`LogSink`，Pipeline 主循环代码不变（见 5.6）。
+`features` 就是 `AlphaEngine.compute(event.panel)` 的输出：index=symbol，columns=各 alpha
+的 `qualified_name`。策略作者只需要继承这一个类，不需要知道 `IPanelSource`/`ISignalReceiver`
+的存在。
+
+### 7.4 `Runner`（`sherpa/strategy/runner.py`）
+
+```python
+class Runner:
+    def __init__(self, strategy: BaseStrategy, alpha_engine: AlphaEngine, sink: ISignalReceiver): ...
+    def run(self, panel_source: IPanelSource) -> None: ...
+    def run_backtest(self, panel_source: IPanelSource) -> None: ...   # 语义化别名，委托给 run()
+    def run_live(self, panel_source: IPanelSource) -> None: ...       # 语义化别名，委托给 run()
+```
+
+**已确认的设计决策**：
+
+1. **`run_backtest`/`run_live` 不允许分叉出两份主循环逻辑**——两者都是 `run()` 的薄别名，
+   唯一差异必须体现在调用方注入的 `panel_source`/`sink` 具体类型上（比如
+   `HistoricalPanelSource` + `BacktestSink` vs `LivePanelSource` + `WebhookSink`）。这是
+   设计文档反复强调的硬约束"同一套策略代码，两种驱动方式"在代码层面的落地方式，`Runner`
+   的实现里不能出现 `if backtest: ... else: ...` 这种分叉。
+2. `_to_intents` 每次 `on_bar` 调用生成一个共享的 `event_id`（`uuid4`）和 `generated_at`
+   （调用时刻，UTC）；同一次 `on_bar` 产出的多个 symbol 的 `SignalIntent` 共享这两个值——
+   它们描述的是"同一次决策"，不是"同一个 symbol 各自独立的多次决策"。
+3. 目标仓位为空（`on_bar` 返回 `None`，或返回的 `TargetPosition` 没有权重）时不调用
+   `sink.submit()`，避免下游收到一次没有信息量的空列表调用。
+
+### 7.5 下游对接子模块 `sherpa/strategy/sink/`
+
+`ISignalReceiver` 协议和三个具体实现按驱动方式拆成独立文件，互不感知彼此的存在，只共享
+`base.py` 里的协议定义：
+
+```text
+sherpa/strategy/sink/
+  base.py              # ISignalReceiver Protocol
+  log_sink.py           # LogSink：只落日志，v1 唯一可用的实现
+  backtest_sink.py        # BacktestSink：占位，raise NotImplementedError，依赖第8章撮合引擎
+  webhook_sink.py           # WebhookSink：占位，raise NotImplementedError，依赖下游 Webhooker
+```
+
+```python
+class ISignalReceiver(Protocol):
+    def submit(self, intents: Sequence[SignalIntent]) -> None: ...
+```
+
+**已确认的设计决策**：
+
+1. **拆子模块而不是一个文件里放三个类**——理由和 §6.3 世坤101按经济含义拆子模块一致：
+   `BacktestSink` 将来要接撮合状态机（持仓/资金/滑点），`WebhookSink` 将来要接 HTTP
+   重试/幂等/签名，这两个的实现复杂度和 `LogSink` 不是一个量级，放一个文件里会互相干扰
+   阅读和测试；拆开后每种实现可以独立演进、独立测试。
+2. **`BacktestSink`/`WebhookSink` 现在是占位报错，不是简化实现**——跟 §6.2 决策2
+   （`indneutralize` 占位）同一个原则：宁可让 `Runner.run_backtest()`/`run_live()` 现在跑
+   不出结果，也不要塞一个"看起来能跑但没有真实撮合/没有真实下单"的版本进去，那样产出的
+   数字会被误认成真实回测收益或真实下单确认，比不实现更危险。在这两个实现落地之前，
+   `run_backtest`/`run_live` 都可以先接 `LogSink`，只验证 Pipeline 主循环本身
+   （数据 → 特征 → 策略 → 信号）跑得通，不代表回测/实盘结果可信。
+
+### 7.6 v1 范围内不做的事（明确排除，避免过度设计）
+
+- **风控/仓位裁剪**：见 §7.2 决策1，`TargetPosition` 不做任何校验，风控是策略自己的职责
+  或者未来独立的一层。
+- **信号去重/幂等**：`Runner` 每次 `on_bar` 都生成新的 `event_id`，不检测"这根 bar 是不是
+  已经发过信号了"——如果 `panel_source` 在实盘场景下意外重复 yield 同一个 `bar_start_time`
+  的事件（不应该发生，但目前没有代码层面的防御），会产生重复的 `SignalIntent`。幂等应该是
+  `WebhookSink` 落地时的职责（它离真实下单最近，重复下单的后果也最大），不在这一层解决，
+  对应第2节架构图里④b "幂等"这项当前尚未实现。
 
 ## 8. 回测引擎
 
@@ -392,18 +517,14 @@ class BaseStrategy:
 - 撮合时间约束：订单只能在 `event.bar_end_time` 之后成交，绝不用当根收盘价无损入场（对应 5.4 的字段设计）。
 - 标准指标：累计收益率、胜率、MaxDrawdown、Sharpe、Calmar、Profit Factor、换手率，以及滑点/手续费敏感性测试表。
 
-## 9. 下游对接（占位，非本次实现范围）
+## 9. 下游对接（已实现，见 §7.5）
 
-```python
-class ISignalReceiver(Protocol):
-    def submit(self, intents: list[SignalIntent]) -> None: ...
-```
+`ISignalReceiver` 协议、`LogSink`/`BacktestSink`/`WebhookSink` 三个实现的设计决策和目录
+结构已经并入 §7.5（`sherpa/strategy/sink/`），本节保留标题只是为了不打乱后续章节编号，
+不再重复内容。
 
-- `BacktestSink`：回测用，接入内部撮合模拟。
-- `LogSink`：实盘链路打通阶段的过渡桩，只落日志/落盘，不发网络请求——在 Webhooker 就绪前，Sherpa 的实时链路可以先用它验证信号是否符合预期。
-- `WebhookSink`：留给 Webhooker 就绪后再实现，本设计不展开其重试/幂等/签名细节。
-
-`SignalIntent` 最小字段集（执行细节留给下游）：`event_id, strategy_id, symbol, signal_type, target_percent, bar_end_time, generated_at`。
+`SignalIntent` 最小字段集（执行细节留给下游）见 §7.2：`event_id, strategy_id, symbol,
+signal_type, target_percent, bar_end_time, generated_at`——已按此实现，无变化。
 
 ## 10. 落地顺序建议
 
@@ -412,7 +533,7 @@ class ISignalReceiver(Protocol):
 | M0 | `BarPanel` / `MarketEvent` 数据结构 + 单元测试（用 mock CH/Redis 数据） |
 | M1 | `CHReader` + `Normalizer` + `HistoricalPanelSource`，先打通批量回测取数 |
 | M2 | Base Primitives + 若干 Alpha101 验证 `calculate(panel)` |
-| M3 | `BaseStrategy` / `Pipeline` / `Runner.run_backtest` + 向量化回测引擎 + 基础风控指标 |
+| M3 | ~~`BaseStrategy` / `Runner`~~ 已落地（见第7章），`Runner.run_backtest`/`run_live` 主循环打通，先接 `LogSink`；向量化回测引擎 + 基础风控指标（`BacktestSink`）仍待做，见第8章 |
 | M4 | `RedisReader` + `WindowCache`(1m) + `LivePanelSource`，实时链路先接 `LogSink` 观察信号 |
 | M5 | 事件驱动回测引擎（止盈止损/挂单模拟）；等 Webhooker 就绪后再实现 `WebhookSink` |
 
