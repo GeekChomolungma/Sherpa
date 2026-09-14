@@ -32,6 +32,18 @@ def test_log_sink_logs_each_intent(caplog):
     assert "ETHUSDT" in caplog.text
 
 
+def test_log_sink_logs_live_order_request_with_idempotency_key(caplog):
+    """LogSink 现在是 paper trading 的默认实现（设计文档 §9.1）：日志里应该能看到
+    build_live_requests 补充的幂等 key，而不是原始 SignalIntent 里那个每次都不同的
+    event_id——这是它跟"简单转发"的关键区别。"""
+    sink = LogSink()
+    intent = _make_intent("BTCUSDT")
+    with caplog.at_level(logging.INFO, logger="sherpa.strategy.sink.log_sink"):
+        sink.submit([intent])
+    assert "idempotency_key" in caplog.text
+    assert f"s1:{intent.bar_end_time.isoformat()}:BTCUSDT" in caplog.text
+
+
 def test_log_sink_handles_empty_intents(caplog):
     sink = LogSink()
     with caplog.at_level(logging.INFO):

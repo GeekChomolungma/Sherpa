@@ -15,6 +15,8 @@
 > **v0.6 变更**：新增 `docs/backtest_principle.md`（回测第一性原理，Alpha Check / Portfolio & Friction Check 两层体系），第8章据此从"回测引擎"改名为"回测与实盘驱动引擎"并重写——拆出 `sherpa.metrics`（纯统计：RankIC/IC_IR/分位数单调性、Sharpe/Calmar/MaxDrawdown）和 `sherpa.portfolio`（纯映射：alpha→权重、持仓漂移/换手率）两个跟 `sherpa.backtest` 平行、可被策略/未来实盘复用的模块，`sherpa.backtest` 变成组合调用它们的编排层。实盘执行模块给出占位小节（§8.5），明确"清算/PnL 归属 Webhooker"这条边界不变（方案A，已讨论确认）。第9章改写成三种 sink 的实例化/接线示例，不再重复设计决策。
 >
 > **v0.7 变更**：第8章从设计说明改写成完整落地——`sherpa/metrics/`（`factor.py`/`performance.py`）、`sherpa/portfolio/`（`weighting.py`/`turnover.py`）、`sherpa/backtest/`（`alpha_check.py`/`vectorized.py`/`event_driven.py`/`cost_model.py`/`result.py`）全部有代码和单元测试；`BacktestSink` 同步从占位报错改成真正转发给 `Simulator`（`WebhookSink` 仍是占位）。实现过程中发现并修正了三个数值上容易踩的坑，都已经写成回归测试：① `ic_summary` 原来对"std≈0"一律判 NaN，导致一个完美稳定的因子（IC 每期都≈1）反而被判不通过，现在区分"std≈0 且 mean≈0"（真 0/0，NaN）和"std≈0 但 mean 明显非零"（+inf）两种情况；② `annualized_return` 直接做 `total_growth ** (periods_per_year/n)` 在样本很短、频率很高时（比如 4 根 1m bar 外推全年）会 `OverflowError`，改成对数空间算指数、溢出时退化成 `inf`；③ `vectorized.py` 算换手时把"漂移用的收益率"和"算毛收益用的收益率"搞成了同一根 bar 的（应该是上一根 bar 的），这个 bug 是靠"向量化和事件驱动两条路径结果必须一致"（§8.4.4 决策2）这条交叉验证抓出来的——单纯跑通向量化路径自己的单元测试是发现不了的。
+>
+> **v0.8 变更**：§8.5 从"占位，非本次实现范围"改写成真正落地的 `sherpa.live`（`request.py`：`LiveOrderRequest` + `build_live_requests`），`LogSink` 同步升级成调用它——这是关于"实盘专属逻辑该挂在哪"这条边界讨论后的结论：**会改变决策结果的逻辑**（比如仓位再平衡阈值这类"要不要发信号"的判断，讨论中称为"gate"）必须对回测/实盘一视同仁，只能挂在 `Runner` 主循环里对所有 sink 共享的阶段，不能挂在某个具体 sink 上，否则回测验证过的净值曲线不能代表实盘真实发生的仓位路径——这类东西现在**还没有具体需求，本版不实现，也不会放进 `sherpa.live`**；**不改变决策结果、只是把决策打包成可派发形状的逻辑**（幂等 key、派发时间戳）不影响策略在任何驱动方式下的行为，`BacktestSink`/`Simulator` 用不上、也不需要知道它的存在，所以适合让 `LogSink`/`WebhookSink` 直接共用——这是 `sherpa.live` 现在唯一收纳的东西。`LogSink` 因此从"照抄 `Runner` 原始输出"升级成名副其实的 paper trading：日志里能看到"如果接了 `WebhookSink`，真正会派发出去的样子"（幂等 key、派发时刻都在），`WebhookSink` 落地时只需要把序列化目标从"写日志"换成"发 HTTP"，复用同一个 `build_live_requests`。
 
 ---
 
@@ -549,11 +551,14 @@ class ISignalReceiver(Protocol):
 sherpa.backtest  ──depends on──>  sherpa.metrics
 sherpa.backtest  ──depends on──>  sherpa.portfolio
 sherpa.strategy  ──depends on──>  sherpa.backtest   (仅 BacktestSink 这一处)
-（未来）sherpa.live  ──depends on──>  sherpa.portfolio   (见 §8.5，不依赖 metrics)
+sherpa.strategy  ──depends on──>  sherpa.live        (LogSink/WebhookSink 这两处，见 §8.5)
 ```
 
 `metrics`/`portfolio` 不反过来依赖 `backtest`/`strategy` 的任何东西，这样它们才能被研究
-脚本、未来实盘模块、乃至仓库之外的地方单独拿去用。
+脚本、未来实盘模块、乃至仓库之外的地方单独拿去用。`sherpa.live` 目前不依赖 `metrics`/
+`portfolio`（见 §8.5，它现在只处理信号的打包格式，不碰权重/绩效数字），也不反向依赖
+`sherpa.strategy`——见 §8.5 里 `SignalIntentLike` Protocol 的说明，跟 `sherpa.backtest.
+event_driven.TargetIntent`（§8.4.3）是同一个理由。
 
 ### 8.2 `sherpa.metrics`：纯统计函数
 
@@ -714,31 +719,87 @@ class BacktestResult:
    排查回测引擎自身 bug 最有效的手段之一；如果两条路径各自实现一套摩擦成本逻辑，一旦结果
    对不上就无法判断是策略问题还是某条路径自己算错了。
 
-### 8.5 实盘执行模块（占位，非本次实现范围）
+### 8.5 实盘专属模块 `sherpa.live`
 
-对应第2节架构图里的 ④b "Live Dispatcher"，目前完全没有代码落地，先占位说明设计意图，不
-在本次一起实现：
+对应第2节架构图里的 ④b "Live Dispatcher"。这一节讨论过程本身值得记录：一开始想把"仓位
+再平衡阈值触发"这类逻辑也放进来，讨论后发现这条路径不对，先说清楚**为什么不对**，再说
+现在真正落地的东西。
 
-- **预期会复用 `sherpa.portfolio`**：如果未来要在 Sherpa 这一侧做"实盘专属"的仓位处理逻辑
-  （比如持仓偏离目标权重超过阈值才触发再平衡信号，而不是每根 bar 都无脑发全量目标仓位），
-  应该直接调用 §8.3 的 `weighting`/`turnover` 函数，跟回测第二层验证过的是同一份代码——
-  避免"实盘跑的映射逻辑"和"回测验证过的映射逻辑"变成两份可能悄悄漂移的实现。
-- **不会复用 `sherpa.metrics.performance` 去算实盘净值曲线**：按本次讨论已确认的方案，实盘
-  清算/PnL 展示是下游 Webhooker 的职责（对应 §1 的范围声明），Sherpa 不接收真实成交回报，
-  也不维护实盘持仓/资金状态。`sherpa.metrics` 之所以设计成不依赖任何模拟/网络的纯函数库
-  （见 §8.2 决策3），就是为了让 Webhooker（如果它也是 Python 服务）以后能直接复用同一套
-  公式算自己的实盘绩效，而不需要 Sherpa 反过来接收 Webhooker 的数据——这条边界现在不变，
-  以后如果出现明确需求再回来重新讨论。
-- **落点未定**：不预先创建 `sherpa/live/` 之类的空目录或占位类——跟 §7.5 的 `WebhookSink`
-  （依赖关系已经明确，只是要等 Webhooker 接口定稿）不同，实盘执行模块现在连要做什么都
-  还没定，提前写占位代码没有实际意义，等有具体需求时再创建。
+#### 8.5.1 一个先讨论掉、决定不做的东西：仓位再平衡"gate"
+
+设想过这样一种需求：实盘不应该每根 bar 都无脑发一次全量目标仓位，而是"持仓偏离目标权重
+超过某个阈值才真正触发一次调仓信号"，权且叫它"gate"。这类逻辑**不能**挂在某个具体 sink
+（比如让 `LogSink`/`WebhookSink` 各自调用一个 gate 函数），也不适合塞进 `sherpa.live`——
+理由是它会**改变策略的决策结果**：如果只有 `LogSink`/`WebhookSink` 经过 gate 过滤、
+`BacktestSink` 不经过，那么同一个策略在回测和实盘里实际发生的仓位路径就不是同一条了，这
+正是设计文档从 §1 起反复强调的"同一套策略代码，两种驱动方式"要防的事——回测验证过的净值
+曲线不能代表实盘真实会发生什么。
+
+**结论**：这类"会改变决策结果"的逻辑，如果将来真的要做，落点只能是 `Runner` 主循环里对
+所有 sink 一视同仁的共享阶段（`on_bar` 产出 `TargetPosition` 之后、`_to_intents` 标准化
+之前），backtest 和 live 要能选择性接入同一份实现，不能分叉成两条路径。这个需求目前概念
+还不清晰、没有具体场景倒逼，本版不做，也不在 `sherpa.live` 里预留位置——`sherpa.live`
+这个包名容易让人误以为"这里面的东西天然只跟实盘有关，回测不用管"，而 gate 恰恰不是这种
+性质的逻辑，放错包里比不做更容易造成误导。
+
+#### 8.5.2 真正落地的东西：`sherpa.live.request`
+
+跟 gate 相反，有一类逻辑**不改变任何决策数字**（`target_percent` 等），只是把"已经决定
+好的信号"打包成"可以派发出去"的形状——幂等 key 怎么生成、这次派发发生在什么时刻。这类
+逻辑天然只有 `LogSink`/`WebhookSink` 需要：`BacktestSink`/`Simulator` 根本不"派发"任何
+东西，直接把 intents 转成换手/成本计算，用不上、也不应该依赖它。这才是 `sherpa.live` 现
+在唯一收纳的内容：
+
+```text
+sherpa/live/
+  request.py   # LiveOrderRequest + build_live_requests(intents)
+```
+
+```python
+@dataclass(frozen=True)
+class LiveOrderRequest:
+    idempotency_key: str
+    strategy_id: str
+    symbol: str
+    target_percent: float
+    bar_end_time: pd.Timestamp
+    generated_at: pd.Timestamp
+    dispatched_at: pd.Timestamp
+
+def build_live_requests(intents: Sequence[SignalIntentLike]) -> list[LiveOrderRequest]: ...
+```
+
+**已确认的设计决策**：
+
+1. **`idempotency_key` 是确定性生成的**（`f"{strategy_id}:{bar_end_time.isoformat()}:
+   {symbol}"`），不是 `SignalIntent.event_id`——`Runner._to_intents`（§7.4）里的
+   `event_id` 是每次调用都新生成的随机 UUID，进程重启后 `LivePanelSource` 如果重放了同
+   一根 bar 的事件，算出来的 `event_id` 会不一样，没法用来判断"这条信号是不是已经处理
+   过了"（这是 §7.6 提到的"信号去重/幂等"那个坑第一次有了具体落点）。确定性 key 只依赖
+   `(strategy_id, bar_end_time, symbol)` 这三个业务含义明确的字段，同一个决策无论重放
+   多少次，key 都一样，真正需要幂等的下游（未来的 `WebhookSink`）可以拿它去重。
+2. **`dispatched_at` 跟 `generated_at`是两个不同的时间戳，故意分开**：`generated_at` 是
+   `Runner` 产出 `SignalIntent` 的时刻；`dispatched_at` 是这条信号真正被 sink 处理、准备
+   派发的时刻——两者中间可能隔着排队、重试，混成一个字段会丢信息。
+3. **`build_live_requests` 只做格式转换，不做任何业务判断**：不检查 `target_percent`
+   是否合理、不检查是否该发这条信号——那些是 §8.5.1 讨论过、明确排除在外的 gate 类逻辑，
+   `sherpa.live` 的职责边界里没有它们的位置。
+4. **`SignalIntentLike` 是本地定义的结构化 Protocol，不 import `sherpa.strategy.
+   SignalIntent`**——跟 `sherpa.backtest.event_driven.TargetIntent`（§8.4.3）同一个理由：
+   `sherpa.live` 不反向依赖 `sherpa.strategy`，真正的 `SignalIntent` 天然满足这个
+   Protocol，`LogSink`/`WebhookSink` 转发过去不需要做任何转换。
+5. **不会复用 `sherpa.metrics.performance` 去算实盘净值曲线**：按之前讨论已确认的方案，
+   实盘清算/PnL 展示是下游 Webhooker 的职责（对应 §1 的范围声明），Sherpa 不接收真实成交
+   回报，也不维护实盘持仓/资金状态。`sherpa.metrics` 设计成不依赖任何模拟/网络的纯函数库
+   （见 §8.2 决策3），就是为了让 Webhooker（如果它也是 Python 服务）以后能直接复用同一套
+   公式算自己的实盘绩效，而不需要 Sherpa 反过来接收 Webhooker 的数据——这条边界不变。
 
 ## 9. Sink 的实例化与调用
 
 `ISignalReceiver`/三个实现的设计决策见 §7.5，`Simulator`/`BacktestResult` 的设计见 §8.4，
 本节只给"调用方怎么组装"的接线示例，不重复设计动机。
 
-### 9.1 `LogSink`——验证 Pipeline 主循环 / 实盘链路打通阶段
+### 9.1 `LogSink`——paper trading 的默认实现
 
 ```python
 from sherpa.strategy.runner import Runner
@@ -748,8 +809,13 @@ runner = Runner(strategy=MyStrategy(), alpha_engine=alpha_engine, sink=LogSink()
 runner.run_backtest(historical_panel_source)   # 或 run_live(live_panel_source)
 ```
 
-不需要任何额外配置，`LogSink()` 直接可用，只落日志——是 M3/M4 阶段验证链路是否跑通、以及
-实盘链路打通阶段的默认选择，不代表回测/实盘结果可信。
+不需要任何额外配置，`LogSink()` 直接可用。内部调用 `sherpa.live.build_live_requests`
+（§8.5.2）把收到的 `SignalIntent` 转成 `LiveOrderRequest` 再落日志——日志里看到的是
+"如果这时候接的是 `WebhookSink`，真正会派发出去的样子"（幂等 key、派发时刻都在），不是
+简单转发 `Runner` 的原始输出，这也是它现在可以被当作 paper trading 默认实现来用的原因。
+`run_live` 场景下用它观察实时信号，`run_backtest` 场景下用它验证 Pipeline 主循环是否
+跑通——两种用法都不代表回测/实盘结果可信，`BacktestSink`/`WebhookSink` 才是真正算数的
+那条路径。
 
 ### 9.2 `BacktestSink`——需要注入一个 `Simulator`
 
