@@ -11,6 +11,10 @@
 > **v0.4 变更**：第6章从接口占位改写成完整设计并在 `sherpa/alpha/` 落地——`Alpha` 基类、`AlphaEngine`、世坤101/TradingView/自定义三大家族、算子库 `ops.py`。确认了两条关键决策：多输出指标拆成多个单输出子类；`indneutralize` 因缺少行业分类数据暂不实现，占位报错。世坤101按经济含义分类到子模块（动量/反转/量价/波动率/形态/跨截面），已实现 8 个核实过的公式，其余待后续核对补充。
 >
 > **v0.5 变更**：第7章从接口占位改写成完整设计并在 `sherpa/strategy/` 落地——`TargetPosition`/`SignalIntent` 契约、`BaseStrategy`、`Runner`（`run_backtest`/`run_live` 都是 `run()` 的薄别名），以及下游对接子模块 `sherpa/strategy/sink/`（`ISignalReceiver` 协议 + `LogSink` 已实现，`BacktestSink`/`WebhookSink` 占位报错）。原第9章"下游对接"内容并入 §7.5，第9章改为指向 §7.5 的指引。第8章（回测引擎）仍是占位，未落地。
+>
+> **v0.6 变更**：新增 `docs/backtest_principle.md`（回测第一性原理，Alpha Check / Portfolio & Friction Check 两层体系），第8章据此从"回测引擎"改名为"回测与实盘驱动引擎"并重写——拆出 `sherpa.metrics`（纯统计：RankIC/IC_IR/分位数单调性、Sharpe/Calmar/MaxDrawdown）和 `sherpa.portfolio`（纯映射：alpha→权重、持仓漂移/换手率）两个跟 `sherpa.backtest` 平行、可被策略/未来实盘复用的模块，`sherpa.backtest` 变成组合调用它们的编排层。实盘执行模块给出占位小节（§8.5），明确"清算/PnL 归属 Webhooker"这条边界不变（方案A，已讨论确认）。第9章改写成三种 sink 的实例化/接线示例，不再重复设计决策。
+>
+> **v0.7 变更**：第8章从设计说明改写成完整落地——`sherpa/metrics/`（`factor.py`/`performance.py`）、`sherpa/portfolio/`（`weighting.py`/`turnover.py`）、`sherpa/backtest/`（`alpha_check.py`/`vectorized.py`/`event_driven.py`/`cost_model.py`/`result.py`）全部有代码和单元测试；`BacktestSink` 同步从占位报错改成真正转发给 `Simulator`（`WebhookSink` 仍是占位）。实现过程中发现并修正了三个数值上容易踩的坑，都已经写成回归测试：① `ic_summary` 原来对"std≈0"一律判 NaN，导致一个完美稳定的因子（IC 每期都≈1）反而被判不通过，现在区分"std≈0 且 mean≈0"（真 0/0，NaN）和"std≈0 但 mean 明显非零"（+inf）两种情况；② `annualized_return` 直接做 `total_growth ** (periods_per_year/n)` 在样本很短、频率很高时（比如 4 根 1m bar 外推全年）会 `OverflowError`，改成对数空间算指数、溢出时退化成 `inf`；③ `vectorized.py` 算换手时把"漂移用的收益率"和"算毛收益用的收益率"搞成了同一根 bar 的（应该是上一根 bar 的），这个 bug 是靠"向量化和事件驱动两条路径结果必须一致"（§8.4.4 决策2）这条交叉验证抓出来的——单纯跑通向量化路径自己的单元测试是发现不了的。
 
 ---
 
@@ -478,7 +482,7 @@ class Runner:
 sherpa/strategy/sink/
   base.py              # ISignalReceiver Protocol
   log_sink.py           # LogSink：只落日志，v1 唯一可用的实现
-  backtest_sink.py        # BacktestSink：占位，raise NotImplementedError，依赖第8章撮合引擎
+  backtest_sink.py        # BacktestSink：已实现（v0.7），转发给 sherpa.backtest.event_driven.Simulator
   webhook_sink.py           # WebhookSink：占位，raise NotImplementedError，依赖下游 Webhooker
 ```
 
@@ -490,15 +494,18 @@ class ISignalReceiver(Protocol):
 **已确认的设计决策**：
 
 1. **拆子模块而不是一个文件里放三个类**——理由和 §6.3 世坤101按经济含义拆子模块一致：
-   `BacktestSink` 将来要接撮合状态机（持仓/资金/滑点），`WebhookSink` 将来要接 HTTP
+   `BacktestSink` 要接撮合状态机（持仓/资金/滑点），`WebhookSink` 将来要接 HTTP
    重试/幂等/签名，这两个的实现复杂度和 `LogSink` 不是一个量级，放一个文件里会互相干扰
    阅读和测试；拆开后每种实现可以独立演进、独立测试。
-2. **`BacktestSink`/`WebhookSink` 现在是占位报错，不是简化实现**——跟 §6.2 决策2
-   （`indneutralize` 占位）同一个原则：宁可让 `Runner.run_backtest()`/`run_live()` 现在跑
-   不出结果，也不要塞一个"看起来能跑但没有真实撮合/没有真实下单"的版本进去，那样产出的
-   数字会被误认成真实回测收益或真实下单确认，比不实现更危险。在这两个实现落地之前，
-   `run_backtest`/`run_live` 都可以先接 `LogSink`，只验证 Pipeline 主循环本身
-   （数据 → 特征 → 策略 → 信号）跑得通，不代表回测/实盘结果可信。
+2. **`BacktestSink` 落地后依然只是薄转发层，不是简化实现**——跟 §6.2 决策2（`indneutralize`
+   占位）同一个原则的另一面：宁可等第8章的 `Simulator` 真正落地了再让 `BacktestSink` 可用，
+   也不要在那之前塞一个"看起来能跑但没有真实撮合"的版本进去，那样产出的数字会被误认成
+   真实回测收益，比不实现更危险（v0.6 时的决定）。v0.7 落地后，`BacktestSink.submit()`
+   本身仍然不包含任何换手/成本/净值逻辑——那些全部在 `sherpa.backtest.event_driven.Simulator`
+   里（见 §8.4.3/§9.2），`BacktestSink` 只是把 `intents` 转发过去，这条"sink 只是调用者"的
+   原则在真正实现之后依然成立，不是权宜之计。`WebhookSink` 目前仍是占位报错，原则不变：
+   在它落地之前，`run_live` 可以先接 `LogSink`，只验证 Pipeline 主循环本身
+   （数据 → 特征 → 策略 → 信号）跑得通，不代表实盘结果可信。
 
 ### 7.6 v1 范围内不做的事（明确排除，避免过度设计）
 
@@ -510,21 +517,267 @@ class ISignalReceiver(Protocol):
   `WebhookSink` 落地时的职责（它离真实下单最近，重复下单的后果也最大），不在这一层解决，
   对应第2节架构图里④b "幂等"这项当前尚未实现。
 
-## 8. 回测引擎
+## 8. 回测与实盘驱动引擎（`sherpa.metrics` / `sherpa.portfolio` / `sherpa.backtest`，实盘执行占位）
 
-- 向量化路径：简单截面打分/无盯盘止损的策略，直接对 `BarPanel` 做批量运算。
-- 事件驱动路径：需要盯盘止盈止损、挂单撮合模拟的策略，逐 `MarketEvent` 跑。
-- 撮合时间约束：订单只能在 `event.bar_end_time` 之后成交，绝不用当根收盘价无损入场（对应 5.4 的字段设计）。
-- 标准指标：累计收益率、胜率、MaxDrawdown、Sharpe、Calmar、Profit Factor、换手率，以及滑点/手续费敏感性测试表。
+> 本章的两层划分——**Alpha Check**（信息预测力检验）与 **Portfolio & Friction Check**（真实
+> 可变现性验证）——直接来自 [`docs/backtest_principle.md`](backtest_principle.md)（回测第
+> 一性原理）。数学定义和推导以那份文档为准，本章只负责把它落地成模块结构和接口边界，不
+> 重复公式。
 
-## 9. 下游对接（已实现，见 §7.5）
+### 8.1 为什么从"回测引擎"改名，`metrics`/`portfolio` 为什么要独立出来
 
-`ISignalReceiver` 协议、`LogSink`/`BacktestSink`/`WebhookSink` 三个实现的设计决策和目录
-结构已经并入 §7.5（`sherpa/strategy/sink/`），本节保留标题只是为了不打乱后续章节编号，
-不再重复内容。
+`backtest_principle.md` 里的两层拆开看，会发现真正"只服务于历史回放"的东西其实很少：
 
-`SignalIntent` 最小字段集（执行细节留给下游）见 §7.2：`event_id, strategy_id, symbol,
-signal_type, target_percent, bar_end_time, generated_at`——已按此实现，无变化。
+- **第一层（Alpha Check）**的 RankIC/IC_IR/分位数单调性，只是"给定 alpha 矩阵 + 未来收益率
+  矩阵，算统计量"，跟这两个矩阵是历史数据还是别的来源完全无关。
+- **第二层（Portfolio & Friction Check）**里的"alpha→权重映射"（截面去均值+L1、Top-K）和
+  "持仓漂移/换手率计算"，是策略作者在 `on_bar()` 里随时会用到的东西——回测第二层不过是
+  "把同一个映射函数在历史数据上跑一遍"而已。
+- 换手/成本扣完之后的 Sharpe/Calmar/MaxDrawdown 等绩效指标，同样只是"给定一条收益率序列
+  算统计量"，不关心这条序列是回测模拟出来的还是别处来的。
+
+如果把这些都锁在"回测引擎"这个标题/包名下，会造成两个问题：一是命名上让人误以为它们只
+服务于历史回放；二是未来实盘要用同一套仓位映射逻辑时，会被迫依赖一个名叫 `backtest` 的
+包，语义上很别扭，而且 `backtest` 包以后长出的重依赖（比如更复杂的撮合模拟）会被无关地
+一起带进实盘代码。这和业内 `alphalens`（纯因子检验，独立于任何具体回测引擎）、`pyfolio`
+（纯绩效指标，既能吃回测收益率序列也能吃实盘收益率序列）把"检验/指标"和"模拟引擎"分成
+两个库的做法是一致的思路，本仓库照此拆分。
+
+拆分后的依赖方向严格单向：
+
+```text
+sherpa.backtest  ──depends on──>  sherpa.metrics
+sherpa.backtest  ──depends on──>  sherpa.portfolio
+sherpa.strategy  ──depends on──>  sherpa.backtest   (仅 BacktestSink 这一处)
+（未来）sherpa.live  ──depends on──>  sherpa.portfolio   (见 §8.5，不依赖 metrics)
+```
+
+`metrics`/`portfolio` 不反过来依赖 `backtest`/`strategy` 的任何东西，这样它们才能被研究
+脚本、未来实盘模块、乃至仓库之外的地方单独拿去用。
+
+### 8.2 `sherpa.metrics`：纯统计函数
+
+```text
+sherpa/metrics/
+  factor.py        # RankIC / IC_IR / 分位数单调性（backtest_principle.md 第一层）
+  performance.py     # Sharpe / Calmar / MaxDrawdown / 换手衰减（backtest_principle.md 第二层）
+```
+
+**已确认的设计决策**：
+
+1. 这个包只依赖 `pandas`/`numpy`，不 import 本仓库任何其他模块（`data`/`alpha`/`strategy`/
+   `backtest` 都不碰）——保证它可以被完全脱离 Sherpa 其余部分单独测试、单独复用。
+2. `factor.py` 里的函数只吃两个矩阵：alpha 分数 `(T,N)` DataFrame + 未来收益率 `(T,N)`
+   DataFrame，返回逐期 RankIC 序列 + 汇总统计（mean/std/IC_IR）+ 分位数分组收益表——不做
+   任何截面预处理（去极值/中性化），那是调用方（`backtest.alpha_check`）的职责，`metrics`
+   只管算统计量。
+3. `performance.py` 里的函数只吃一条收益率 `pd.Series`，不关心它从哪来——这条边界是为了
+   §8.5 提到的可能性预留的：如果以后 Webhooker 想直接复用这几个公式去算自己的实盘 Sharpe，
+   它只需要一条收益率序列，不需要引入 Sherpa 的模拟/数据层依赖。
+
+### 8.3 `sherpa.portfolio`：alpha → 权重的纯函数映射
+
+```text
+sherpa/portfolio/
+  weighting.py    # demean_l1 / top_k_long_short / equal_weight
+  turnover.py       # 持仓漂移 W_drift + 换手率计算
+```
+
+**已确认的设计决策**：
+
+1. `weighting.py` 每个函数的签名统一是"一个截面的 alpha 分数 → 一个截面的目标权重
+   `pd.Series`"，纯函数、无状态。**同一个函数**在向量化回测第二层调一次、在
+   `BaseStrategy.on_bar()` 里调一次——两处产出的权重口径必须完全一致，这是刻意设计：避免
+   "回测用一套映射公式、实盘/策略代码另写一套"这种最终导致回测结果和实盘表现对不上的
+   经典坑。
+2. `turnover.py` 落地 `backtest_principle.md` §2(4) 的持仓漂移计算：给定上一期目标权重 +
+   期间实际收益率，算出漂移后的权重 `W_drift`，再和新一期目标权重比较得出换手率。这个计算
+   同样不是回测专属——未来如果要做实盘"持仓偏离目标仓位超过阈值就触发再平衡"的监控，同一
+   个函数可以直接复用（见 §8.5）。
+
+### 8.4 `sherpa.backtest`：编排层
+
+```text
+sherpa/backtest/
+  alpha_check.py     # 第一层入口
+  vectorized.py         # 第二层·向量化入口
+  event_driven.py          # 第二层·事件驱动入口（BacktestSink 唯一直接调用的东西）
+  cost_model.py               # 手续费/滑点模型，向量化和事件驱动两条路径共用
+  result.py                     # AlphaCheckResult / BacktestResult
+```
+
+#### 8.4.1 第一层入口：`alpha_check.py`
+
+```python
+def run_alpha_check(
+    alpha_history: pd.DataFrame,      # (T,N)，来自 AlphaEngine.compute_history()
+    forward_returns: pd.DataFrame,     # (T,N)，跟 alpha_history 对齐的未来收益率
+    *,
+    n_quantiles: int = 10,
+    ic_ir_threshold: float = 0.5,
+) -> AlphaCheckResult: ...
+```
+
+调用 `sherpa.metrics.factor` 里的函数算 RankIC 序列/IC_IR/分位数单调性，不做任何仓位/成本
+计算——完全对应 `backtest_principle.md` 第一层"无交易摩擦、纯统计假说检验"的假设。
+`ic_ir_threshold` 显式做成参数而不是写死常量，因为原理文档里明确指出不同频率的因子阈值
+不一样（日频通常要求 IC 均值 >0.03~0.05，分钟级 0.01~0.02 就有价值）；`passed=False` 时
+只是给出建议，`backtest` 模块本身不阻止调用方继续跑第二层。
+
+#### 8.4.2 第二层·向量化入口：`vectorized.py`
+
+```python
+def run_vectorized_backtest(
+    alpha_history: pd.DataFrame,
+    panel: BarPanel,
+    weighting_fn: Callable[[pd.Series], pd.Series],   # 来自 sherpa.portfolio.weighting
+    cost_model: CostModel,
+    *,
+    shift: int = 1,
+) -> BacktestResult: ...
+```
+
+`shift` 就是 `backtest_principle.md` §2(1) 的因果律对齐（alpha 在 t 生成，默认 t+1 才生效）
+——注意这跟 `MarketEvent.bar_end_time`（§5.4）不是同一件事：`bar_end_time` 保证的是"单根
+bar 内部不能用收盘价无损入场"，`shift` 保证的是"权重矩阵整体要比 alpha 矩阵晚一期"，两层
+因果律约束都要满足，缺一不可。内部依次调用 `portfolio.weighting`（生成权重）→
+`portfolio.turnover`（算换手/漂移）→ `cost_model`（算摩擦成本）→
+`metrics.performance`（算最终 Sharpe/Calmar/MaxDrawdown），产出 `BacktestResult`。
+
+#### 8.4.3 第二层·事件驱动入口：`event_driven.py` + `cost_model.py`
+
+```python
+class Simulator:
+    def __init__(
+        self, *, prices: pd.DataFrame, cost_model: CostModel,
+        initial_capital: float = 1.0, interval: str = "1m",
+    ): ...
+    def on_intents(self, intents: Sequence[TargetIntent]) -> None: ...
+    def result(self) -> BacktestResult: ...
+```
+
+`interval` 是为了两件事：① 反解 `SignalIntent.bar_end_time` 对回 `prices` 的 `start_time`
+索引（§5.4 的 `bar_end_time = bar_start_time + interval - 1ms` 公式在这里反着用一次）；
+② 算年化 Sharpe/Calmar 时换算 `periods_per_year`。`TargetIntent` 是 `sherpa.backtest`
+自己定义的结构化 `Protocol`（只要求 `symbol`/`target_percent`/`bar_end_time` 三个字段），
+不是 import 自 `sherpa.strategy.schema.SignalIntent`——这样 8.4.4 决策1"backtest 不依赖
+strategy"才能真正做到没有例外，真正的 `SignalIntent` 天然结构匹配，不需要做任何转换。
+
+`Simulator` 是 `BacktestSink`（见 §9.2）唯一直接持有、直接调用的对象——`sink.submit(intents)`
+只是把 `intents` 转发给 `simulator.on_intents(intents)`，不自己维护任何状态，这是之前讨论
+确认的"sink 只是调用者"。
+
+**一个容易漏掉的点**：`ISignalReceiver.submit(intents)` 的协议必须跟 `WebhookSink` 共用同一
+个签名，只能传 `SignalIntent`（目标百分比 + 时间戳），不能夹带行情——而计算真实收益/换手/
+成本恰恰需要价格。所以 `Simulator` **不能只靠 `on_intents` 喂进来的东西算账**，价格必须在
+构造时作为独立依赖注入（`prices`：跟研究脚本手上那份 `panel.close` 同源的 `(T,N)` DataFrame，
+覆盖整个回测区间）。这不是设计疏漏，而是刻意的职责分离：`intents` 描述"策略想要什么仓位"，
+`prices` 描述"世界实际发生了什么"，两者来源不同、生命周期也不同（`WebhookSink` 完全不需要
+后者，因为它对接的是真实交易所，成交价格由交易所直接返回）。
+
+`Simulator` 内部维护当前持仓权重的运行时状态（相当于持续滚动的 `W_drift`），每收到一批新
+`SignalIntent`（等价于新一期的目标权重 `W_t`，映射这一步已经在 `BaseStrategy.on_bar()` 里用
+`sherpa.portfolio.weighting` 做完了，`Simulator` 不再重复映射），用 `prices` 查出上一期到
+这一期的实际价格变动，把旧权重漂移成 `W_drift`，再跟新目标权重比较算换手，套用 `cost_model`
+扣成本，累乘净值。`cost_model.py` 提供参数化的手续费/滑点函数，向量化和事件驱动两条路径
+必须共用同一套实现（见 8.4.4 决策2）。
+
+#### 8.4.4 结果结构：`result.py`
+
+```python
+@dataclass(frozen=True)
+class AlphaCheckResult:
+    ic_series: pd.Series
+    ic_mean: float
+    ic_std: float
+    ic_ir: float
+    quantile_returns: pd.DataFrame
+    passed: bool
+
+@dataclass(frozen=True)
+class BacktestResult:
+    equity_curve: pd.Series
+    returns: pd.Series
+    turnover: pd.Series
+    sharpe: float
+    calmar: float
+    max_drawdown: float
+```
+
+**已确认的设计决策**：
+
+1. **`sherpa.backtest` 不 import `sherpa.strategy` 的任何东西**——它必须能在完全不存在任何
+   `Runner`/`BaseStrategy` 的情况下被研究脚本独立调用（比如"我有个新 alpha 想先跑一下第一层
+   检验，还没写策略类"），依赖方向永远是 `strategy -> backtest`，不允许反过来。
+2. **向量化和事件驱动两条第二层路径必须共用同一个 `cost_model` 实现，且都产出同一形状的
+   `BacktestResult`**——这样才能用"同一个策略分别跑两条路径，结果应该接近"来交叉验证，这是
+   排查回测引擎自身 bug 最有效的手段之一；如果两条路径各自实现一套摩擦成本逻辑，一旦结果
+   对不上就无法判断是策略问题还是某条路径自己算错了。
+
+### 8.5 实盘执行模块（占位，非本次实现范围）
+
+对应第2节架构图里的 ④b "Live Dispatcher"，目前完全没有代码落地，先占位说明设计意图，不
+在本次一起实现：
+
+- **预期会复用 `sherpa.portfolio`**：如果未来要在 Sherpa 这一侧做"实盘专属"的仓位处理逻辑
+  （比如持仓偏离目标权重超过阈值才触发再平衡信号，而不是每根 bar 都无脑发全量目标仓位），
+  应该直接调用 §8.3 的 `weighting`/`turnover` 函数，跟回测第二层验证过的是同一份代码——
+  避免"实盘跑的映射逻辑"和"回测验证过的映射逻辑"变成两份可能悄悄漂移的实现。
+- **不会复用 `sherpa.metrics.performance` 去算实盘净值曲线**：按本次讨论已确认的方案，实盘
+  清算/PnL 展示是下游 Webhooker 的职责（对应 §1 的范围声明），Sherpa 不接收真实成交回报，
+  也不维护实盘持仓/资金状态。`sherpa.metrics` 之所以设计成不依赖任何模拟/网络的纯函数库
+  （见 §8.2 决策3），就是为了让 Webhooker（如果它也是 Python 服务）以后能直接复用同一套
+  公式算自己的实盘绩效，而不需要 Sherpa 反过来接收 Webhooker 的数据——这条边界现在不变，
+  以后如果出现明确需求再回来重新讨论。
+- **落点未定**：不预先创建 `sherpa/live/` 之类的空目录或占位类——跟 §7.5 的 `WebhookSink`
+  （依赖关系已经明确，只是要等 Webhooker 接口定稿）不同，实盘执行模块现在连要做什么都
+  还没定，提前写占位代码没有实际意义，等有具体需求时再创建。
+
+## 9. Sink 的实例化与调用
+
+`ISignalReceiver`/三个实现的设计决策见 §7.5，`Simulator`/`BacktestResult` 的设计见 §8.4，
+本节只给"调用方怎么组装"的接线示例，不重复设计动机。
+
+### 9.1 `LogSink`——验证 Pipeline 主循环 / 实盘链路打通阶段
+
+```python
+from sherpa.strategy.runner import Runner
+from sherpa.strategy.sink import LogSink
+
+runner = Runner(strategy=MyStrategy(), alpha_engine=alpha_engine, sink=LogSink())
+runner.run_backtest(historical_panel_source)   # 或 run_live(live_panel_source)
+```
+
+不需要任何额外配置，`LogSink()` 直接可用，只落日志——是 M3/M4 阶段验证链路是否跑通、以及
+实盘链路打通阶段的默认选择，不代表回测/实盘结果可信。
+
+### 9.2 `BacktestSink`——需要注入一个 `Simulator`
+
+```python
+from sherpa.backtest.event_driven import Simulator
+from sherpa.backtest.cost_model import FixedFeeCostModel
+from sherpa.strategy.runner import Runner
+from sherpa.strategy.sink import BacktestSink
+
+simulator = Simulator(prices=historical_panel.close, cost_model=FixedFeeCostModel(fee_bps=5), initial_capital=1.0)
+runner = Runner(strategy=MyStrategy(), alpha_engine=alpha_engine, sink=BacktestSink(simulator))
+runner.run_backtest(historical_panel_source)
+
+result = simulator.result()   # BacktestResult：equity_curve / returns / turnover / sharpe / ...
+```
+
+`BacktestSink` 本身不持有任何业务状态，构造时接收一个 `Simulator`，`submit(intents)` 只是
+转发给 `simulator.on_intents(intents)`——真正的换手/成本/净值计算全部在 `sherpa.backtest`
+里完成（见 §8.4.3/8.4.4）。
+
+### 9.3 `WebhookSink`——占位，等 Webhooker 就绪
+
+```python
+sink = WebhookSink()   # 目前 submit() 直接 raise NotImplementedError（§7.5 决策2，故意的）
+```
+
+构造函数的具体参数（endpoint / 鉴权 / 重试策略）留到 Webhooker 接口定稿后再设计，现在调用
+会在 `submit()` 时报错，不是 bug。
 
 ## 10. 落地顺序建议
 
@@ -533,9 +786,9 @@ signal_type, target_percent, bar_end_time, generated_at`——已按此实现，
 | M0 | `BarPanel` / `MarketEvent` 数据结构 + 单元测试（用 mock CH/Redis 数据） |
 | M1 | `CHReader` + `Normalizer` + `HistoricalPanelSource`，先打通批量回测取数 |
 | M2 | Base Primitives + 若干 Alpha101 验证 `calculate(panel)` |
-| M3 | ~~`BaseStrategy` / `Runner`~~ 已落地（见第7章），`Runner.run_backtest`/`run_live` 主循环打通，先接 `LogSink`；向量化回测引擎 + 基础风控指标（`BacktestSink`）仍待做，见第8章 |
+| M3 | ~~`BaseStrategy` / `Runner`~~ 已落地（见第7章）；~~向量化回测引擎 + 基础风控指标~~ 已落地（`sherpa.metrics`/`sherpa.portfolio`/`sherpa.backtest.{alpha_check,vectorized}`，见第8章） |
 | M4 | `RedisReader` + `WindowCache`(1m) + `LivePanelSource`，实时链路先接 `LogSink` 观察信号 |
-| M5 | 事件驱动回测引擎（止盈止损/挂单模拟）；等 Webhooker 就绪后再实现 `WebhookSink` |
+| M5 | ~~事件驱动回测引擎~~ 已落地（`sherpa.backtest.event_driven.Simulator` + `BacktestSink`，见 §8.4.3/§9.2）；止盈止损/挂单模拟等更复杂的撮合细节仍可按需扩展；等 Webhooker 就绪后再实现 `WebhookSink` |
 
 ---
 
