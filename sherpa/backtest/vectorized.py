@@ -40,31 +40,34 @@ def run_vectorized_backtest(
     target_weights = target_weights.reindex(columns=panel.close.columns, fill_value=0.0)
     effective_weights = target_weights.shift(shift)
 
-    period_returns = panel.close.pct_change()
+    period_returns = panel.close.pct_change() # return_t = (close_t - close_{t-1}) / close_{t-1}，用来计算每根 bar 的已实现收益
 
-    common_index = effective_weights.index.intersection(period_returns.index)
+    # 把因(权重）果（收益）关系放到了‘果’的这个时间行中, t时刻行含有 {close_t, return_t, effective_weight_t(也就是 weight_t-1)...}
+    common_index = effective_weights.index.intersection(period_returns.index) 
     effective_weights = effective_weights.loc[common_index]
     period_returns = period_returns.loc[common_index]
 
     net_returns: list[float] = []
     turnovers: list[float] = []
-    prev_weights = pd.Series(0.0, index=panel.close.columns)
-    # `prev_weights` 是在*上一根* bar 才生效持有的权重，真正漂移它要用上一根 bar 自己实现的
+
+    # `prev_weights` 是在*上一根* bar 刚开始时，生效持有的权重，真正漂移它要用上一根 bar 闭合时的
     # 收益率，不是当前这根——这两根 bar 的收益率通常不同，用错会导致换手算多/算少（这个坑
     # 已经在 event_driven.py 的实现/文档里踩过一次，这里的写法要跟它保持一致，见 §8.4.4 决策2）。
+    prev_weights = pd.Series(0.0, index=panel.close.columns) # prev effective weights
+    # decided by the (t-2) bar's alpha, calculated to (t-2) weights, then shift to (t-1) effective_weights
     prev_return = pd.Series(0.0, index=panel.close.columns)
 
     for t in common_index:
-        w_t = effective_weights.loc[t].fillna(0.0)
+        ew_t = effective_weights.loc[t].fillna(0.0) # w_t-1
         r_t = period_returns.loc[t]
         drifted = drift_weights(prev_weights, prev_return)
-        to = compute_turnover(w_t, drifted)
-        gross = float((w_t * r_t.fillna(0.0)).sum())
+        to = compute_turnover(ew_t, drifted)
+        gross = float((ew_t * r_t.fillna(0.0)).sum())
         cost = cost_model.cost(to)
 
         net_returns.append(gross - cost)
         turnovers.append(to)
-        prev_weights = w_t
+        prev_weights = ew_t
         prev_return = r_t.fillna(0.0)
 
     net_series = pd.Series(net_returns, index=common_index, name="net_return")
