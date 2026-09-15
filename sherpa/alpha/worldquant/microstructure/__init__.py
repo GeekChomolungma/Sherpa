@@ -1,0 +1,43 @@
+"""分类四·高低价差与盘口结构类（18 个，`101_alpha_factors_classified.md` §四）。"""
+
+from .alphas import (
+    Alpha005,
+    Alpha018,
+    Alpha028,
+    Alpha041,
+    Alpha042,
+    Alpha047,
+    Alpha053,
+    Alpha054,
+    Alpha055,
+    Alpha057,
+    Alpha060,
+    Alpha065,
+    Alpha066,
+    Alpha068,
+    Alpha073,
+    Alpha077,
+    Alpha083,
+    Alpha092,
+)
+
+__all__ = [
+    "Alpha005",
+    "Alpha018",
+    "Alpha028",
+    "Alpha041",
+    "Alpha042",
+    "Alpha047",
+    "Alpha053",
+    "Alpha054",
+    "Alpha055",
+    "Alpha057",
+    "Alpha060",
+    "Alpha065",
+    "Alpha066",
+    "Alpha068",
+    "Alpha073",
+    "Alpha077",
+    "Alpha083",
+    "Alpha092",
+]

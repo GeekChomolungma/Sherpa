@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 
 import pandas as pd
@@ -14,12 +15,17 @@ import pandas as pd
 def rank_ic(alpha: pd.DataFrame, forward_returns: pd.DataFrame) -> pd.Series:
     """逐期 Spearman 秩相关系数（原理文档 §1.2(1)）。
 
-    index 对齐取交集；某一期非缺失的 symbol 数不足 2 个时相关系数无意义，返回 NaN
-    （`DataFrame.corrwith` 对全 NaN/单点行的默认行为已经是 NaN，这里不需要额外处理）。
+    index 对齐取交集；某一期非缺失的 symbol 数不足 2 个、或某一整行恒定（比如占位因子/
+    某个截面全部打平）时相关系数无意义，返回 NaN（`DataFrame.corrwith` 对这些情况的默认
+    行为已经是 NaN，不需要额外处理）。scipy 在恒定输入时会顺带打一条 `ConstantInputWarning`
+    到 stderr——这条警告描述的正是我们已经处理好、预期之内的 NaN 情况，不是需要调用方
+    关注的异常，批量跑几十上百个因子时会刷屏，这里显式吞掉。
     """
     alpha, forward_returns = alpha.align(forward_returns, join="inner", axis=0)
     common_cols = alpha.columns.intersection(forward_returns.columns)
-    ic = alpha[common_cols].corrwith(forward_returns[common_cols], axis=1, method="spearman")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        ic = alpha[common_cols].corrwith(forward_returns[common_cols], axis=1, method="spearman")
     return ic.rename("rank_ic")
 
 

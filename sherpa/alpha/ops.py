@@ -63,6 +63,11 @@ def stddev(x: pd.DataFrame, window: int) -> pd.DataFrame:
     return x.rolling(window).std()
 
 
+def ts_product(x: pd.DataFrame, window: int) -> pd.DataFrame:
+    """窗口内累乘（世坤101公式里的 `product(x, d)`）。"""
+    return x.rolling(window).apply(lambda s: float(np.prod(s.values)), raw=False)
+
+
 def ts_rank(x: pd.DataFrame, window: int) -> pd.DataFrame:
     """滚动窗口内的时序百分位排名（逐 symbol 独立，不跨 symbol，别跟 rank() 搞混）。"""
     return x.rolling(window).apply(lambda s: pd.Series(s).rank(pct=True).iloc[-1], raw=False)
@@ -78,7 +83,17 @@ def ts_argmin(x: pd.DataFrame, window: int) -> pd.DataFrame:
 
 
 def ts_corr(x: pd.DataFrame, y: pd.DataFrame, window: int) -> pd.DataFrame:
-    return x.rolling(window).corr(y)
+    """滚动皮尔逊相关系数。窗口内方差趋近于 0 时（比如横截面 rank 在只有几个 symbol 的
+    小市场里连续几期打平），浮点误差会让"本该恰好是 0"的方差算成 ~1e-17 而不是精确 0，
+    分母趋近 0 但不精确为 0——这会让 pandas 算出 `inf`，甚至是 `1.5` 这种超出 [-1,1] 定义域
+    但看着又不像 inf 的"貌似正常"的错误值（同一个数值不稳定问题的两种外在表现）。这个坑
+    已经在 `sherpa.metrics.factor.ic_summary`/`sherpa.metrics.performance.sharpe_ratio`
+    踩过两次，这里统一处理：明显越界（超过定义域 1e-6 以上）的判定为数值不稳定，收口成
+    NaN；只是浮点舍入级别的轻微越界（比如 1.0000000002）夹回 [-1,1]，不当作错误。
+    """
+    result = x.rolling(window).corr(y)
+    result = result.where(result.abs() <= 1 + 1e-6)
+    return result.clip(lower=-1.0, upper=1.0)
 
 
 def ts_cov(x: pd.DataFrame, y: pd.DataFrame, window: int) -> pd.DataFrame:
@@ -95,7 +110,9 @@ def decay_linear(x: pd.DataFrame, window: int) -> pd.DataFrame:
 # ---- 逐元素算子 ----
 
 
-def signed_power(x: pd.DataFrame, power: float) -> pd.DataFrame:
+def signed_power(x: pd.DataFrame, power: float | pd.DataFrame) -> pd.DataFrame:
+    """保持符号的幂：`sign(x) * |x|^power`。`power` 也可以是逐元素变化的 DataFrame
+    （世坤101 Alpha#84 就是这么用的：指数本身是 `delta(close, 4)`，不是常数）。"""
     return np.sign(x) * (x.abs() ** power)
 
 

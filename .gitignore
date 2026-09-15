@@ -5,3 +5,7 @@ __pycache__/
 .venv/
 venv/
 *.log
+
+# research/ 下脚本跑真实 ClickHouse 数据产出的报告——因为跑的是随时间变化的真实行情，
+# 每次重跑结果都不一样，不是可复现的源代码，不提交进仓库。
+research/**/*.csv

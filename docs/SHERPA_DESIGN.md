@@ -14,9 +14,11 @@
 >
 > **v0.6 变更**：新增 `docs/backtest_principle.md`（回测第一性原理，Alpha Check / Portfolio & Friction Check 两层体系），第8章据此从"回测引擎"改名为"回测与实盘驱动引擎"并重写——拆出 `sherpa.metrics`（纯统计：RankIC/IC_IR/分位数单调性、Sharpe/Calmar/MaxDrawdown）和 `sherpa.portfolio`（纯映射：alpha→权重、持仓漂移/换手率）两个跟 `sherpa.backtest` 平行、可被策略/未来实盘复用的模块，`sherpa.backtest` 变成组合调用它们的编排层。实盘执行模块给出占位小节（§8.5），明确"清算/PnL 归属 Webhooker"这条边界不变（方案A，已讨论确认）。第9章改写成三种 sink 的实例化/接线示例，不再重复设计决策。
 >
-> **v0.7 变更**：第8章从设计说明改写成完整落地——`sherpa/metrics/`（`factor.py`/`performance.py`）、`sherpa/portfolio/`（`weighting.py`/`turnover.py`）、`sherpa/backtest/`（`alpha_check.py`/`vectorized.py`/`event_driven.py`/`cost_model.py`/`result.py`）全部有代码和单元测试；`BacktestSink` 同步从占位报错改成真正转发给 `Simulator`（`WebhookSink` 仍是占位）。实现过程中发现并修正了三个数值上容易踩的坑，都已经写成回归测试：① `ic_summary` 原来对"std≈0"一律判 NaN，导致一个完美稳定的因子（IC 每期都≈1）反而被判不通过，现在区分"std≈0 且 mean≈0"（真 0/0，NaN）和"std≈0 但 mean 明显非零"（+inf）两种情况；② `annualized_return` 直接做 `total_growth ** (periods_per_year/n)` 在样本很短、频率很高时（比如 4 根 1m bar 外推全年）会 `OverflowError`，改成对数空间算指数、溢出时退化成 `inf`；③ `vectorized.py` 算换手时把"漂移用的收益率"和"算毛收益用的收益率"搞成了同一根 bar 的（应该是上一根 bar 的），这个 bug 是靠"向量化和事件驱动两条路径结果必须一致"（§8.4.4 决策2）这条交叉验证抓出来的——单纯跑通向量化路径自己的单元测试是发现不了的。
+> **v0.7 变更**：第8章从设计说明改写成完整落地——`sherpa/metrics/`（`factor.py`/`performance.py`）、`sherpa/portfolio/`（`weighting.py`/`turnover.py`）、`sherpa/backtest/`（`alpha_check.py`/`vectorized.py`/`event_driven.py`/`cost_model.py`/`result.py`）全部有代码和单元测试；`BacktestSink` 同步从占位报错改成真正转发给 `Simulator`（`WebhookSink` 仍是占位）。实现过程中发现并修正了三个数值上容易踩的坑，都已经写成回归测试：① `ic_summary` 原来对"std≈0"一律判 NaN，导致一个完美稳定的因子（IC 每期都≈1）反而被判不通过，现在区分"std≈0 且 mean≈0"（真 0/0，NaN）和"std≈0 但 mean 明显非零"（+inf）两种情况；② `annualized_return` 直接做 `total_growth ** (periods_per_year/n)` 在样本很短、频率很高时（比如 4 根 1m bar 外推全年）会 `OverflowError`，改成对数空间算指数、溢出时退化成 `inf`；③ `vectorized.py` 算换手时把"漂移用的收益率"和"算毛收益用的收益率"搞成了同一根 bar 的（应该是上一根 bar 的），这个 bug 是靠"向量化和事件驱动两条路径结果必须一致"（§8.4.5 决策2）这条交叉验证抓出来的——单纯跑通向量化路径自己的单元测试是发现不了的。
 >
 > **v0.8 变更**：§8.5 从"占位，非本次实现范围"改写成真正落地的 `sherpa.live`（`request.py`：`LiveOrderRequest` + `build_live_requests`），`LogSink` 同步升级成调用它——这是关于"实盘专属逻辑该挂在哪"这条边界讨论后的结论：**会改变决策结果的逻辑**（比如仓位再平衡阈值这类"要不要发信号"的判断，讨论中称为"gate"）必须对回测/实盘一视同仁，只能挂在 `Runner` 主循环里对所有 sink 共享的阶段，不能挂在某个具体 sink 上，否则回测验证过的净值曲线不能代表实盘真实发生的仓位路径——这类东西现在**还没有具体需求，本版不实现，也不会放进 `sherpa.live`**；**不改变决策结果、只是把决策打包成可派发形状的逻辑**（幂等 key、派发时间戳）不影响策略在任何驱动方式下的行为，`BacktestSink`/`Simulator` 用不上、也不需要知道它的存在，所以适合让 `LogSink`/`WebhookSink` 直接共用——这是 `sherpa.live` 现在唯一收纳的东西。`LogSink` 因此从"照抄 `Runner` 原始输出"升级成名副其实的 paper trading：日志里能看到"如果接了 `WebhookSink`，真正会派发出去的样子"（幂等 key、派发时刻都在），`WebhookSink` 落地时只需要把序列化目标从"写日志"换成"发 HTTP"，复用同一个 `build_live_requests`。
+>
+> **v0.9 变更**：世坤101因子库从 8/101 补齐到 101/101——用户提供了 `sherpa/alpha/worldquant/101_alpha_factors_classified.md`（按经济含义分好的五大类、每条公式的原始表达式），§6.3 据此重写：`worldquant/` 从"按文件"改成"按文件夹"（`industry/price_volume/momentum_reversal/microstructure/composite`，18+28+25+18+12=101），新增 `_common.py`（`ternary`/`bool_to_signal` 两个小工具，统一处理三元表达式/布尔当分数的 NaN 传播）。19 个公式因为 `BarPanel` 缺字段占位不实现（18 个缺行业分类、Alpha056 缺市值），处理方式跟 §6.2 决策2 的 `indneutralize` 占位一致。实现过程中在 `ops.ts_corr` 里又抓到一个"std≈0 时浮点误差把 NaN 变成别的错误值"的坑（这个 session 第三次遇到同类问题）——横截面/时序秩取值范围很窄时，滚动相关系数会算出 `inf` 甚至 `1.5` 这种超出定义域的值，现在统一收口成 NaN。测试策略上也有一条值得记录的教训：`min_lookback` 对含三元分支/`min`/`max` 的复合公式只能是保守上界（哪个分支更快成熟完全看数据），不能要求"某根之前必须全 NaN"，测试因此按"是否含分支"拆成严格/宽松两组，只对最初手工核实过的 8 个简单公式做逐根边界断言。
 
 ---
 
@@ -316,17 +318,27 @@ class Alpha:
 sherpa/alpha/
   ops.py                 # 无状态算子库：rank/scale/indneutralize（横截面），
                           # delay/delta/ts_sum/ts_min/ts_max/stddev/ts_rank/
-                          # ts_argmax/ts_argmin/ts_corr/ts_cov/decay_linear（时序），
+                          # ts_argmax/ts_argmin/ts_corr/ts_cov/ts_product/decay_linear（时序），
                           # signed_power/sign/log（逐元素），adv/vwap（常见子表达式）
   base.py                 # Alpha / AlphaRegistry / register_alpha / custom_alpha
   engine.py               # AlphaEngine
-  worldquant/             # 世坤101风格因子，按经济含义分类到子模块：
-    momentum.py            动量类：押注趋势延续                    Alpha009
-    reversal.py             反转/均值回归类：押注极端表现会被修正        Alpha004
-    volume_price.py          量价关系类：volume 和 price 的联动/背离     Alpha002/003/006/012
-    volatility.py            波动率类：用价格离散度构造信号            Alpha001
-    pattern.py               价格形态类：K线内部结构/形状              Alpha101
-    cross_sectional.py        跨截面/行业中性类：依赖 indneutralize，占位不实现
+  worldquant/             # 世坤101风格因子，按 `101_alpha_factors_classified.md` 的
+                          # 五个大类分子文件夹（不是按文件，是按文件夹——每类内部公式数量
+                          # 太多，单文件放不下也不好找），18+28+25+18+12=101，跟论文编号
+                          # 一一对应：
+    _common.py              ternary/bool_to_signal 两个小工具：把"三元表达式/布尔当分数"
+                             统一转换，同时处理 NaN 传播（设计文档 §6.5 教训），所有五个
+                             分类文件夹共用
+    industry/                分类一·行业与板块中性化类（18个）：全部依赖 indneutralize/
+                             IndClass，BarPanel 没有行业数据，v1 统一占位不实现
+                             （base.py 定义占位基类，placeholders.py 是 18 个具体编号）
+    price_volume/             分类二·量价关系与流动性交叉类（28个），Alpha056 另外依赖
+                             市值(cap)，BarPanel 也没有，单独占位
+    momentum_reversal/         分类三·动量与趋势反转类（25个）
+    microstructure/             分类四·高低价差与盘口结构类（18个）
+    composite/                   分类五·复合极值与非线性时序衰减类（12个；这个分类的
+                                 标题写"14个"，实际表格只列了 12 条，是原始分类文档自己
+                                 的计数笔误，代码以表格实际内容为准，5 类总数仍是 101）
   tradingview/            # TA 指标复刻：RSI、ATR（先两个打样，其余按需补）
   custom/                 # 用户自定义：CustomAlpha 子类 或 @custom_alpha 装饰函数
 ```
@@ -339,20 +351,21 @@ class TradingViewIndicator(Alpha):  family = "tradingview"
 class CustomAlpha(Alpha):       family = "custom"
 ```
 
-**世坤101已实现子集**（8/101，都不依赖 `indneutralize`/市值）：
+**世坤101已全部落地**（101/101，对着 `sherpa/alpha/worldquant/101_alpha_factors_classified.md`
+逐条实现；19 个因为 `BarPanel` 缺字段占位不实现：18 个缺行业分类、Alpha056 缺市值）。新增/
+核对一个因子的流程：找到对应大类的 `alphas.py`（或 `placeholders.py`），继承
+`WorldQuantAlpha`，用 `@register_alpha` 注册，公式对着 `101_alpha_factors_classified.md`
+核对，不要凭印象默写；公式里的非整数窗口一律按论文约定 `int(floor(d))` 处理，写代码时
+直接用取整后的整数常量。三元表达式/布尔当分数的公式统一调用 `_common.ternary`/
+`_common.bool_to_signal`，不要各自手写 NaN 掩码。
 
-| 分类 | Alpha | 公式 | 一句话含义 |
-| :-- | :-- | :-- | :-- |
-| 动量 | Alpha#9 | 连续5根同向延续，否则反转当根变动 | 趋势确认 |
-| 反转 | Alpha#4 | `-1 * ts_rank(rank(low), 9)` | 低价持续偏低的做反向 |
-| 量价 | Alpha#2 | 成交量变化率与实体涨跌幅的横截面负相关 | 量价背离 |
-| 量价 | Alpha#3 | `-1 * correlation(rank(open), rank(volume), 10)` | 开盘价-成交量背离 |
-| 量价 | Alpha#6 | `-1 * correlation(open, volume, 10)` | 同上，不做横截面排名 |
-| 量价 | Alpha#12 | `sign(delta(volume,1)) * -delta(close,1)` | 放量时价格反转 |
-| 波动率 | Alpha#1 | 下跌用波动率/上涨用收盘价，找5根内极值位置 | 波动聚集 + 反转 |
-| 形态 | Alpha#101 | `(close-open)/((high-low)+.001)` | 收盘强弱 |
-
-**其余 ~93 个公式暂未实现**——101 篇公式全部逐条核实工作量很大，没有把握的宁可先留空，也不往交易系统里塞没核实过的公式。新增一个因子的流程：找经济含义最接近的分类文件（没有合适的就新建一个），继承 `WorldQuantAlpha`，用 `@register_alpha` 注册，公式本身对着原始论文核对，不要凭印象默写。
+实现过程中在 `sherpa.alpha.ops.ts_corr` 里发现并修了一个数值稳定性问题：横截面/时序秩的
+取值范围很窄（比如只有几个 symbol，或者 `ts_rank(x,4)` 只有 4 种可能取值）时，滚动窗口内
+方差趋近于 0 但不精确为 0，pandas 原生 `.rolling().corr()` 会算出 `inf` 甚至是 `1.5` 这种
+超出 `[-1,1]` 定义域但看着不像 inf 的错误值——这是本 session 第三次踩到"std≈0 时浮点误差
+让本该是 NaN 的东西变成别的错误值"这类坑（前两次是 `sherpa.metrics.factor.ic_summary`/
+`sherpa.metrics.performance.sharpe_ratio`），现在 `ts_corr` 会把明显越界（超过 `[-1,1]`
+`1e-6` 以上）的值收口成 NaN，只是浮点舍入级别的轻微越界才夹回定义域，不当作错误处理。
 
 **TradingView 家族**目前实现 `RSI`、`ATR` 两个打样，模式相同：继承 `TradingViewIndicator`，参数化的指标（比如 `RSI(period=14)`）在 `__init__` 里把 `self.name` 改成带参数后缀的形式（`"rsi_14"`），避免同一个引擎里放两个不同 period 的 RSI 时 `qualified_name` 撞车。
 
@@ -504,7 +517,7 @@ class ISignalReceiver(Protocol):
    也不要在那之前塞一个"看起来能跑但没有真实撮合"的版本进去，那样产出的数字会被误认成
    真实回测收益，比不实现更危险（v0.6 时的决定）。v0.7 落地后，`BacktestSink.submit()`
    本身仍然不包含任何换手/成本/净值逻辑——那些全部在 `sherpa.backtest.event_driven.Simulator`
-   里（见 §8.4.3/§9.2），`BacktestSink` 只是把 `intents` 转发过去，这条"sink 只是调用者"的
+   里（见 §8.4.4/§9.2），`BacktestSink` 只是把 `intents` 转发过去，这条"sink 只是调用者"的
    原则在真正实现之后依然成立，不是权宜之计。`WebhookSink` 目前仍是占位报错，原则不变：
    在它落地之前，`run_live` 可以先接 `LogSink`，只验证 Pipeline 主循环本身
    （数据 → 特征 → 策略 → 信号）跑得通，不代表实盘结果可信。
@@ -558,7 +571,7 @@ sherpa.strategy  ──depends on──>  sherpa.live        (LogSink/WebhookSin
 脚本、未来实盘模块、乃至仓库之外的地方单独拿去用。`sherpa.live` 目前不依赖 `metrics`/
 `portfolio`（见 §8.5，它现在只处理信号的打包格式，不碰权重/绩效数字），也不反向依赖
 `sherpa.strategy`——见 §8.5 里 `SignalIntentLike` Protocol 的说明，跟 `sherpa.backtest.
-event_driven.TargetIntent`（§8.4.3）是同一个理由。
+event_driven.TargetIntent`（§8.4.4）是同一个理由。
 
 ### 8.2 `sherpa.metrics`：纯统计函数
 
@@ -605,10 +618,11 @@ sherpa/portfolio/
 ```text
 sherpa/backtest/
   alpha_check.py     # 第一层入口
-  vectorized.py         # 第二层·向量化入口
-  event_driven.py          # 第二层·事件驱动入口（BacktestSink 唯一直接调用的东西）
-  cost_model.py               # 手续费/滑点模型，向量化和事件驱动两条路径共用
-  result.py                     # AlphaCheckResult / BacktestResult
+  screening.py         # 第一层批量版：一次跑一整个 AlphaEngine，产出排行榜
+  vectorized.py           # 第二层·向量化入口
+  event_driven.py            # 第二层·事件驱动入口（BacktestSink 唯一直接调用的东西）
+  cost_model.py                 # 手续费/滑点模型，向量化和事件驱动两条路径共用
+  result.py                       # AlphaCheckResult / BacktestResult
 ```
 
 #### 8.4.1 第一层入口：`alpha_check.py`
@@ -629,7 +643,44 @@ def run_alpha_check(
 不一样（日频通常要求 IC 均值 >0.03~0.05，分钟级 0.01~0.02 就有价值）；`passed=False` 时
 只是给出建议，`backtest` 模块本身不阻止调用方继续跑第二层。
 
-#### 8.4.2 第二层·向量化入口：`vectorized.py`
+#### 8.4.2 第一层·批量版：`screening.py`
+
+```python
+def screen_alphas(
+    alpha_engine: AlphaEngine,
+    panel: BarPanel,
+    forward_returns: pd.DataFrame,
+    *,
+    n_quantiles: int = 10,
+    ic_ir_threshold: float = 0.5,
+) -> ScreeningReport: ...
+
+@dataclass(frozen=True)
+class ScreeningReport:
+    table: pd.DataFrame          # index=qualified_name，按 IC_IR 从高到低排序
+    errors: dict[str, str]         # 算不出来的 alpha（比如占位因子）：qualified_name -> 报错信息
+```
+
+世坤101因子库补齐到 101 个之后，一次性看"这一批因子里哪些真的有预测力"是研究阶段的高频
+需求（比如每加几个新公式就想知道整批排行有没有变化），一个个手动调 `run_alpha_check` 太
+慢，所以加了这个批量版。
+
+**已确认的设计决策**：
+
+1. **不复用 `AlphaEngine.compute_history()`**——那是一个 dict comprehension，只要其中一个
+   alpha `raise`（世坤101现在就有 19 个占位因子会这样），整批直接失败，拿不到任何结果。
+   `screen_alphas` 改成逐个 alpha 单独调用 `alpha.compute()`，单独捕获
+   `NotImplementedError` 记进 `errors`，不让一个占位因子拖累其余因子的结果——这正是"批量
+   筛选"这个场景的核心诉求：你往往是在还没搞清楚哪些因子能算的阶段就想跑一遍全集。
+2. **只吞 `NotImplementedError`，其余异常照常往外抛**——占位因子抛这个是"预期之中"的
+   已知状态，但如果是别的异常（比如公式本身写错了），不应该被"这个因子算不出来"这种
+   措辞悄悄盖过去，那样会把真正的 bug 伪装成正常的因子筛选结果。
+3. **排序用 `na_position="last"`**：`ic_ir` 可能是 `NaN`（因子完全没有信息量，见
+   `sherpa.metrics.factor.ic_summary` 的 0/0 情况）或 `inf`（因子稳定到 std≈0，见同一个
+   函数的 +inf 情况），`inf` 天然排在"从高到低"的最前面（数学上合理——极端稳定的强信号
+   理应排第一），`NaN` 显式排到最后而不是穿插在中间，方便一眼看出"完全没有信息量"的因子。
+
+#### 8.4.3 第二层·向量化入口：`vectorized.py`
 
 ```python
 def run_vectorized_backtest(
@@ -649,7 +700,7 @@ bar 内部不能用收盘价无损入场"，`shift` 保证的是"权重矩阵整
 `portfolio.turnover`（算换手/漂移）→ `cost_model`（算摩擦成本）→
 `metrics.performance`（算最终 Sharpe/Calmar/MaxDrawdown），产出 `BacktestResult`。
 
-#### 8.4.3 第二层·事件驱动入口：`event_driven.py` + `cost_model.py`
+#### 8.4.4 第二层·事件驱动入口：`event_driven.py` + `cost_model.py`
 
 ```python
 class Simulator:
@@ -665,7 +716,7 @@ class Simulator:
 索引（§5.4 的 `bar_end_time = bar_start_time + interval - 1ms` 公式在这里反着用一次）；
 ② 算年化 Sharpe/Calmar 时换算 `periods_per_year`。`TargetIntent` 是 `sherpa.backtest`
 自己定义的结构化 `Protocol`（只要求 `symbol`/`target_percent`/`bar_end_time` 三个字段），
-不是 import 自 `sherpa.strategy.schema.SignalIntent`——这样 8.4.4 决策1"backtest 不依赖
+不是 import 自 `sherpa.strategy.schema.SignalIntent`——这样 8.4.5 决策1"backtest 不依赖
 strategy"才能真正做到没有例外，真正的 `SignalIntent` 天然结构匹配，不需要做任何转换。
 
 `Simulator` 是 `BacktestSink`（见 §9.2）唯一直接持有、直接调用的对象——`sink.submit(intents)`
@@ -685,9 +736,9 @@ strategy"才能真正做到没有例外，真正的 `SignalIntent` 天然结构�
 `sherpa.portfolio.weighting` 做完了，`Simulator` 不再重复映射），用 `prices` 查出上一期到
 这一期的实际价格变动，把旧权重漂移成 `W_drift`，再跟新目标权重比较算换手，套用 `cost_model`
 扣成本，累乘净值。`cost_model.py` 提供参数化的手续费/滑点函数，向量化和事件驱动两条路径
-必须共用同一套实现（见 8.4.4 决策2）。
+必须共用同一套实现（见 8.4.5 决策2）。
 
-#### 8.4.4 结果结构：`result.py`
+#### 8.4.5 结果结构：`result.py`
 
 ```python
 @dataclass(frozen=True)
@@ -785,7 +836,7 @@ def build_live_requests(intents: Sequence[SignalIntentLike]) -> list[LiveOrderRe
    是否合理、不检查是否该发这条信号——那些是 §8.5.1 讨论过、明确排除在外的 gate 类逻辑，
    `sherpa.live` 的职责边界里没有它们的位置。
 4. **`SignalIntentLike` 是本地定义的结构化 Protocol，不 import `sherpa.strategy.
-   SignalIntent`**——跟 `sherpa.backtest.event_driven.TargetIntent`（§8.4.3）同一个理由：
+   SignalIntent`**——跟 `sherpa.backtest.event_driven.TargetIntent`（§8.4.4）同一个理由：
    `sherpa.live` 不反向依赖 `sherpa.strategy`，真正的 `SignalIntent` 天然满足这个
    Protocol，`LogSink`/`WebhookSink` 转发过去不需要做任何转换。
 5. **不会复用 `sherpa.metrics.performance` 去算实盘净值曲线**：按之前讨论已确认的方案，
@@ -834,7 +885,7 @@ result = simulator.result()   # BacktestResult：equity_curve / returns / turnov
 
 `BacktestSink` 本身不持有任何业务状态，构造时接收一个 `Simulator`，`submit(intents)` 只是
 转发给 `simulator.on_intents(intents)`——真正的换手/成本/净值计算全部在 `sherpa.backtest`
-里完成（见 §8.4.3/8.4.4）。
+里完成（见 §8.4.4/8.4.5）。
 
 ### 9.3 `WebhookSink`——占位，等 Webhooker 就绪
 
@@ -854,7 +905,7 @@ sink = WebhookSink()   # 目前 submit() 直接 raise NotImplementedError（§7.
 | M2 | Base Primitives + 若干 Alpha101 验证 `calculate(panel)` |
 | M3 | ~~`BaseStrategy` / `Runner`~~ 已落地（见第7章）；~~向量化回测引擎 + 基础风控指标~~ 已落地（`sherpa.metrics`/`sherpa.portfolio`/`sherpa.backtest.{alpha_check,vectorized}`，见第8章） |
 | M4 | `RedisReader` + `WindowCache`(1m) + `LivePanelSource`，实时链路先接 `LogSink` 观察信号 |
-| M5 | ~~事件驱动回测引擎~~ 已落地（`sherpa.backtest.event_driven.Simulator` + `BacktestSink`，见 §8.4.3/§9.2）；止盈止损/挂单模拟等更复杂的撮合细节仍可按需扩展；等 Webhooker 就绪后再实现 `WebhookSink` |
+| M5 | ~~事件驱动回测引擎~~ 已落地（`sherpa.backtest.event_driven.Simulator` + `BacktestSink`，见 §8.4.4/§9.2）；止盈止损/挂单模拟等更复杂的撮合细节仍可按需扩展；等 Webhooker 就绪后再实现 `WebhookSink` |
 
 ---
 

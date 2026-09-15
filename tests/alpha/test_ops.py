@@ -37,6 +37,11 @@ def test_ts_sum_min_max():
     assert ops.ts_max(x, 2)["A"].tolist()[-2:] == [3.0, 4.0]
 
 
+def test_ts_product_matches_manual_rolling_product():
+    x = _df({"A": [1.0, 2.0, 3.0, 4.0]})
+    assert ops.ts_product(x, 2)["A"].tolist()[-2:] == pytest.approx([6.0, 12.0])
+
+
 def test_stddev_matches_pandas_rolling_std():
     x = _df({"A": [1.0, 2.0, 3.0, 4.0]})
     expected = x["A"].rolling(2).std()
@@ -64,6 +69,17 @@ def test_ts_corr_perfectly_correlated_and_anticorrelated():
     y_neg = _df({"A": [-1.0, -2.0, -3.0, -4.0, -5.0]})
     assert ops.ts_corr(x, y_pos, 3)["A"].iloc[-1] == pytest.approx(1.0)
     assert ops.ts_corr(x, y_neg, 3)["A"].iloc[-1] == pytest.approx(-1.0)
+
+
+def test_ts_corr_near_zero_variance_gives_nan_not_inf():
+    # y 在窗口内几乎恒定（三个值只在最后一位小数上有浮点噪声），方差趋近于 0 但不精确为 0，
+    # pandas 原生 rolling().corr() 在这种输入下会算出 inf——必须收口成 NaN（世坤101
+    # Alpha#68 在只有 3 个 symbol 的小截面里真实踩到过这个坑：rank() 连续几期打平）。
+    x = _df({"A": [1.0, 2.0, 3.0]})
+    y = _df({"A": [1.0 / 3, 1.0 / 3 + 1e-16, 1.0 / 3 - 1e-16]})
+    result = ops.ts_corr(x, y, 3)["A"].iloc[-1]
+    assert not np.isinf(result)
+    assert np.isnan(result) or abs(result) <= 1.0
 
 
 def test_decay_linear_weighted_average():
