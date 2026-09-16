@@ -23,9 +23,9 @@ from sherpa.data.normalizer import ch_long_to_panel
 from sherpa.data.schema import BarPanel
 from sherpa.data.universe import Universe
 
-INTERVAL = "4h"
-START_TIME = "2026-08-17"
-END_TIME = "2026-09-01"
+INTERVAL = "1d"
+START_TIME = "2020-01-01"
+END_TIME = "2026-09-15"
 
 
 def _env(name: str, default: str | None = None, *, required: bool = False) -> str | None:
