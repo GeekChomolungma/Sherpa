@@ -60,6 +60,44 @@ def ic_summary(ic_series: pd.Series) -> ICSummary:
     return ICSummary(mean=mean, std=std, ic_ir=ic_ir)
 
 
+def conditional_ic_summary(ic_series: pd.Series, regime: pd.Series) -> pd.DataFrame:
+    """按 `regime` 的取值对 `ic_series` 做条件切片统计（原理参考 `research/
+    REGIME_ALPHA_EVALUATION_WORKFLOW.md` §5 步骤4），返回一行一个类别的画像表，行索引里
+    多一个 `"ALL"` 基线行。
+
+    `regime` 可以是单个维度的状态列（比如 `regime_report["trend"]`，值是 "bull"/"bear"/
+    "neutral"），也可以是组合结论列（`regime_report["regime_label"]`）——本函数不关心
+    label 是怎么来的，只按值分组统计,所以同一份实现可以喂两种粒度的画像需求。
+
+    跟 `regime` 对齐后，`regime` 为 `NA` 的行（比如打标函数自己的滚动窗口 warm-up 期）会被
+    整行剔除，既不进 `"ALL"` 基线也不进任何分组——`"ALL"` 的样本量因此正好等于各分组样本量
+    之和，两者可以直接比较增量信息，不会因为 `"ALL"` 悄悄多算了一段分组阶段完全没覆盖到的
+    历史而失真。这里特意跟 `REGIME_ALPHA_EVALUATION_WORKFLOW.md` 给的参考代码不一样（那份
+    示例用未过滤的完整 `ic_series` 当基线）——两种口径都不算错，这里选了口径更严格的一种。
+    """
+    ic_series, regime = ic_series.align(regime, join="inner")
+    known = regime.notna()
+    ic_series = ic_series[known]
+    regime = regime[known]
+
+    def _row(values: pd.Series) -> dict[str, float]:
+        summary = ic_summary(values)
+        clean = values.dropna()
+        return {
+            "samples": int(clean.shape[0]),
+            "ic_mean": summary.mean,
+            "ic_std": summary.std,
+            "ic_ir": summary.ic_ir,
+            "win_rate": float((clean > 0).mean()) if not clean.empty else float("nan"),
+        }
+
+    rows: dict[str, dict[str, float]] = {"ALL": _row(ic_series)}
+    for label, group in ic_series.groupby(regime):
+        rows[str(label)] = _row(group)
+
+    return pd.DataFrame.from_dict(rows, orient="index")
+
+
 def quantile_returns(alpha: pd.DataFrame, forward_returns: pd.DataFrame, n_quantiles: int = 10) -> pd.DataFrame:
     """逐期按 alpha 分数分 `n_quantiles` 组的未来收益均值（原理文档 §1.2(3)）。
 

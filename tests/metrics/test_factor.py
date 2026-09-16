@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from sherpa.metrics.factor import ic_summary, is_monotonic_decreasing, quantile_returns, rank_ic
+from sherpa.metrics.factor import conditional_ic_summary, ic_summary, is_monotonic_decreasing, quantile_returns, rank_ic
 
 
 def _panel(rows):
@@ -86,3 +86,41 @@ def test_is_monotonic_decreasing_true_and_false():
 
 def test_is_monotonic_decreasing_requires_at_least_two_points():
     assert is_monotonic_decreasing(pd.Series([0.1])) is False
+
+
+def _series(values, freq="4h"):
+    index = pd.date_range("2026-01-01", periods=len(values), freq=freq, tz="UTC")
+    return pd.Series(values, index=index)
+
+
+def test_conditional_ic_summary_splits_by_regime_and_adds_all_baseline():
+    ic_series = _series([0.5, 0.5, -0.5, -0.5, 0.1])
+    regime = _series(["bull", "bull", "bear", "bear", "bull"])
+
+    report = conditional_ic_summary(ic_series, regime)
+
+    assert set(report.index) == {"ALL", "bull", "bear"}
+    assert report.loc["bull", "samples"] == 3
+    assert report.loc["bull", "ic_mean"] == pytest.approx((0.5 + 0.5 + 0.1) / 3)
+    assert report.loc["bear", "ic_mean"] == pytest.approx(-0.5)
+    # ALL 的样本量应该正好是各分组样本量之和，不多不少。
+    assert report.loc["ALL", "samples"] == report.drop(index="ALL")["samples"].sum()
+
+
+def test_conditional_ic_summary_drops_rows_where_regime_is_na():
+    ic_series = _series([0.2, 0.4, 0.6])
+    regime = pd.Series(["bull", pd.NA, "bear"], index=ic_series.index)
+
+    report = conditional_ic_summary(ic_series, regime)
+
+    assert report.loc["ALL", "samples"] == 2
+    assert set(report.index) == {"ALL", "bull", "bear"}
+
+
+def test_conditional_ic_summary_win_rate():
+    ic_series = _series([0.1, -0.1, 0.2, -0.2])
+    regime = _series(["chop", "chop", "chop", "chop"])
+
+    report = conditional_ic_summary(ic_series, regime)
+
+    assert report.loc["chop", "win_rate"] == pytest.approx(0.5)
