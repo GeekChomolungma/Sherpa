@@ -23,7 +23,7 @@ def tradable_mask(
     trades_count: pd.DataFrame,
     *,
     lookback: int = DEFAULT_LOOKBACK,
-    min_percentile: float = 0.50,
+    min_percentile: float = 0.60,
     min_quote_volume: float = 0.0,
     min_trades_count: float = 0.0,
     seasoning_period: int = DEFAULT_LOOKBACK,
