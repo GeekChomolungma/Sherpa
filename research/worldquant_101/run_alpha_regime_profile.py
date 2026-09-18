@@ -22,8 +22,18 @@ symbol）远够不到 GPU 数据搬运开销划算的规模，真正的计算内
 硬要搬上 GPU 等于重写 `sherpa.alpha.ops` 整层，而且 GPU dataframe 方案（RAPIDS/cuDF）在
 Windows 上不原生支持（需要 WSL2），投入产出比不划算。
 
+算 `ic_series` 之前会先用 `sherpa.metrics.tradability.tradable_mask` 把每期截面里"上线了
+但实际没有真实流动性"的 symbol 掩掉（掩成 `NaN`）——加密市场长尾小币持续打印K线但订单簿
+早已枯竭是常态，`Universe.as_of()` 只管"有没有上线"，不管"上线后是不是还有真实成交"，直接
+拿全部截面 symbol 去算秩相关，插针币会污染 IC 的稳定性,选出来的因子也没法在真实执行时
+接得住。这一步只影响这个旁路脚本自己算的 `ic_series`——`rank_ic()`/`quantile_returns()`
+本身不用改一行代码，它们已经会正确处理逐期缺失值,把 mask 为 `False` 的位置设成 `NaN`
+就等价于"这一期这个 symbol 缺失"。`run_screening.py`/`_category_runner.py` 那条真正决定
+仓位的产线目前还没接这个掩码，是有意先在这里验证设计、范围先不铺开。
+
 对应架构分层：
-`sherpa.metrics.factor.conditional_ic_summary`（纯统计）
+`sherpa.metrics.tradability.tradable_mask`（纯统计，掩码）
+`sherpa.metrics.factor.conditional_ic_summary`（纯统计，条件切片）
 -> `sherpa.backtest.regime_screening.profile_alphas_by_regime`（批量入口）
 -> 这里（具体项目跑批 + 落盘）。
 
@@ -45,6 +55,7 @@ import sherpa.alpha.worldquant  # noqa: F401  import 触发 @register_alpha，�
 from sherpa.alpha import registry
 from sherpa.backtest.regime_screening import profile_alphas_by_regime, regime_report
 from sherpa.metrics.factor import rank_ic
+from sherpa.metrics.tradability import tradable_mask
 
 from data import END_TIME, INTERVAL, START_TIME, load_universe_panel
 
@@ -55,12 +66,14 @@ OUTPUT_PATH = "regime_alpha_profile.csv"
 # worker 处理的每个任务（每个 alpha）都直接复用，不用每个任务都重新反序列化一遍 panel。
 _worker_panel = None
 _worker_forward_returns = None
+_worker_mask = None
 
 
-def _init_worker(panel, forward_returns) -> None:
-    global _worker_panel, _worker_forward_returns
+def _init_worker(panel, forward_returns, mask) -> None:
+    global _worker_panel, _worker_forward_returns, _worker_mask
     _worker_panel = panel
     _worker_forward_returns = forward_returns
+    _worker_mask = mask
 
 
 def _compute_ic_series(qualified_name: str) -> tuple[str, "pd.Series | None", "str | None"]:
@@ -69,13 +82,18 @@ def _compute_ic_series(qualified_name: str) -> tuple[str, "pd.Series | None", "s
     用 `registry.get(qualified_name)()` 而不是直接 pickle alpha 实例——Windows 的 spawn
     方式起 worker 进程时会重新 import 这个脚本模块（触发 `sherpa.alpha.worldquant` 重新
     注册），每个 worker 自己的 `registry` 里本来就有这份 alpha，没必要跨进程传对象。
+
+    算 `rank_ic` 之前用 `_worker_mask` 把两个矩阵里"当期没有真实流动性"的位置盖成 `NaN`——
+    `rank_ic` 本身已经会正确处理逐期缺失值，不用改它，掩码只是一步预处理。
     """
     alpha = registry.get(qualified_name)()
     try:
         history = alpha.compute(_worker_panel)
     except NotImplementedError as exc:
         return qualified_name, None, str(exc)
-    return qualified_name, rank_ic(history, _worker_forward_returns), None
+    history = history.where(_worker_mask)
+    forward_returns = _worker_forward_returns.where(_worker_mask)
+    return qualified_name, rank_ic(history, forward_returns), None
 
 
 def main() -> None:
@@ -85,13 +103,17 @@ def main() -> None:
 
     forward_returns = panel.close.pct_change().shift(-1)
 
+    print("正在计算可流通性掩码（剔除上线了但没有真实流动性的 symbol）……")
+    mask = tradable_mask(panel.quote_volume, panel.trades_count, seasoning_period=20)
+    print(f"  每期平均 {mask.sum(axis=1).mean():.1f} / {len(panel.symbols)} 个 symbol 通过流通性筛选")
+
     qualified_names = list(registry.all(family="worldquant").keys())
     print(f"\n正在用多进程对全部 {len(qualified_names)} 个世坤101 alpha 计算 ic_series……")
 
     ic_series_by_alpha: dict[str, pd.Series] = {}
     errors: dict[str, str] = {}
     processed = 0
-    with ProcessPoolExecutor(initializer=_init_worker, initargs=(panel, forward_returns)) as executor:
+    with ProcessPoolExecutor(initializer=_init_worker, initargs=(panel, forward_returns, mask)) as executor:
         for qualified_name, ic_series, error in executor.map(_compute_ic_series, qualified_names):
             processed += 1
             if error is not None:
