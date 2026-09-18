@@ -104,7 +104,7 @@ def main() -> None:
     forward_returns = panel.close.pct_change().shift(-1)
 
     print("正在计算可流通性掩码（剔除上线了但没有真实流动性的 symbol）……")
-    mask = tradable_mask(panel.quote_volume, panel.trades_count, seasoning_period=20)
+    mask = tradable_mask(panel.quote_volume, panel.trades_count)
     print(f"  每期平均 {mask.sum(axis=1).mean():.1f} / {len(panel.symbols)} 个 symbol 通过流通性筛选")
 
     qualified_names = list(registry.all(family="worldquant").keys())

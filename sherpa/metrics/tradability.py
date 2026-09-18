@@ -23,9 +23,9 @@ def tradable_mask(
     trades_count: pd.DataFrame,
     *,
     lookback: int = DEFAULT_LOOKBACK,
-    min_percentile: float = 0.60,
-    min_quote_volume: float = 0.0,
-    min_trades_count: float = 0.0,
+    min_percentile: float = 0.40,
+    min_quote_volume: float = 5_000_000.0,  # 10日内的中位值要超过 500 万usdt成交才行
+    min_trades_count: float = 50_000.0,     # 10日内的中位值要超过 5 万 笔成交才行（默认关闭）
     seasoning_period: int = DEFAULT_LOOKBACK,
 ) -> pd.DataFrame:
     """逐期判定每个 symbol 是不是"真的可流通"，输出跟 `quote_volume` 同形状的布尔矩阵。
