@@ -1,23 +1,40 @@
-"""世坤101研究项目·Regime 全历史体检第二步：把已经通过 `run_screening.py` 第一层筛选的
-alpha，逐个在 `regime_report.csv` 的四个维度上做条件 IC 切片，产出"alpha × 维度 × 状态"的
-长表体检结果。
+"""世坤101研究项目·Regime 全历史体检：对全部已注册的世坤101 alpha（不预先过 `run_screening.py`
+的全局 IC_IR 筛选）逐个算 `ic_series`，在 `regime_report.csv` 的四个维度上做条件 IC 切片，
+产出"alpha × 维度 × 状态"的长表体检结果。
 
-跟 `run_screening.py`/`run_regime_report.py` 完全解耦——regime 和 alpha 各自独立算完，这里
-只是把两条已经落盘的旁路结果拿来对齐，不重新碰 ClickHouse 之外的任何东西（除了要重新
-`alpha.compute(panel)` 拿 `ic_series`，因为 `screening_report.csv` 里只落了汇总标量，没有
-逐 bar 的 IC 序列）。对应架构分层：
+故意不依赖 `screening_report.csv` 的 `passed` 列表——regime 体检本身就是一种因子体检，不是
+"体检完的因子再体检一遍"。用全局 IC_IR 筛选结果做准入门槛，反而会把 regime 体检最该捞出来
+的那类因子先滤掉：`REGIME_ALPHA_EVALUATION_WORKFLOW.md` §6 决策矩阵里"条件进攻型因子"的
+示例 Alpha_A，全局 IC_IR 只有 0.11，比 `run_screening.py` 用的 0.15 门槛还低，如果先过一遍
+全局筛选就永远轮不到这里——它恰恰是全局表现平庸、但在特定 regime 下很强的那类因子，是这份
+体检真正要找的对象。这也是跟 `run_screening.py`/`_category_runner.py` 那条产线彻底解耦、
+互不依赖的"并行旁路"（两条线各自独立跑，谁也不需要等谁的结果）。
+
+跟世坤101所有因子一样，部分因子会因为缺行业分类/市值字段 `raise NotImplementedError`（占位
+不实现），这里如实跳过并单独计数，不当成 bug 吞掉，也不让它拖累其余因子（跟 `screen_alphas`
+处理占位因子的方式一致）。
+
+101 个 alpha 的 `compute()` + `rank_ic()` 互相独立、都只读同一份 `panel`/`forward_returns`，
+用 `ProcessPoolExecutor` 按 alpha 分给多个进程算——这一步是 pandas rolling/rank 计算，GIL
+下多线程没用，必须是多进程；`panel`/`forward_returns` 通过 `initializer` 只在每个 worker
+进程启动时发一次，不随每个 alpha 任务重复发送。没有考虑 GPU：这里的矩阵（几千 bar × 几百
+symbol）远够不到 GPU 数据搬运开销划算的规模，真正的计算内核也是 pandas 的 rolling/rank，
+硬要搬上 GPU 等于重写 `sherpa.alpha.ops` 整层，而且 GPU dataframe 方案（RAPIDS/cuDF）在
+Windows 上不原生支持（需要 WSL2），投入产出比不划算。
+
+对应架构分层：
 `sherpa.metrics.factor.conditional_ic_summary`（纯统计）
 -> `sherpa.backtest.regime_screening.profile_alphas_by_regime`（批量入口）
 -> 这里（具体项目跑批 + 落盘）。
 
-运行前先跑过 `run_screening.py`（产出 `screening_report.csv`）和 `run_regime_report.py`
-（产出 `regime_report.csv`），再跑：
+运行前先跑过 `run_regime_report.py`（产出 `regime_report.csv`），再跑：
     CH_HOST=... CH_PASSWORD=... python research/worldquant_101/run_alpha_regime_profile.py
 """
 
 from __future__ import annotations
 
 import sys
+from concurrent.futures import ProcessPoolExecutor
 
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8")
@@ -31,38 +48,63 @@ from sherpa.metrics.factor import rank_ic
 
 from data import END_TIME, INTERVAL, START_TIME, load_universe_panel
 
-SCREENING_REPORT_PATH = "screening_report.csv"
 BENCHMARK_SYMBOL = "BTCUSDT"
 OUTPUT_PATH = "regime_alpha_profile.csv"
 
+# worker 进程内的全局状态：`_init_worker` 在每个 worker 进程启动时赋值一次，之后同一个
+# worker 处理的每个任务（每个 alpha）都直接复用，不用每个任务都重新反序列化一遍 panel。
+_worker_panel = None
+_worker_forward_returns = None
 
-def _passed_qualified_names() -> list[str]:
-    screening = pd.read_csv(SCREENING_REPORT_PATH, index_col=0)
-    passed = screening[screening["passed"]]
-    return list(passed.index)
+
+def _init_worker(panel, forward_returns) -> None:
+    global _worker_panel, _worker_forward_returns
+    _worker_panel = panel
+    _worker_forward_returns = forward_returns
+
+
+def _compute_ic_series(qualified_name: str) -> tuple[str, "pd.Series | None", "str | None"]:
+    """单个 alpha 的 worker 任务：算不出来（占位因子）返回 error 信息，算出来返回 ic_series。
+
+    用 `registry.get(qualified_name)()` 而不是直接 pickle alpha 实例——Windows 的 spawn
+    方式起 worker 进程时会重新 import 这个脚本模块（触发 `sherpa.alpha.worldquant` 重新
+    注册），每个 worker 自己的 `registry` 里本来就有这份 alpha，没必要跨进程传对象。
+    """
+    alpha = registry.get(qualified_name)()
+    try:
+        history = alpha.compute(_worker_panel)
+    except NotImplementedError as exc:
+        return qualified_name, None, str(exc)
+    return qualified_name, rank_ic(history, _worker_forward_returns), None
 
 
 def main() -> None:
-    qualified_names = _passed_qualified_names()
-    print(f"从 {SCREENING_REPORT_PATH} 读到 {len(qualified_names)} 个通过第一层筛选的 alpha")
-    if not qualified_names:
-        print("没有通过第一层筛选的 alpha，无需继续，先去跑 run_screening.py")
-        return
-
-    print(f"\n正在从 ClickHouse 拉取 {START_TIME} ~ {END_TIME} 的 {INTERVAL} K 线全市场数据……")
+    print(f"正在从 ClickHouse 拉取 {START_TIME} ~ {END_TIME} 的 {INTERVAL} K 线全市场数据……")
     panel = load_universe_panel()
     print(f"universe={len(panel.symbols)} 个 symbol，共 {len(panel.index)} 根 {INTERVAL} bar")
 
     forward_returns = panel.close.pct_change().shift(-1)
 
-    print(f"\n正在对 {len(qualified_names)} 个 alpha 重算 ic_series……")
-    ic_series_by_alpha: dict[str, pd.Series] = {}
-    for qualified_name in qualified_names:
-        alpha = registry.get(qualified_name)()
-        history = alpha.compute(panel)
-        ic_series_by_alpha[qualified_name] = rank_ic(history, forward_returns)
+    qualified_names = list(registry.all(family="worldquant").keys())
+    print(f"\n正在用多进程对全部 {len(qualified_names)} 个世坤101 alpha 计算 ic_series……")
 
-    print("正在计算 regime 报告矩阵……")
+    ic_series_by_alpha: dict[str, pd.Series] = {}
+    errors: dict[str, str] = {}
+    processed = 0
+    with ProcessPoolExecutor(initializer=_init_worker, initargs=(panel, forward_returns)) as executor:
+        for qualified_name, ic_series, error in executor.map(_compute_ic_series, qualified_names):
+            processed += 1
+            if error is not None:
+                errors[qualified_name] = error
+            else:
+                ic_series_by_alpha[qualified_name] = ic_series
+            if processed % 20 == 0 or processed == len(qualified_names):
+                print(f"  已完成 {processed}/{len(qualified_names)}")
+
+    print(f"算不出来的因子：{len(errors)} 个（缺行业分类/市值，占位不实现）")
+    print(f"参与 regime 体检的因子：{len(ic_series_by_alpha)} 个")
+
+    print("\n正在计算 regime 报告矩阵……")
     regime = regime_report(panel, benchmark_symbol=BENCHMARK_SYMBOL)
 
     print("正在做条件 IC 切片体检……")

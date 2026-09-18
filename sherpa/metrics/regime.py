@@ -50,7 +50,7 @@ def compute_trend_regime(
     close: pd.DataFrame,
     *,
     benchmark_symbol: str,
-    ma_period: int = 60,
+    ma_period: int = 30,
     bull_breadth: float = 0.65,
     bear_breadth: float = 0.35,
 ) -> pd.DataFrame:
@@ -162,7 +162,7 @@ def build_regime_report(
     taker_buy_quote_volume: pd.DataFrame,
     *,
     benchmark_symbol: str,
-    ma_period: int = 60,
+    ma_period: int = 30,
     vol_window: int = 24,
     lookback: int = DEFAULT_LOOKBACK,
 ) -> pd.DataFrame:
