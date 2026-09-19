@@ -1,17 +1,12 @@
-"""tradability_calibration 研究项目共用的取数入口：接真实 ClickHouse，不是合成数据。
+"""本项目专用的取数入口：接真实 ClickHouse，不是合成数据。
 
-跟 `research/alpha_research/worldquant_101/data.py` 是同一套连接方式，特意原样复制一份、不共用——
-`connect_ch_reader()` 是纯客户端代码（读环境变量、建连接），不含任何项目专属常量，让每个
-研究项目自己维护一份更简单；而且这次要看的是成交量/成交笔数这几年的非平稳性，时间窗天然
-想尽量拉长，跟 alpha_research/worldquant_101 现在的区间不需要绑在一起，共用一份反而会让两边的默认参数
-互相牵制。
+刻意不 import `research/alpha_research/worldquant_101/data.py`（两者内容看起来相似，但故意各自维护一份）
+——本模块要求跟其它 research 子项目解耦：不共享代码、不共享中间结果，改任何一边都不会
+波及另一边，选取的历史区间/频率也可以完全独立调整，不用担心牵动别的研究项目。
 
-连接信息一律从环境变量读，约定跟 `scripts/smoke_test_data_layer.py` 一致：
+连接信息一律从环境变量读，不写进代码/仓库，跟仓库里其它 research 脚本同一套约定：
+
     CH_HOST(必填) / CH_PORT(默认8123) / CH_USER(默认default) / CH_PASSWORD / CH_DATABASE(默认market)
-
-默认拉 2020-01-01 至今的 1d K 线——研究成交量分布用日线的粒度就够，频率拉太高只会徒增
-数据量、不增加这次要看的信息；以后想换区间/频率，改这三个常量或者调用
-`load_universe_panel()` 时显式传参覆盖。
 """
 
 from __future__ import annotations
@@ -27,8 +22,8 @@ from sherpa.data.schema import BarPanel
 from sherpa.data.universe import Universe
 
 INTERVAL = "1d"
-START_TIME = "2024-01-01"
-END_TIME = "2026-09-18"
+START_TIME = "2020-01-01"
+END_TIME = "2026-09-15"
 
 
 def _env(name: str, default: str | None = None, *, required: bool = False) -> str | None:
@@ -60,8 +55,8 @@ def load_universe_panel(
 ) -> BarPanel:
     """拉取指定区间/周期的全市场 K 线，拼成研究用的 `BarPanel`。
 
-    universe 用 `Universe.as_of(end_time)`（设计文档 §5.3 的 point-in-time 口径）——避免
-    把区间内还没上线/已经退市的 symbol 也当成"从头到尾都在"，防止幸存者偏差。
+    universe 用 `Universe.as_of(end_time)`（point-in-time 口径），避免把区间内还没上线/
+    已经退市的 symbol 也当成"从头到尾都在"，防止幸存者偏差。
     """
     ch_reader = ch_reader or connect_ch_reader()
     universe = Universe.from_clickhouse(ch_reader)

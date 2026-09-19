@@ -231,7 +231,7 @@ class LiveOrderRequest:
 | `sherpa.strategy`（`BaseStrategy`/`Runner`/`LogSink`/`BacktestSink`） | 完成 |
 | `sherpa.live` | 部分完成，仅 `build_live_requests`，仓位再平衡/风控未实现 |
 | `WebhookSink` / 实盘对接 | **未实现**，等下游 Webhooker |
-| 世坤101因子的真实数据验证（`research/worldquant_101/`） | 进行中，多数因子尚未在真实数据上通过第一层检验 |
+| 世坤101因子的真实数据验证（`research/alpha_research/worldquant_101/`） | 进行中，多数因子尚未在真实数据上通过第一层检验 |
 
 ## 10. 相关文档
 
@@ -240,4 +240,4 @@ class LiveOrderRequest:
 | [`DATA_CONSUMER_GUIDE.md`](DATA_CONSUMER_GUIDE.md) | 上游 ClickHouse/Redis 字段契约 |
 | [`backtest_principle.md`](backtest_principle.md) | 两层回测体系的数学原理 |
 | `examples/` | 合成数据教学示例 |
-| `research/worldquant_101/` | 真实 ClickHouse 数据的因子研究项目 |
+| `research/alpha_research/worldquant_101/` | 真实 ClickHouse 数据的因子研究项目 |

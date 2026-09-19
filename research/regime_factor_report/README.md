@@ -33,6 +33,7 @@ regime_factor_report/
     ├── 01_factor_overview.csv
     ├── 02_dimension_diagnostics.csv
     ├── 03_regime_leaderboard.csv
+    ├── 04_regime_matrix.csv
     ├── IMPORTANT_FINDINGS.md
     ├── thresholds.json
     ├── validation.json
@@ -587,7 +588,21 @@ volatility_high_top.csv
 
 ---
 
-## 6.7 `IMPORTANT_FINDINGS.md`
+## 6.7 `04_regime_matrix.csv`
+
+用途：**统一跨维度状态策略装配总表（Dimension × State 作战矩阵）。**
+
+该表直接聚合了所有 12 个细分状态下的 Top 3 最强 Alpha，并自动标注了：
+- **交易方向与带符号因子名**（例如 `+worldquant.alpha026`, `-worldquant.alpha007`）；
+- **样本数与小样本警示**（`samples`, `low_sample`）；
+- **Top 1 ~ Top 3 的各自信噪比与胜率**（`ic_ir`, `abs_ic_ir`, `win_rate`）；
+- **简明摘要字段**（`top_signed_alphas` 与 `top_alphas_summary`）。
+
+量化策略层（如 `BaseStrategy.on_bar`）可直接读取此表实现状态自适应动态多因子路由。
+
+---
+
+## 6.8 `IMPORTANT_FINDINGS.md`
 
 这是脚本自动生成的文字摘要。
 

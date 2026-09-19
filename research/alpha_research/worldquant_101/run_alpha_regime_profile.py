@@ -38,7 +38,7 @@ Windows 上不原生支持（需要 WSL2），投入产出比不划算。
 -> 这里（具体项目跑批 + 落盘）。
 
 运行前先跑过 `run_regime_report.py`（产出 `regime_report.csv`），再跑：
-    CH_HOST=... CH_PASSWORD=... python research/worldquant_101/run_alpha_regime_profile.py
+    CH_HOST=... CH_PASSWORD=... python research/alpha_research/worldquant_101/run_alpha_regime_profile.py
 """
 
 from __future__ import annotations
@@ -132,7 +132,7 @@ def main() -> None:
     print("正在做条件 IC 切片体检……")
     profile = profile_alphas_by_regime(ic_series_by_alpha, regime)
     profile.to_csv(OUTPUT_PATH, index=False)
-    print(f"\n完整 alpha × regime 体检长表已写入 research/worldquant_101/{OUTPUT_PATH}")
+    print(f"\n完整 alpha × regime 体检长表已写入 research/alpha_research/worldquant_101/{OUTPUT_PATH}")
 
     print("\n== 每个 alpha 在各维度上 ic_ir 波动最大的一档（跟 ALL 基线差距最大） ==")
     # 用 merge 而不是把 (alpha, dimension) 设成索引再相减——非 ALL 的那部分一个 (alpha,

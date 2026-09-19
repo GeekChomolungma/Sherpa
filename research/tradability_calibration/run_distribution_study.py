@@ -20,7 +20,7 @@
   不是特别少"（如果 Study 2 发现某段时间通过筛选的数量塌缩，回来这张表能查是不是因为
   当时 universe 本来就小，而不是筛选太严）。
 
-运行前先设好连接环境变量（同 `research/worldquant_101/run_screening.py`）：
+运行前先设好连接环境变量（同 `research/alpha_research/worldquant_101/run_screening.py`）：
     CH_HOST=... CH_PASSWORD=... python research/tradability_calibration/run_distribution_study.py
 """
 

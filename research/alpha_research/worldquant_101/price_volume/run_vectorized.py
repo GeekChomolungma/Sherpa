@@ -5,7 +5,7 @@
 `_category_runner.run_category`。Alpha056 依赖市值(cap)，`BarPanel` 不支持，会打印"跳过"。
 
 运行：
-    CH_HOST=... CH_PASSWORD=... python research/worldquant_101/price_volume/run_vectorized.py
+    CH_HOST=... CH_PASSWORD=... python research/alpha_research/worldquant_101/price_volume/run_vectorized.py
 """
 
 from __future__ import annotations

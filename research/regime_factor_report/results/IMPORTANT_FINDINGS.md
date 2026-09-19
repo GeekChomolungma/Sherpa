@@ -33,6 +33,23 @@ This file is generated automatically from the input CSV. It highlights where a h
 - Weak / Noise: **71**
 - Data Quality Issue: **4**
 
+## Regime strategy matrix (Top alphas per state)
+
+| Dimension | State | Samples | Low sample? | Top 1 Alpha | Top 2 Alpha | Top 3 Alpha |
+|---|---|---:|:---:|---|---|---|
+| dispersion | low | 697 | False | `+worldquant.alpha016` (IR=0.2753) | `+worldquant.alpha013` (IR=0.2672) | `+worldquant.alpha050` (IR=0.2643) |
+| dispersion | normal | 959 | False | `+worldquant.alpha044` (IR=0.2382) | `+worldquant.alpha088` (IR=0.2317) | `+worldquant.alpha016` (IR=0.2022) |
+| dispersion | high | 730 | False | `+worldquant.alpha088` (IR=0.2148) | `+worldquant.alpha019` (IR=0.1849) | `+worldquant.alpha013` (IR=0.1801) |
+| liquidity | starved | 545 | False | `-worldquant.alpha007` (IR=-0.3608) | `+worldquant.alpha026` (IR=0.3039) | `+worldquant.alpha033` (IR=0.2738) |
+| liquidity | normal | 1151 | False | `+worldquant.alpha044` (IR=0.2598) | `+worldquant.alpha088` (IR=0.2588) | `+worldquant.alpha016` (IR=0.2582) |
+| liquidity | high | 654 | False | `+worldquant.alpha088` (IR=0.1886) | `+worldquant.alpha055` (IR=0.1479) | `+worldquant.alpha060` (IR=0.1365) |
+| trend | bear | 924 | False | `+worldquant.alpha026` (IR=0.2375) | `+worldquant.alpha044` (IR=0.2329) | `+worldquant.alpha016` (IR=0.2036) |
+| trend | neutral | 1407 | False | `+worldquant.alpha016` (IR=0.2588) | `+worldquant.alpha013` (IR=0.2480) | `+worldquant.alpha088` (IR=0.2400) |
+| trend | bull | 52 | True | `-worldquant.alpha009` (IR=-0.5581) | `-worldquant.alpha042` (IR=-0.5443) | `+worldquant.alpha088` (IR=0.5125) |
+| volatility | low | 822 | False | `+worldquant.alpha016` (IR=0.2849) | `+worldquant.alpha044` (IR=0.2299) | `+worldquant.alpha015` (IR=0.2285) |
+| volatility | normal | 680 | False | `+worldquant.alpha088` (IR=0.2568) | `+worldquant.alpha016` (IR=0.2160) | `+worldquant.alpha055` (IR=0.2101) |
+| volatility | high | 872 | False | `+worldquant.alpha026` (IR=0.2478) | `+worldquant.alpha088` (IR=0.2412) | `+worldquant.alpha013` (IR=0.2275) |
+
 ## Most regime-sensitive factor/dimension pairs
 
 | Rank | Factor | Dimension | Class | IR spread | Best state | Best IC_IR | Best samples | Low sample? |
@@ -93,5 +110,6 @@ This file is generated automatically from the input CSV. It highlights where a h
 1. Start with `01_factor_overview.csv` to decide which factors deserve attention.
 2. Open `02_dimension_diagnostics.csv` to see *which dimension* creates the regime dependency.
 3. Open the matching file in `dimensions/` to compare every state side by side.
-4. Use `03_regime_leaderboard.csv` or `leaderboards/` when asking 'what is strongest in this specific state?'.
-5. Always check `low_sample` before acting on an extreme IC/IR.
+4. Use `04_regime_matrix.csv` as the unified Dimension x State matrix to configure multi-factor regime allocation.
+5. Use `03_regime_leaderboard.csv` or `leaderboards/` when asking 'what is strongest in this specific state?'.
+6. Always check `low_sample` before acting on an extreme IC/IR.

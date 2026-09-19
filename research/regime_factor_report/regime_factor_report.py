@@ -439,6 +439,85 @@ def build_leaderboard(rows: List[Dict[str, Any]], thresholds: Dict[str, float]) 
     return out
 
 
+def build_regime_matrix(
+    leaderboard: List[Dict[str, Any]],
+    dimensions: Sequence[str],
+    rows: List[Dict[str, Any]],
+    thresholds: Dict[str, float],
+    top_k: int = 3,
+) -> List[Dict[str, Any]]:
+    """Build a consolidated Dimension x State regime matrix picking the top K alphas per state.
+
+    Reads the pre-sorted leaderboard entries, extracts top K alphas for each state,
+    and formats them with explicit trading directions (+/-), metrics, and sample warnings.
+    """
+    matrix: List[Dict[str, Any]] = []
+
+    by_dim_state: Dict[Tuple[str, str], List[Dict[str, Any]]] = defaultdict(list)
+    for r in leaderboard:
+        by_dim_state[(r["dimension"], r["state"])].append(r)
+
+    for dim in dimensions:
+        dim_states = sorted(set(r["state"] for r in rows if r["dimension"] == dim and r["state"] != "ALL"))
+        ordered_states = state_order_for(dim, dim_states)
+
+        for state in ordered_states:
+            candidates = by_dim_state.get((dim, state), [])
+            top_alphas = candidates[:top_k]
+
+            state_samples = top_alphas[0]["samples"] if top_alphas else 0
+            state_fraction = top_alphas[0]["sample_fraction_of_all"] if top_alphas else None
+            state_low_sample = top_alphas[0]["low_sample"] if top_alphas else True
+
+            signed_alpha_list = []
+            summary_list = []
+            for item in top_alphas:
+                prefix = "+" if item["direction"] == "original" else "-"
+                signed_name = f"{prefix}{item['alpha']}"
+                signed_alpha_list.append(signed_name)
+                ir_str = f"{item['ic_ir']:.4f}" if item.get("ic_ir") is not None else "N/A"
+                wr_str = f"{item['win_rate']*100:.1f}%" if item.get("win_rate") is not None else "N/A"
+                summary_list.append(f"{signed_name} (IR={ir_str}, WR={wr_str})")
+
+            row: Dict[str, Any] = {
+                "dimension": dim,
+                "state": state,
+                "samples": state_samples,
+                "sample_fraction_of_all": state_fraction,
+                "low_sample": state_low_sample,
+                "top_signed_alphas": " | ".join(signed_alpha_list),
+                "top_alphas_summary": " | ".join(summary_list),
+            }
+
+            for i in range(1, top_k + 1):
+                if i <= len(top_alphas):
+                    item = top_alphas[i - 1]
+                    prefix = "+" if item["direction"] == "original" else "-"
+                    row[f"top{i}_alpha"] = item["alpha"]
+                    row[f"top{i}_direction"] = item["direction"]
+                    row[f"top{i}_signed_alpha"] = f"{prefix}{item['alpha']}"
+                    row[f"top{i}_ic_ir"] = item["ic_ir"]
+                    row[f"top{i}_abs_ic_ir"] = item["abs_ic_ir"]
+                    row[f"top{i}_win_rate"] = item["win_rate"]
+                    row[f"top{i}_ic_mean"] = item["ic_mean"]
+                    row[f"top{i}_ic_std"] = item["ic_std"]
+                    row[f"top{i}_low_sample"] = item["low_sample"]
+                else:
+                    row[f"top{i}_alpha"] = ""
+                    row[f"top{i}_direction"] = ""
+                    row[f"top{i}_signed_alpha"] = ""
+                    row[f"top{i}_ic_ir"] = None
+                    row[f"top{i}_abs_ic_ir"] = None
+                    row[f"top{i}_win_rate"] = None
+                    row[f"top{i}_ic_mean"] = None
+                    row[f"top{i}_ic_std"] = None
+                    row[f"top{i}_low_sample"] = None
+
+            matrix.append(row)
+
+    return matrix
+
+
 def build_dimension_wide(
     rows: List[Dict[str, Any]], dimension: str, diagnostics: List[Dict[str, Any]], thresholds: Dict[str, float]
 ) -> List[Dict[str, Any]]:
@@ -520,6 +599,7 @@ def write_findings(
     leaderboard: List[Dict[str, Any]],
     validation: Dict[str, Any],
     thresholds: Dict[str, float],
+    regime_matrix: Optional[List[Dict[str, Any]]] = None,
 ) -> None:
     class_counts = Counter(r["factor_classification"] for r in overview)
     dim_class_counts = Counter(r["classification"] for r in diagnostics)
@@ -566,6 +646,16 @@ def write_findings(
     for name in ["Regime-Reversal", "Conditional", "Stable", "Mixed / Moderate", "Weak / Noise", "Data Quality Issue"]:
         lines.append(f"- {name}: **{dim_class_counts.get(name, 0)}**")
 
+    if regime_matrix:
+        lines.append("\n## Regime strategy matrix (Top alphas per state)\n")
+        lines.append("| Dimension | State | Samples | Low sample? | Top 1 Alpha | Top 2 Alpha | Top 3 Alpha |")
+        lines.append("|---|---|---:|:---:|---|---|---|")
+        for m in regime_matrix:
+            t1 = f"`{m.get('top1_signed_alpha')}` (IR={m.get('top1_ic_ir'):.4f})" if m.get("top1_signed_alpha") else "-"
+            t2 = f"`{m.get('top2_signed_alpha')}` (IR={m.get('top2_ic_ir'):.4f})" if m.get("top2_signed_alpha") else "-"
+            t3 = f"`{m.get('top3_signed_alpha')}` (IR={m.get('top3_ic_ir'):.4f})" if m.get("top3_signed_alpha") else "-"
+            lines.append(f"| {m['dimension']} | {m['state']} | {m['samples']} | {m['low_sample']} | {t1} | {t2} | {t3} |")
+
     lines.append("\n## Most regime-sensitive factor/dimension pairs\n")
     lines.append("| Rank | Factor | Dimension | Class | IR spread | Best state | Best IC_IR | Best samples | Low sample? |")
     lines.append("|---:|---|---|---|---:|---|---:|---:|---|")
@@ -600,8 +690,9 @@ def write_findings(
     lines.append("1. Start with `01_factor_overview.csv` to decide which factors deserve attention.")
     lines.append("2. Open `02_dimension_diagnostics.csv` to see *which dimension* creates the regime dependency.")
     lines.append("3. Open the matching file in `dimensions/` to compare every state side by side.")
-    lines.append("4. Use `03_regime_leaderboard.csv` or `leaderboards/` when asking 'what is strongest in this specific state?'.")
-    lines.append("5. Always check `low_sample` before acting on an extreme IC/IR.")
+    lines.append("4. Use `04_regime_matrix.csv` as the unified Dimension x State matrix to configure multi-factor regime allocation.")
+    lines.append("5. Use `03_regime_leaderboard.csv` or `leaderboards/` when asking 'what is strongest in this specific state?'.")
+    lines.append("6. Always check `low_sample` before acting on an extreme IC/IR.")
 
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -611,6 +702,7 @@ def main() -> None:
     parser.add_argument("input_csv", type=Path, help="Long-format regime alpha profile CSV")
     parser.add_argument("--output-dir", type=Path, default=Path("results"), help="Directory for generated results")
     parser.add_argument("--top-n", type=int, default=25, help="Rows per per-state leaderboard file")
+    parser.add_argument("--matrix-top-k", type=int, default=3, help="Number of top alphas per regime state in 04_regime_matrix.csv")
     args = parser.parse_args()
 
     rows, _ = load_rows(args.input_csv)
@@ -635,6 +727,9 @@ def main() -> None:
     write_csv(output / "03_regime_leaderboard.csv", leaderboard)
 
     dimensions = sorted(set(r["dimension"] for r in rows))
+    matrix = build_regime_matrix(leaderboard, dimensions, rows, thresholds, top_k=args.matrix_top_k)
+    write_csv(output / "04_regime_matrix.csv", matrix)
+
     for dim in dimensions:
         wide = build_dimension_wide(rows, dim, diagnostics, thresholds)
         write_csv(output / "dimensions" / f"{dim}_report.csv", wide)
@@ -649,7 +744,7 @@ def main() -> None:
 
     (output / "thresholds.json").write_text(json.dumps(thresholds, indent=2), encoding="utf-8")
     (output / "validation.json").write_text(json.dumps(validation, indent=2), encoding="utf-8")
-    write_findings(output / "IMPORTANT_FINDINGS.md", rows, overview, diagnostics, leaderboard, validation, thresholds)
+    write_findings(output / "IMPORTANT_FINDINGS.md", rows, overview, diagnostics, leaderboard, validation, thresholds, regime_matrix=matrix)
 
     print(f"Generated report for {len(set(r['alpha'] for r in rows))} factors in: {output.resolve()}")
     if validation["warnings"]:

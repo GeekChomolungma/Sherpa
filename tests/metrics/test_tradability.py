@@ -15,7 +15,13 @@ def test_tradable_mask_excludes_bottom_percentile_of_cross_section():
     trades_count = _frame([[100.0, 1.0] for _ in range(n)], columns)
 
     mask = tradable_mask(
-        quote_volume, trades_count, lookback=10, min_percentile=0.6, seasoning_period=10
+        quote_volume,
+        trades_count,
+        lookback=10,
+        min_percentile=0.6,
+        min_quote_volume=0.0,
+        min_trades_count=0.0,
+        seasoning_period=10,
     )
 
     tail = mask.iloc[-1]
@@ -71,9 +77,23 @@ def test_tradable_mask_causal_no_lookahead():
     quote_volume = _frame(list(zip(a_series, b_series)), columns)
     trades_count = _frame(list(zip([100.0] * 60, [100.0] * 60)), columns)
 
-    full_mask = tradable_mask(quote_volume, trades_count, lookback=10, min_percentile=0.6, seasoning_period=10)
+    full_mask = tradable_mask(
+        quote_volume,
+        trades_count,
+        lookback=10,
+        min_percentile=0.6,
+        min_quote_volume=0.0,
+        min_trades_count=0.0,
+        seasoning_period=10,
+    )
     truncated_mask = tradable_mask(
-        quote_volume.iloc[:35], trades_count.iloc[:35], lookback=10, min_percentile=0.6, seasoning_period=10
+        quote_volume.iloc[:35],
+        trades_count.iloc[:35],
+        lookback=10,
+        min_percentile=0.6,
+        min_quote_volume=0.0,
+        min_trades_count=0.0,
+        seasoning_period=10,
     )
 
     pd.testing.assert_frame_equal(full_mask.iloc[:35], truncated_mask)

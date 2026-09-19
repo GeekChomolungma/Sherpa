@@ -241,7 +241,7 @@ flowchart TD
 ```
 
 ### 5.1 宏观层：BTC 减半 4 年大周期情景切片（Scenario Slices）
-在做样本外测试（Out-of-Sample）与压力测试时，把历史按宏观大时代拆分成标准字典切片（在 `research/worldquant_101/data.py` 中规范）：
+在做样本外测试（Out-of-Sample）与压力测试时，把历史按宏观大时代拆分成标准字典切片（在 `research/alpha_research/worldquant_101/data.py` 中规范）：
 
 ```python
 # 推荐的标准测试切片（以最近一轮周期为例）

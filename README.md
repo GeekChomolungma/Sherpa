@@ -26,7 +26,11 @@ sherpa/       library code (see table above)
 tests/        unit tests, mirrors sherpa/ layout
 examples/     runnable teaching scripts against synthetic data
 research/     real research projects against live ClickHouse data
-  worldquant_101/   batch-screening + per-category vectorized backtests for the WorldQuant 101 library
+  alpha_research/          Stage 1 (Alpha Research) per-family pipelines
+    worldquant_101/          batch-screening + per-category vectorized backtests for the WorldQuant 101 library
+  tradability_calibration/  hyperparameter calibration for sherpa.metrics.tradability.tradable_mask
+  regime_factor_report/     turns any family's regime-conditional IC profile into human-readable reports
+  factor_orthogonalization/ Gate 1 (the 4 Gates): regime-sliced correlation clustering / orthogonalization
 docs/         design docs
 scripts/      one-off ops scripts (e.g. a ClickHouse/Redis smoke test)
 ```
@@ -46,7 +50,7 @@ python examples/vectorized_research.py   # a self-contained example on synthetic
 This is a working framework, not a finished product. Honest state as of now:
 
 - **Data layer** — done, smoke-tested against real ClickHouse/Redis.
-- **Alpha library** — all 101 WorldQuant formulas are implemented and registered (19 are intentional no-ops: they need industry-classification or market-cap data the current `BarPanel` doesn't carry). Only **2** TradingView indicators exist so far. Most of the 101 factors have **not** been validated against real market data yet — that validation work lives in `research/worldquant_101/` and is in progress, not finished.
+- **Alpha library** — all 101 WorldQuant formulas are implemented and registered (19 are intentional no-ops: they need industry-classification or market-cap data the current `BarPanel` doesn't carry). Only **2** TradingView indicators exist so far. Most of the 101 factors have **not** been validated against real market data yet — that validation work lives in `research/alpha_research/worldquant_101/` and is in progress, not finished.
 - **Backtest engine** — the two-layer pipeline (`alpha_check`/`screening` → `vectorized`/`event_driven`) works and is unit-tested, but the *research workflow* around it (multi-factor combination, parameter sensitivity, standardized reporting) is still minimal — right now it's "call the functions yourself," not a polished tool.
 - **Strategy/Runner/sink** — `BaseStrategy`, `Runner`, `LogSink`, and `BacktestSink` are implemented and tested end to end in `examples/`. A real strategy built on validated alphas, run through the full backtest→sink pipeline, hasn't been done yet.
 - **Live signal path** — `WebhookSink` is a placeholder that raises on use; there is no real execution-service integration. Position-rebalancing/risk-gating logic (deliberately) hasn't been designed yet — see `docs/SHERPA_DESIGN.md` §8 for the reasoning.

@@ -6,7 +6,7 @@
 跟另外四个分类保持同样的目录结构，以后真有行业分类数据源接入时，这里就是现成的落点。
 
 运行：
-    CH_HOST=... CH_PASSWORD=... python research/worldquant_101/industry/run_vectorized.py
+    CH_HOST=... CH_PASSWORD=... python research/alpha_research/worldquant_101/industry/run_vectorized.py
 """
 
 from __future__ import annotations

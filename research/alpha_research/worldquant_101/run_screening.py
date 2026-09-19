@@ -9,7 +9,7 @@
 `momentum_reversal/`/...）下的 `run_vectorized.py` 去跑第二层。
 
 运行前先设好连接环境变量（同 `scripts/smoke_test_data_layer.py`）：
-    CH_HOST=... CH_PASSWORD=... python research/worldquant_101/run_screening.py
+    CH_HOST=... CH_PASSWORD=... python research/alpha_research/worldquant_101/run_screening.py
 """
 
 from __future__ import annotations
@@ -56,7 +56,7 @@ def main() -> None:
         print(passed.to_string())
 
     report.table.to_csv(REPORT_PATH)
-    print(f"\n完整排行榜已写入 research/worldquant_101/{REPORT_PATH}")
+    print(f"\n完整排行榜已写入 research/alpha_research/worldquant_101/{REPORT_PATH}")
     print("下一步：去对应分类文件夹跑 run_vectorized.py，对通过第一层的因子跑第二层向量化回测。")
 
 

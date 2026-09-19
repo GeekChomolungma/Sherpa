@@ -7,7 +7,7 @@
 `tests/alpha/test_worldquant.py` 里对它的专门说明。
 
 运行：
-    CH_HOST=... CH_PASSWORD=... python research/worldquant_101/composite/run_vectorized.py
+    CH_HOST=... CH_PASSWORD=... python research/alpha_research/worldquant_101/composite/run_vectorized.py
 """
 
 from __future__ import annotations

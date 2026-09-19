@@ -10,7 +10,7 @@
 条件 IC 表现后再决定怎么合并。
 
 运行方式同 `run_screening.py`：
-    CH_HOST=... CH_PASSWORD=... python research/worldquant_101/run_regime_report.py
+    CH_HOST=... CH_PASSWORD=... python research/alpha_research/worldquant_101/run_regime_report.py
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ def main() -> None:
     report = regime_report(panel, benchmark_symbol=BENCHMARK_SYMBOL)
 
     report.to_csv(REPORT_PATH)
-    print(f"\n完整 regime 报告矩阵已写入 research/worldquant_101/{REPORT_PATH}")
+    print(f"\n完整 regime 报告矩阵已写入 research/alpha_research/worldquant_101/{REPORT_PATH}")
 
     n_known = report["regime_label"].notna().sum()
     print(f"\n共 {len(report)} 根 bar，其中 {n_known} 根已脱离滚动窗口 warm-up、有完整四维度标签")
