@@ -11,99 +11,99 @@ This file is generated automatically from the input CSV. It highlights where a h
 
 ## Data-derived thresholds
 
-- |IC_IR| median: **0.0742**; upper quartile: **0.1229**.
-- IR-spread upper quartile: **0.1375**. This is used as the primary 'regime-sensitive' cutoff.
+- |IC_IR| median: **0.1051**; upper quartile: **0.1952**.
+- IR-spread upper quartile: **0.1749**. This is used as the primary 'regime-sensitive' cutoff.
 - Material sign reversal requires meaningful IC_IR on both sides of zero; tiny sign changes near zero are not promoted to `Regime-Reversal`.
 
 ## Factor-level classification counts
 
-- Regime-Reversal: **21**
-- Conditional: **40**
+- Regime-Reversal: **31**
+- Conditional: **19**
 - Stable: **0**
-- Mixed / Moderate: **19**
-- Weak / Noise: **1**
+- Mixed / Moderate: **28**
+- Weak / Noise: **3**
 - Data Quality Issue: **1**
 
 ## Dimension-level classification counts
 
-- Regime-Reversal: **26**
-- Conditional: **53**
-- Stable: **32**
-- Mixed / Moderate: **142**
-- Weak / Noise: **71**
+- Regime-Reversal: **36**
+- Conditional: **37**
+- Stable: **34**
+- Mixed / Moderate: **133**
+- Weak / Noise: **84**
 - Data Quality Issue: **4**
 
 ## Regime strategy matrix (Top alphas per state)
 
 | Dimension | State | Samples | Low sample? | Top 1 Alpha | Top 2 Alpha | Top 3 Alpha |
 |---|---|---:|:---:|---|---|---|
-| dispersion | low | 697 | False | `+worldquant.alpha016` (IR=0.2753) | `+worldquant.alpha013` (IR=0.2672) | `+worldquant.alpha050` (IR=0.2643) |
-| dispersion | normal | 959 | False | `+worldquant.alpha044` (IR=0.2382) | `+worldquant.alpha088` (IR=0.2317) | `+worldquant.alpha016` (IR=0.2022) |
-| dispersion | high | 730 | False | `+worldquant.alpha088` (IR=0.2148) | `+worldquant.alpha019` (IR=0.1849) | `+worldquant.alpha013` (IR=0.1801) |
-| liquidity | starved | 545 | False | `-worldquant.alpha007` (IR=-0.3608) | `+worldquant.alpha026` (IR=0.3039) | `+worldquant.alpha033` (IR=0.2738) |
-| liquidity | normal | 1151 | False | `+worldquant.alpha044` (IR=0.2598) | `+worldquant.alpha088` (IR=0.2588) | `+worldquant.alpha016` (IR=0.2582) |
-| liquidity | high | 654 | False | `+worldquant.alpha088` (IR=0.1886) | `+worldquant.alpha055` (IR=0.1479) | `+worldquant.alpha060` (IR=0.1365) |
-| trend | bear | 924 | False | `+worldquant.alpha026` (IR=0.2375) | `+worldquant.alpha044` (IR=0.2329) | `+worldquant.alpha016` (IR=0.2036) |
-| trend | neutral | 1407 | False | `+worldquant.alpha016` (IR=0.2588) | `+worldquant.alpha013` (IR=0.2480) | `+worldquant.alpha088` (IR=0.2400) |
-| trend | bull | 52 | True | `-worldquant.alpha009` (IR=-0.5581) | `-worldquant.alpha042` (IR=-0.5443) | `+worldquant.alpha088` (IR=0.5125) |
-| volatility | low | 822 | False | `+worldquant.alpha016` (IR=0.2849) | `+worldquant.alpha044` (IR=0.2299) | `+worldquant.alpha015` (IR=0.2285) |
-| volatility | normal | 680 | False | `+worldquant.alpha088` (IR=0.2568) | `+worldquant.alpha016` (IR=0.2160) | `+worldquant.alpha055` (IR=0.2101) |
-| volatility | high | 872 | False | `+worldquant.alpha026` (IR=0.2478) | `+worldquant.alpha088` (IR=0.2412) | `+worldquant.alpha013` (IR=0.2275) |
+| dispersion | low | 255 | False | `+worldquant.alpha016` (IR=0.5118) | `+worldquant.alpha013` (IR=0.4232) | `+worldquant.alpha088` (IR=0.3909) |
+| dispersion | normal | 362 | False | `+worldquant.alpha088` (IR=0.4642) | `+worldquant.alpha016` (IR=0.4286) | `+worldquant.alpha050` (IR=0.4137) |
+| dispersion | high | 281 | False | `+worldquant.alpha016` (IR=0.4446) | `+worldquant.alpha013` (IR=0.4147) | `+worldquant.alpha088` (IR=0.4048) |
+| liquidity | starved | 215 | False | `+worldquant.alpha016` (IR=0.5494) | `+worldquant.alpha038` (IR=0.4885) | `+worldquant.alpha050` (IR=0.4862) |
+| liquidity | normal | 454 | False | `+worldquant.alpha016` (IR=0.5029) | `+worldquant.alpha088` (IR=0.4678) | `+worldquant.alpha044` (IR=0.4387) |
+| liquidity | high | 229 | False | `+worldquant.alpha088` (IR=0.3439) | `+worldquant.alpha053` (IR=0.3240) | `+worldquant.alpha050` (IR=0.3166) |
+| trend | bear | 258 | False | `+worldquant.alpha088` (IR=0.3968) | `+worldquant.alpha016` (IR=0.3826) | `+worldquant.alpha044` (IR=0.3565) |
+| trend | neutral | 586 | False | `+worldquant.alpha016` (IR=0.4934) | `+worldquant.alpha013` (IR=0.4517) | `+worldquant.alpha088` (IR=0.4261) |
+| trend | bull | 54 | True | `+worldquant.alpha088` (IR=0.5507) | `-worldquant.alpha054` (IR=-0.5184) | `+worldquant.alpha003` (IR=0.5138) |
+| volatility | low | 302 | False | `+worldquant.alpha016` (IR=0.4723) | `+worldquant.alpha088` (IR=0.4583) | `+worldquant.alpha050` (IR=0.3750) |
+| volatility | normal | 286 | False | `+worldquant.alpha016` (IR=0.5530) | `+worldquant.alpha044` (IR=0.4744) | `+worldquant.alpha088` (IR=0.4732) |
+| volatility | high | 310 | False | `+worldquant.alpha016` (IR=0.3566) | `+worldquant.alpha050` (IR=0.3553) | `+worldquant.alpha088` (IR=0.3526) |
 
 ## Most regime-sensitive factor/dimension pairs
 
 | Rank | Factor | Dimension | Class | IR spread | Best state | Best IC_IR | Best samples | Low sample? |
 |---:|---|---|---|---:|---|---:|---:|---|
-| 1 | worldquant.alpha009 | trend | Conditional | 0.5853 | bull | -0.5581 | 52 | True |
-| 2 | worldquant.alpha068 | trend | Regime-Reversal | 0.5030 | bull | -0.4650 | 52 | True |
-| 3 | worldquant.alpha010 | trend | Conditional | 0.4956 | bull | -0.5054 | 52 | True |
-| 4 | worldquant.alpha042 | trend | Conditional | 0.4911 | bull | -0.5443 | 52 | True |
-| 5 | worldquant.alpha049 | trend | Regime-Reversal | 0.4841 | bull | -0.3290 | 52 | True |
-| 6 | worldquant.alpha037 | trend | Regime-Reversal | 0.4822 | bull | -0.3343 | 52 | True |
-| 7 | worldquant.alpha007 | liquidity | Regime-Reversal | 0.4694 | starved | -0.3608 | 545 | False |
-| 8 | worldquant.alpha101 | trend | Regime-Reversal | 0.4648 | bull | 0.3797 | 52 | True |
-| 9 | worldquant.alpha031 | trend | Regime-Reversal | 0.4608 | bull | -0.3708 | 52 | True |
-| 10 | worldquant.alpha025 | trend | Regime-Reversal | 0.4420 | bull | -0.3699 | 52 | True |
-| 11 | worldquant.alpha024 | trend | Conditional | 0.4332 | bull | -0.4364 | 52 | True |
-| 12 | worldquant.alpha034 | trend | Regime-Reversal | 0.4081 | bull | -0.3304 | 52 | True |
-| 13 | worldquant.alpha051 | trend | Regime-Reversal | 0.4074 | bull | -0.2592 | 52 | True |
-| 14 | worldquant.alpha094 | trend | Conditional | 0.3790 | bull | -0.3794 | 52 | True |
-| 15 | worldquant.alpha054 | trend | Conditional | 0.3663 | bull | -0.4262 | 52 | True |
+| 1 | worldquant.alpha010 | trend | Regime-Reversal | 0.7524 | bull | -0.4747 | 54 | True |
+| 2 | worldquant.alpha101 | trend | Regime-Reversal | 0.7289 | bull | 0.4700 | 54 | True |
+| 3 | worldquant.alpha068 | trend | Regime-Reversal | 0.5903 | bull | -0.4733 | 54 | True |
+| 4 | worldquant.alpha035 | trend | Regime-Reversal | 0.5879 | bull | -0.3256 | 54 | True |
+| 5 | worldquant.alpha034 | trend | Regime-Reversal | 0.5600 | bull | -0.3477 | 54 | True |
+| 6 | worldquant.alpha086 | trend | Regime-Reversal | 0.5586 | bull | -0.4038 | 54 | True |
+| 7 | worldquant.alpha043 | liquidity | Regime-Reversal | 0.5535 | starved | -0.3997 | 215 | False |
+| 8 | worldquant.alpha025 | trend | Regime-Reversal | 0.5360 | bull | -0.2877 | 54 | True |
+| 9 | worldquant.alpha007 | liquidity | Regime-Reversal | 0.5110 | starved | -0.3241 | 215 | False |
+| 10 | worldquant.alpha017 | trend | Regime-Reversal | 0.4894 | bull | -0.2761 | 54 | True |
+| 11 | worldquant.alpha054 | trend | Conditional | 0.4788 | bull | -0.5184 | 54 | True |
+| 12 | worldquant.alpha031 | trend | Regime-Reversal | 0.4365 | bull | -0.3647 | 54 | True |
+| 13 | worldquant.alpha062 | trend | Regime-Reversal | 0.4211 | bear | 0.2418 | 258 | False |
+| 14 | worldquant.alpha078 | trend | Regime-Reversal | 0.4190 | bull | -0.2166 | 54 | True |
+| 15 | worldquant.alpha095 | trend | Conditional | 0.4129 | bull | -0.4128 | 54 | True |
 
 ## Strongest regime observations after excluding low-sample states
 
 | Rank | Factor | Dimension | State | IC_IR | |IC_IR| | Direction | Samples | Win rate |
 |---:|---|---|---|---:|---:|---|---:|---:|
-| 1 | worldquant.alpha007 | liquidity | starved | -0.3608 | 0.3608 | invert | 545 | 0.3321 |
-| 2 | worldquant.alpha026 | liquidity | starved | 0.3039 | 0.3039 | original | 576 | 0.6111 |
-| 3 | worldquant.alpha016 | volatility | low | 0.2849 | 0.2849 | original | 822 | 0.6204 |
-| 4 | worldquant.alpha016 | dispersion | low | 0.2753 | 0.2753 | original | 697 | 0.6385 |
-| 5 | worldquant.alpha033 | liquidity | starved | 0.2738 | 0.2738 | original | 576 | 0.5990 |
-| 6 | worldquant.alpha038 | liquidity | starved | 0.2707 | 0.2707 | original | 576 | 0.6128 |
-| 7 | worldquant.alpha013 | dispersion | low | 0.2672 | 0.2672 | original | 696 | 0.6293 |
-| 8 | worldquant.alpha050 | dispersion | low | 0.2643 | 0.2643 | original | 681 | 0.6270 |
-| 9 | worldquant.alpha044 | liquidity | normal | 0.2598 | 0.2598 | original | 1151 | 0.6377 |
-| 10 | worldquant.alpha020 | liquidity | starved | 0.2595 | 0.2595 | original | 576 | 0.6059 |
-| 11 | worldquant.alpha016 | trend | neutral | 0.2588 | 0.2588 | original | 1407 | 0.6311 |
-| 12 | worldquant.alpha088 | liquidity | normal | 0.2588 | 0.2588 | original | 1106 | 0.6248 |
-| 13 | worldquant.alpha016 | liquidity | normal | 0.2582 | 0.2582 | original | 1151 | 0.6325 |
-| 14 | worldquant.alpha088 | volatility | normal | 0.2568 | 0.2568 | original | 680 | 0.6265 |
-| 15 | worldquant.alpha013 | trend | neutral | 0.2480 | 0.2480 | original | 1407 | 0.6269 |
+| 1 | worldquant.alpha016 | volatility | normal | 0.5530 | 0.5530 | original | 286 | 0.6923 |
+| 2 | worldquant.alpha016 | liquidity | starved | 0.5494 | 0.5494 | original | 215 | 0.6884 |
+| 3 | worldquant.alpha016 | dispersion | low | 0.5118 | 0.5118 | original | 255 | 0.6627 |
+| 4 | worldquant.alpha016 | liquidity | normal | 0.5029 | 0.5029 | original | 454 | 0.6718 |
+| 5 | worldquant.alpha016 | trend | neutral | 0.4934 | 0.4934 | original | 586 | 0.6689 |
+| 6 | worldquant.alpha038 | liquidity | starved | 0.4885 | 0.4885 | original | 215 | 0.6651 |
+| 7 | worldquant.alpha050 | liquidity | starved | 0.4862 | 0.4862 | original | 215 | 0.6605 |
+| 8 | worldquant.alpha044 | volatility | normal | 0.4744 | 0.4744 | original | 286 | 0.6818 |
+| 9 | worldquant.alpha088 | volatility | normal | 0.4732 | 0.4732 | original | 285 | 0.7053 |
+| 10 | worldquant.alpha016 | volatility | low | 0.4723 | 0.4723 | original | 302 | 0.6457 |
+| 11 | worldquant.alpha088 | liquidity | normal | 0.4678 | 0.4678 | original | 454 | 0.7004 |
+| 12 | worldquant.alpha088 | dispersion | normal | 0.4642 | 0.4642 | original | 362 | 0.6796 |
+| 13 | worldquant.alpha015 | liquidity | starved | 0.4619 | 0.4619 | original | 215 | 0.6605 |
+| 14 | worldquant.alpha088 | volatility | low | 0.4583 | 0.4583 | original | 302 | 0.6887 |
+| 15 | worldquant.alpha050 | volatility | normal | 0.4536 | 0.4536 | original | 286 | 0.6678 |
 
 ## Strong-looking results that are low-sample (treat cautiously)
 
 | Rank | Factor | Dimension | State | IC_IR | |IC_IR| | Samples | Sample fraction |
 |---:|---|---|---|---:|---:|---:|---:|
-| 1 | worldquant.alpha009 | trend | bull | -0.5581 | 0.5581 | 52 | 0.0218 |
-| 2 | worldquant.alpha042 | trend | bull | -0.5443 | 0.5443 | 52 | 0.0218 |
-| 3 | worldquant.alpha088 | trend | bull | 0.5125 | 0.5125 | 52 | 0.0225 |
-| 4 | worldquant.alpha010 | trend | bull | -0.5054 | 0.5054 | 52 | 0.0218 |
-| 5 | worldquant.alpha068 | trend | bull | -0.4650 | 0.4650 | 52 | 0.0231 |
-| 6 | worldquant.alpha024 | trend | bull | -0.4364 | 0.4364 | 52 | 0.0232 |
-| 7 | worldquant.alpha054 | trend | bull | -0.4262 | 0.4262 | 52 | 0.0218 |
-| 8 | worldquant.alpha061 | trend | bull | -0.4241 | 0.4241 | 52 | 0.0231 |
-| 9 | worldquant.alpha050 | trend | bull | 0.4183 | 0.4183 | 52 | 0.0224 |
-| 10 | worldquant.alpha003 | trend | bull | 0.3919 | 0.3919 | 52 | 0.0218 |
+| 1 | worldquant.alpha088 | trend | bull | 0.5507 | 0.5507 | 54 | 0.0602 |
+| 2 | worldquant.alpha054 | trend | bull | -0.5184 | 0.5184 | 54 | 0.0601 |
+| 3 | worldquant.alpha003 | trend | bull | 0.5138 | 0.5138 | 54 | 0.0601 |
+| 4 | worldquant.alpha010 | trend | bull | -0.4747 | 0.4747 | 54 | 0.0601 |
+| 5 | worldquant.alpha068 | trend | bull | -0.4733 | 0.4733 | 54 | 0.0601 |
+| 6 | worldquant.alpha101 | trend | bull | 0.4700 | 0.4700 | 54 | 0.0601 |
+| 7 | worldquant.alpha016 | trend | bull | 0.4361 | 0.4361 | 54 | 0.0601 |
+| 8 | worldquant.alpha050 | trend | bull | 0.4321 | 0.4321 | 54 | 0.0601 |
+| 9 | worldquant.alpha095 | trend | bull | -0.4128 | 0.4128 | 54 | 0.0601 |
+| 10 | worldquant.alpha086 | trend | bull | -0.4038 | 0.4038 | 54 | 0.0601 |
 
 ## Reading order
 

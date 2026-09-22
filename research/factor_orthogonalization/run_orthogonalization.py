@@ -1,11 +1,11 @@
-"""四大工程关卡 · 关卡1：因子相关性分析与正交化（按 regime state 切片）。
+"""三大工程关卡 · 关卡1：因子相关性分析与正交化（按 regime state 切片）。
 
 对 `config.REGIME_ALPHA_SETS` 里手动圈定的"12 个 regime 状态各自的候选因子集"，在**每个
 state 自己的历史切片内**逐对计算截面 Spearman 相关，按 `config.CORRELATION_THRESHOLD` 做
 单链聚类，每簇只保留该 state 切片内信噪比（|IC_IR|）最高的一个代表因子——
 `QUANT_RESEARCH_TO_LIVE_LIFECYCLE.md` §4 关卡1 的落地实现。
 
-**为什么要按 regime state 切片，而不是算一次全历史相关性了事**：关卡3（基于微观 Regime 的
+**为什么要按 regime state 切片，而不是算一次全历史相关性了事**：关卡2（基于微观 Regime 的
 动态多因子合成）最终是"regime 命中 state X 时，从 X 专属的因子集合里挑权重"，所以两个因子
 是否冗余，必须在它们真正会被放进同一个 state 的那段历史上检验——全历史看起来不太相关的一
 对因子，完全可能在具体某个 state（比如 trend=bull 这种样本本来就少的极端切片）里其实高度

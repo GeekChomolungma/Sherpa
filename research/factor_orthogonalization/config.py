@@ -1,6 +1,6 @@
 """手动配置：本轮参与正交化聚类分析的候选因子池——按 12 个 regime 状态分别指定。
 
-`QUANT_RESEARCH_TO_LIVE_LIFECYCLE.md` §4 关卡3（基于微观 Regime 的动态多因子合成）最终是
+`QUANT_RESEARCH_TO_LIVE_LIFECYCLE.md` §4 关卡2（基于微观 Regime 的动态多因子合成）最终是
 "regime 命中 state X 时，从属于 X 的因子集合里挑权重"，所以关卡1 的正交化检验也必须限定在
 同一个 regime 历史切片里做——两个因子如果全历史看不太相关，但恰好都是"trend=bull 专属
 强因子"，会一起被装进同一个 state 的因子集合里，那就必须在 trend=bull 这段历史上专门检验
@@ -23,30 +23,107 @@ from __future__ import annotations
 #     dispersion  -> high / normal / low
 #     liquidity   -> high / normal / starved
 #
-# 下面给的默认值是从 `research/regime_factor_report/results/04_regime_matrix.csv` 里每个
-# state 的 Top3 alpha 抄过来的一份示例（体检阶段筛出来的"头号种子选手"）——正好用来验证一个
-# 直觉：同一个 state 排行榜前几名之间是不是其实在重复下注同一份信息。按需替换成你自己想测试
-# 的候选因子。
+# 下面的值是从 `research/regime_factor_report/results/04_regime_matrix.csv`（残差化版本，
+# 由 `run_alpha_regime_profile.py`（`USE_NEUTRALIZATION=True`）→ `regime_factor_report.py`
+# 产出）里每个 state 的 Top5 alpha 抄过来的——不是原始分数版本（`04_regime_matrix_without_neutral.csv`），
+# 已经是剥离过 Beta/Size 暴露之后的排行榜，正好用来验证一个直觉：同一个 state 排行榜前几名
+# 之间是不是其实在重复下注同一份信息。按需替换成你自己想测试的候选因子。
+#
+# `trend.bull` 只有 54 个样本（占该维度 ALL 样本的 ~6%），`04_regime_matrix.csv` 里
+# `low_sample=True`——这个 state 的排行榜可信度比其余 11 个低，解读这里的聚类结果时要打
+# 折扣，不能跟其它样本充足的 state 同等看待。
 REGIME_ALPHA_SETS: dict[str, dict[str, list[str]]] = {
     "trend": {
-        "bull": ["worldquant.alpha009", "worldquant.alpha042", "worldquant.alpha088"],
-        "bear": ["worldquant.alpha026", "worldquant.alpha044", "worldquant.alpha016"],
-        "neutral": ["worldquant.alpha016", "worldquant.alpha013", "worldquant.alpha088"],
+        "bull": [
+            "worldquant.alpha088",
+            "worldquant.alpha054",
+            "worldquant.alpha003",
+            "worldquant.alpha010",
+            "worldquant.alpha068",
+        ],
+        "bear": [
+            "worldquant.alpha088",
+            "worldquant.alpha016",
+            "worldquant.alpha044",
+            "worldquant.alpha050",
+            "worldquant.alpha027",
+        ],
+        "neutral": [
+            "worldquant.alpha016",
+            "worldquant.alpha013",
+            "worldquant.alpha088",
+            "worldquant.alpha050",
+            "worldquant.alpha015",
+        ],
     },
     "volatility": {
-        "high": ["worldquant.alpha026", "worldquant.alpha088", "worldquant.alpha013"],
-        "normal": ["worldquant.alpha088", "worldquant.alpha016", "worldquant.alpha055"],
-        "low": ["worldquant.alpha016", "worldquant.alpha044", "worldquant.alpha015"],
+        "high": [
+            "worldquant.alpha016",
+            "worldquant.alpha050",
+            "worldquant.alpha088",
+            "worldquant.alpha027",
+            "worldquant.alpha013",
+        ],
+        "normal": [
+            "worldquant.alpha016",
+            "worldquant.alpha044",
+            "worldquant.alpha088",
+            "worldquant.alpha050",
+            "worldquant.alpha013",
+        ],
+        "low": [
+            "worldquant.alpha016",
+            "worldquant.alpha088",
+            "worldquant.alpha050",
+            "worldquant.alpha013",
+            "worldquant.alpha015",
+        ],
     },
     "dispersion": {
-        "high": ["worldquant.alpha088", "worldquant.alpha019", "worldquant.alpha013"],
-        "normal": ["worldquant.alpha044", "worldquant.alpha088", "worldquant.alpha016"],
-        "low": ["worldquant.alpha016", "worldquant.alpha013", "worldquant.alpha050"],
+        "high": [
+            "worldquant.alpha016",
+            "worldquant.alpha013",
+            "worldquant.alpha088",
+            "worldquant.alpha015",
+            "worldquant.alpha050",
+        ],
+        "normal": [
+            "worldquant.alpha088",
+            "worldquant.alpha016",
+            "worldquant.alpha050",
+            "worldquant.alpha044",
+            "worldquant.alpha015",
+        ],
+        "low": [
+            "worldquant.alpha016",
+            "worldquant.alpha013",
+            "worldquant.alpha088",
+            "worldquant.alpha050",
+            "worldquant.alpha044",
+        ],
     },
     "liquidity": {
-        "high": ["worldquant.alpha088", "worldquant.alpha055", "worldquant.alpha060"],
-        "normal": ["worldquant.alpha044", "worldquant.alpha088", "worldquant.alpha016"],
-        "starved": ["worldquant.alpha007", "worldquant.alpha026", "worldquant.alpha033"],
+        "high": [
+            "worldquant.alpha088",
+            "worldquant.alpha053",
+            "worldquant.alpha050",
+            "worldquant.alpha016",
+            "worldquant.alpha027",
+        ],
+        "normal": [
+            "worldquant.alpha016",
+            "worldquant.alpha088",
+            "worldquant.alpha044",
+            "worldquant.alpha013",
+            "worldquant.alpha050",
+        ],
+        "starved": [
+            "worldquant.alpha016",
+            "worldquant.alpha038",
+            "worldquant.alpha050",
+            "worldquant.alpha015",
+            "worldquant.alpha013",
+        ],
     },
 }
 

@@ -44,6 +44,11 @@ Windows 上不原生支持（需要 WSL2），投入产出比不划算。
 `regime_alpha_profile.csv` 真正要回答的问题："剥离掉被动风险暴露之后，这个因子在各个 regime
 下还剩多少真实的选币能力"，而不是"这个因子的表现有多少其实是在骑 Beta"。
 
+`USE_NEUTRALIZATION` 开关默认 `True`（标准做法）；手动改成 `False` 会跳过中性化，直接用
+原始分数（也就是允许骑 Beta）算 `ic_series`，仅用于跟中性化版本做对照诊断——`OUTPUT_PATH`
+会跟着开关自动换文件名（`regime_alpha_profile.csv` / `regime_alpha_profile_without_neutralization.csv`），
+两版结果不会互相覆盖。
+
 运行前先跑过 `run_regime_report.py`（产出 `regime_report.csv`），再跑：
     CH_HOST=... CH_PASSWORD=... python research/alpha_research/worldquant_101/run_alpha_regime_profile.py
 """
@@ -69,7 +74,13 @@ from sherpa.risk.neutralize import neutralize
 from data import END_TIME, INTERVAL, START_TIME, load_universe_panel
 
 BENCHMARK_SYMBOL = "BTCUSDT"
-OUTPUT_PATH = "regime_alpha_profile.csv"
+
+# 中性化开关：默认 True，剥离 Beta/Size 被动暴露算残差 ic_series（`QUANT_RESEARCH_TO_LIVE_LIFECYCLE.md`
+# §3.2 的标准做法）。手动改成 False 会直接用原始分数（允许骑 Beta），仅用于跟中性化版本
+# 做对照诊断，不建议作为长期默认。
+USE_NEUTRALIZATION = True
+
+OUTPUT_PATH = "regime_alpha_profile.csv" if USE_NEUTRALIZATION else "regime_alpha_profile_without_neutralization.csv"
 
 # worker 进程内的全局状态：`_init_worker` 在每个 worker 进程启动时赋值一次，之后同一个
 # worker 处理的每个任务（每个 alpha）都直接复用，不用每个任务都重新反序列化一遍 panel。
@@ -105,7 +116,8 @@ def _compute_ic_series(qualified_name: str) -> tuple[str, "pd.Series | None", "s
     except NotImplementedError as exc:
         return qualified_name, None, str(exc)
     history = history.where(_worker_mask)
-    history = neutralize(history, _worker_exposures)
+    if _worker_exposures is not None:
+        history = neutralize(history, _worker_exposures)
     forward_returns = _worker_forward_returns.where(_worker_mask)
     return qualified_name, rank_ic(history, forward_returns), None
 
@@ -121,11 +133,16 @@ def main() -> None:
     mask = tradable_mask(panel.quote_volume, panel.trades_count)
     print(f"  每期平均 {mask.sum(axis=1).mean():.1f} / {len(panel.symbols)} 个 symbol 通过流通性筛选")
 
-    print("正在计算中性化用的风险暴露矩阵（Beta 对 BTCUSDT / Size 用 log(quote_volume)）……")
-    exposures = default_style_exposures(panel, benchmark_symbol=BENCHMARK_SYMBOL)
+    if USE_NEUTRALIZATION:
+        print("正在计算中性化用的风险暴露矩阵（Beta 对 BTCUSDT / Size 用 log(quote_volume)）……")
+        exposures = default_style_exposures(panel, benchmark_symbol=BENCHMARK_SYMBOL)
+    else:
+        print("USE_NEUTRALIZATION=False：跳过中性化，直接用原始分数（允许骑 Beta）算 ic_series，仅供对照……")
+        exposures = None
 
     qualified_names = list(registry.all(family="worldquant").keys())
-    print(f"\n正在用多进程对全部 {len(qualified_names)} 个世坤101 alpha 计算残差分数的 ic_series……")
+    score_kind = "残差分数" if USE_NEUTRALIZATION else "原始分数"
+    print(f"\n正在用多进程对全部 {len(qualified_names)} 个世坤101 alpha 计算{score_kind}的 ic_series……")
 
     ic_series_by_alpha: dict[str, pd.Series] = {}
     errors: dict[str, str] = {}
