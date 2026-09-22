@@ -8,6 +8,10 @@
 这一步只做筛选，不算仓位/成本——通过的因子留给对应分类文件夹（`price_volume/`/
 `momentum_reversal/`/...）下的 `run_vectorized.py` 去跑第二层。
 
+`screen_alphas` 现在会先对每个因子的原始分数做中性化残差化（`QUANT_RESEARCH_TO_LIVE_LIFECYCLE.md`
+§3.2，剔除 Beta/Size 被动暴露），再拿残差分数算 IC——`exposures` 用
+`sherpa.backtest.style_exposure.default_style_exposures(panel)` 构造。
+
 运行前先设好连接环境变量（同 `scripts/smoke_test_data_layer.py`）：
     CH_HOST=... CH_PASSWORD=... python research/alpha_research/worldquant_101/run_screening.py
 """
@@ -23,6 +27,7 @@ import sherpa.alpha.worldquant  # noqa: F401  import 触发 @register_alpha，�
 from sherpa.alpha import registry
 from sherpa.alpha.engine import AlphaEngine
 from sherpa.backtest.screening import screen_alphas
+from sherpa.backtest.style_exposure import default_style_exposures
 
 from data import END_TIME, INTERVAL, START_TIME, load_universe_panel
 
@@ -41,8 +46,13 @@ def main() -> None:
     worldquant_alphas = [cls() for cls in registry.all(family="worldquant").values()]
     engine = AlphaEngine(worldquant_alphas)
 
-    print(f"\n开始跑 {len(worldquant_alphas)} 个因子的第一层检验……")
-    report = screen_alphas(engine, panel, forward_returns, n_quantiles=N_QUANTILES, ic_ir_threshold=IC_IR_THRESHOLD)
+    print("正在计算中性化用的风险暴露矩阵（Beta 对 BTCUSDT / Size 用 log(quote_volume)）……")
+    exposures = default_style_exposures(panel)
+
+    print(f"\n开始跑 {len(worldquant_alphas)} 个因子的第一层检验（残差分数）……")
+    report = screen_alphas(
+        engine, panel, forward_returns, n_quantiles=N_QUANTILES, ic_ir_threshold=IC_IR_THRESHOLD, exposures=exposures
+    )
 
     passed = report.table[report.table["passed"]]
     print(f"\n算不出来的因子：{len(report.errors)} 个（缺行业分类/市值，占位不实现）")

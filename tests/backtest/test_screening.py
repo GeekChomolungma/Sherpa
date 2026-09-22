@@ -110,3 +110,33 @@ def test_screen_alphas_table_has_expected_columns():
     report = screen_alphas(engine, panel, forward_returns)
 
     assert list(report.table.columns) == ["ic_mean", "ic_std", "ic_ir", "passed"]
+
+
+def test_screen_alphas_exposures_none_keeps_raw_score_behavior():
+    # exposures 默认关闭（None）时，结果必须跟完全不传这个参数时一样——向后兼容。
+    index, columns, base, forward_returns = _synthetic_panel()
+    panel = _make_panel_for_engine(index, columns)
+
+    engine = AlphaEngine([_StrongAlpha(base, index, columns)])
+    without_kwarg = screen_alphas(engine, panel, forward_returns, ic_ir_threshold=0.5)
+    with_none = screen_alphas(engine, panel, forward_returns, ic_ir_threshold=0.5, exposures=None)
+
+    pd.testing.assert_frame_equal(without_kwarg.table, with_none.table)
+
+
+def test_screen_alphas_exposures_neutralizes_raw_score_before_ic():
+    # _StrongAlpha 的原始分数就是逐 symbol 的常数 base（每个 symbol 一个固定值，不随时间变
+    # 化）。把 base 本身当成一个 exposure 喂进去，相当于让因子对自己做回归——残差应该趋近于
+    # 0，IC_IR 应该从"完美通过"塌缩成噪音，验证 exposures 真的在 screen_alphas 内部生效。
+    index, columns, base, forward_returns = _synthetic_panel()
+    panel = _make_panel_for_engine(index, columns)
+    exposure = pd.DataFrame(base, index=index, columns=columns)
+
+    engine = AlphaEngine([_StrongAlpha(base, index, columns)])
+    raw_report = screen_alphas(engine, panel, forward_returns, ic_ir_threshold=0.5)
+    neutralized_report = screen_alphas(
+        engine, panel, forward_returns, ic_ir_threshold=0.5, exposures={"self": exposure}
+    )
+
+    assert bool(raw_report.table.loc["custom.strong", "passed"]) is True
+    assert bool(neutralized_report.table.loc["custom.strong", "passed"]) is False

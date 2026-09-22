@@ -33,9 +33,16 @@ Windows 上不原生支持（需要 WSL2），投入产出比不划算。
 
 对应架构分层：
 `sherpa.metrics.tradability.tradable_mask`（纯统计，掩码）
+`sherpa.risk.neutralize.neutralize`（纯统计，截面中性化残差化，`QUANT_RESEARCH_TO_LIVE_LIFECYCLE.md`
+§3.2）
 `sherpa.metrics.factor.conditional_ic_summary`（纯统计，条件切片）
 -> `sherpa.backtest.regime_screening.profile_alphas_by_regime`（批量入口）
 -> 这里（具体项目跑批 + 落盘）。
+
+`_compute_ic_series` 在算 `rank_ic` 之前，先用可流通性掩码盖掉没有真实流动性的 symbol，再
+对剩下的原始分数做中性化残差化（剔除 Beta/Size 暴露）——用残差分数产出的 `ic_series`，才是
+`regime_alpha_profile.csv` 真正要回答的问题："剥离掉被动风险暴露之后，这个因子在各个 regime
+下还剩多少真实的选币能力"，而不是"这个因子的表现有多少其实是在骑 Beta"。
 
 运行前先跑过 `run_regime_report.py`（产出 `regime_report.csv`），再跑：
     CH_HOST=... CH_PASSWORD=... python research/alpha_research/worldquant_101/run_alpha_regime_profile.py
@@ -54,8 +61,10 @@ import pandas as pd
 import sherpa.alpha.worldquant  # noqa: F401  import 触发 @register_alpha，把 101 个 alpha 都注册进 registry
 from sherpa.alpha import registry
 from sherpa.backtest.regime_screening import profile_alphas_by_regime, regime_report
+from sherpa.backtest.style_exposure import default_style_exposures
 from sherpa.metrics.factor import rank_ic
 from sherpa.metrics.tradability import tradable_mask
+from sherpa.risk.neutralize import neutralize
 
 from data import END_TIME, INTERVAL, START_TIME, load_universe_panel
 
@@ -67,13 +76,15 @@ OUTPUT_PATH = "regime_alpha_profile.csv"
 _worker_panel = None
 _worker_forward_returns = None
 _worker_mask = None
+_worker_exposures = None
 
 
-def _init_worker(panel, forward_returns, mask) -> None:
-    global _worker_panel, _worker_forward_returns, _worker_mask
+def _init_worker(panel, forward_returns, mask, exposures) -> None:
+    global _worker_panel, _worker_forward_returns, _worker_mask, _worker_exposures
     _worker_panel = panel
     _worker_forward_returns = forward_returns
     _worker_mask = mask
+    _worker_exposures = exposures
 
 
 def _compute_ic_series(qualified_name: str) -> tuple[str, "pd.Series | None", "str | None"]:
@@ -83,8 +94,10 @@ def _compute_ic_series(qualified_name: str) -> tuple[str, "pd.Series | None", "s
     方式起 worker 进程时会重新 import 这个脚本模块（触发 `sherpa.alpha.worldquant` 重新
     注册），每个 worker 自己的 `registry` 里本来就有这份 alpha，没必要跨进程传对象。
 
-    算 `rank_ic` 之前用 `_worker_mask` 把两个矩阵里"当期没有真实流动性"的位置盖成 `NaN`——
-    `rank_ic` 本身已经会正确处理逐期缺失值，不用改它，掩码只是一步预处理。
+    先用 `_worker_mask` 把"当期没有真实流动性"的位置盖成 `NaN`，再对剩下的原始分数做
+    `neutralize()` 中性化残差化——先掩码再中性化，是为了不让插针小币的噪声分数混进当期的
+    截面回归，跟 `factor_orthogonalization` 现有的"先掩码再算统计量"顺序一致。`rank_ic`
+    本身已经会正确处理逐期缺失值，不用改它。
     """
     alpha = registry.get(qualified_name)()
     try:
@@ -92,6 +105,7 @@ def _compute_ic_series(qualified_name: str) -> tuple[str, "pd.Series | None", "s
     except NotImplementedError as exc:
         return qualified_name, None, str(exc)
     history = history.where(_worker_mask)
+    history = neutralize(history, _worker_exposures)
     forward_returns = _worker_forward_returns.where(_worker_mask)
     return qualified_name, rank_ic(history, forward_returns), None
 
@@ -107,13 +121,18 @@ def main() -> None:
     mask = tradable_mask(panel.quote_volume, panel.trades_count)
     print(f"  每期平均 {mask.sum(axis=1).mean():.1f} / {len(panel.symbols)} 个 symbol 通过流通性筛选")
 
+    print("正在计算中性化用的风险暴露矩阵（Beta 对 BTCUSDT / Size 用 log(quote_volume)）……")
+    exposures = default_style_exposures(panel, benchmark_symbol=BENCHMARK_SYMBOL)
+
     qualified_names = list(registry.all(family="worldquant").keys())
-    print(f"\n正在用多进程对全部 {len(qualified_names)} 个世坤101 alpha 计算 ic_series……")
+    print(f"\n正在用多进程对全部 {len(qualified_names)} 个世坤101 alpha 计算残差分数的 ic_series……")
 
     ic_series_by_alpha: dict[str, pd.Series] = {}
     errors: dict[str, str] = {}
     processed = 0
-    with ProcessPoolExecutor(initializer=_init_worker, initargs=(panel, forward_returns, mask)) as executor:
+    with ProcessPoolExecutor(
+        initializer=_init_worker, initargs=(panel, forward_returns, mask, exposures)
+    ) as executor:
         for qualified_name, ic_series, error in executor.map(_compute_ic_series, qualified_names):
             processed += 1
             if error is not None:

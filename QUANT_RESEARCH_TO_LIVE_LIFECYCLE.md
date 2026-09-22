@@ -1,8 +1,10 @@
 # 从单因子研究到实盘生产：量化策略全生命周期与模块归属准则
 
-> 本文档为 Sherpa 量化系统的**顶层工程准则（Master Engineering Guideline）**，系统性规范从单因子挖掘、跨越四大工程关卡、构建投资组合，直至历史回测、纸面交易与实盘放量的完整全生命周期。
+> 本文档为 Sherpa 量化系统的**顶层工程准则（Master Engineering Guideline）**，系统性规范从单因子挖掘、跨越三大工程关卡、构建投资组合，直至历史回测、纸面交易与实盘放量的完整全生命周期。
 > 
 > 本文档清晰定义了每一个生命周期阶段**在代码库中的模块归属**以及**对应的 Research 专题研究文档与实战工程索引**，作为后续量化研发与文档演进的统一总纲。
+>
+> **版本变更说明**：原"四大工程关卡"中的**关卡2（风险与风格中性化）**，经讨论确认必须**前移并入阶段一（单因子挖掘与体检）**——因子的截面残差化（剔除 Beta/Size 暴露）必须发生在因子相关性聚类（原关卡1）之前，否则聚类算出来的"相关性"会把"共同承担同一份被动风险暴露"误判成"信息冗余"，错误地淘汰掉本来互补的因子。因此本文档现行版本只保留**三大工程关卡**，编号相应前移（原关卡3→关卡2，原关卡4→关卡3）。
 
 ---
 
@@ -11,13 +13,13 @@
 2. [全生命周期文档与工程索引全景表](#2-全生命周期文档与工程索引全景表)
 3. [阶段一：单因子挖掘与体检 (Alpha Research)](#3-阶段一单因子挖掘与体检-alpha-research)
    - [3.1 职责边界与准入准出](#31-职责边界与准入准出)
-   - [3.2 对应 Research 文档与实操指南](#32-对应-research-文档与实操指南)
-   - [3.3 对应代码模块归属](#33-对应代码模块归属)
-4. [桥梁关卡：从单因子到投资组合的四大核心门槛 (The 4 Gates)](#4-桥梁关卡从单因子到投资组合的四大核心门槛-the-4-gates)
+   - [3.2 中性化：截面风险与风格暴露残差化 (Neutralization)](#32-中性化截面风险与风格暴露残差化-neutralization)
+   - [3.3 对应 Research 文档与实操指南](#33-对应-research-文档与实操指南)
+   - [3.4 对应代码模块归属](#34-对应代码模块归属)
+4. [桥梁关卡：从残差因子到投资组合的三大核心门槛 (The 3 Gates)](#4-桥梁关卡从残差因子到投资组合的三大核心门槛-the-3-gates)
    - [关卡 1：因子相关性分析与正交化 (Orthogonalization)](#关卡-1因子相关性分析与正交化-orthogonalization)
-   - [关卡 2：风险与风格中性化 (Risk & Style Neutralization)](#关卡-2风险与风格中性化-risk--style-neutralization)
-   - [关卡 3：基于微观 Regime 的动态多因子合成 (Synthesis)](#关卡-3基于-微观-regime-的动态多因子合成-synthesis)
-   - [关卡 4：第二层可变现性与资金容量压力测试 (Friction Test)](#关卡-4第二层可变现性与资金容量压力测试-friction-test)
+   - [关卡 2：基于微观 Regime 的动态多因子合成 (Synthesis)](#关卡-2基于-微观-regime-的动态多因子合成-synthesis)
+   - [关卡 3：第二层可变现性与资金容量压力测试 (Friction Test)](#关卡-3第二层可变现性与资金容量压力测试-friction-test)
    - [关卡对应指导文档与设计原理](#关卡对应指导文档与设计原理)
 5. [阶段二：投资组合严格时序回测 (Portfolio Backtesting)](#5-阶段二投资组合严格时序回测-portfolio-backtesting)
    - [5.1 职责边界与核心规范](#51-职责边界与核心规范)
@@ -42,16 +44,16 @@
 flowchart TD
     subgraph STAGE1["阶段一：单因子挖掘与体检 (Alpha Research)"]
         A1["算子计算: ops.py / worldquant / tradingview"]
-        A2["第一层检验: run_alpha_check (RankIC, IC_IR, 单调性)"]
-        A3["Regime 掩码画像: 条件 IC_IR / 淘汰纯噪音"]
+        A2["中性化残差化: sherpa.risk.rolling_beta + neutralize (逐期截面OLS剔除Beta/Size暴露)"]
+        A3["第一层检验: run_alpha_check (对残差分数算 RankIC, IC_IR, 单调性)"]
+        A4["Regime 掩码画像: 残差分数的条件 IC_IR / 淘汰纯噪音"]
     end
 
-    subgraph GATES["工业界核心桥梁：四大工程关卡 (The 4 Gates)"]
+    subgraph GATES["工业界核心桥梁：三大工程关卡 (The 3 Gates)"]
         direction TB
-        G1["关卡 1: 相关性聚类与正交化 (剔除影子因子)"]
-        G2["关卡 2: 风格与风险中性化 (剔除隐性 Beta/市值暴露)"]
-        G3["关卡 3: 基于微观 Regime 动态合成组合 (TargetPosition)"]
-        G4["关卡 4: 全摩擦换手与资金容量测试 (漂移扣费)"]
+        G1["关卡 1: 相关性聚类与正交化 (对残差因子聚类，剔除影子因子)"]
+        G2["关卡 2: 基于微观 Regime 动态合成组合 (TargetPosition)"]
+        G3["关卡 3: 全摩擦换手与资金容量测试 (漂移扣费)"]
     end
 
     subgraph STAGE2["阶段二：投资组合严格回测 (Portfolio Backtesting)"]
@@ -85,8 +87,8 @@ flowchart TD
 
 | 生命周期阶段 | 核心任务目标 | 关联 Research 文档 / 系统指南 | 文档核心作用与解决的痛点 |
 | :--- | :--- | :--- | :--- |
-| **阶段一：单因子挖掘与体检<br>*(Alpha Research)*** | 因子数学表达、全时序计算、无前视因果打标、环境适应性体检、指标数值量级标尺与品性诊断 | 📘 [`docs/ALPHA_METRIC_BENCHMARKS.md`](file:///d:/code-repo/Chomo/Sherpa/docs/ALPHA_METRIC_BENCHMARKS.md)<br><br>📘 [`research/REGIME_FRAMEWORK_GUIDE.md`](file:///d:/code-repo/Chomo/Sherpa/research/REGIME_FRAMEWORK_GUIDE.md)<br><br>📘 [`research/REGIME_ALPHA_EVALUATION_WORKFLOW.md`](file:///d:/code-repo/Chomo/Sherpa/research/REGIME_ALPHA_EVALUATION_WORKFLOW.md)<br><br>🛠️ [`research/alpha_research/worldquant_101/`](file:///d:/code-repo/Chomo/Sherpa/research/alpha_research/worldquant_101) | **体检指标体系与量级基准**：规范 `ic_mean`、`ic_std`、`ic_ir`、`win_rate`、`samples`、`ic_ir_gap` 的数学物理本质与工业级及格/优秀/神级量级标尺，给出多指标交叉诊断口诀。<br><br>**市场状态分类准则**：建立 TradFi 四大维度到 Crypto 的 1:1 映射，补充永续合约特有的资金费率与杠杆维度，给出 BTC 减半宏观情景切片与 Python 代码。<br><br>**工业级单因子测评 SOP**：阐述“全时序连续计算、严格 Point-in-time 条件掩码打标”机制，剖析物理切片四大暗礁，输出因子决策矩阵。<br><br>**首个落地研究项目**：基于真实 ClickHouse 全量 4h 数据，完成世坤 101 因子的批量筛选与排行榜产出。 |
-| **四大桥梁关卡<br>*(Portfolio Construction)*** | 因子去冗余正交化、风格剥离、基于微观 Regime 动态组装组合大脑 | 📘 [`docs/backtest_principle.md`](file:///d:/code-repo/Chomo/Sherpa/docs/backtest_principle.md)<br><br>🔖 *(预留规划中文档)* | **回测两层第一性原理**：系统性阐明信息预测力（第一层）与资金可变现性（第二层）的鸿沟，推导因果律 Shift-1、去均值 L1 归一化与被动持仓漂移公式。<br><br>*(后续将补充: 因子正交化实操、Regime 路由动态加权指南)* |
+| **阶段一：单因子挖掘与体检<br>*(Alpha Research)*** | 因子数学表达、全时序计算、**截面中性化残差化（剔除 Beta/Size 被动暴露）**、无前视因果打标、环境适应性体检、指标数值量级标尺与品性诊断 | 📘 [`docs/ALPHA_METRIC_BENCHMARKS.md`](file:///d:/code-repo/Chomo/Sherpa/docs/ALPHA_METRIC_BENCHMARKS.md)<br><br>📘 [`research/REGIME_FRAMEWORK_GUIDE.md`](file:///d:/code-repo/Chomo/Sherpa/research/REGIME_FRAMEWORK_GUIDE.md)<br><br>📘 [`research/REGIME_ALPHA_EVALUATION_WORKFLOW.md`](file:///d:/code-repo/Chomo/Sherpa/research/REGIME_ALPHA_EVALUATION_WORKFLOW.md)<br><br>🛠️ [`research/alpha_research/worldquant_101/`](file:///d:/code-repo/Chomo/Sherpa/research/alpha_research/worldquant_101) | **体检指标体系与量级基准**：规范 `ic_mean`、`ic_std`、`ic_ir`、`win_rate`、`samples`、`ic_ir_gap` 的数学物理本质与工业级及格/优秀/神级量级标尺，给出多指标交叉诊断口诀。<br><br>**市场状态分类准则**：建立 TradFi 四大维度到 Crypto 的 1:1 映射，补充永续合约特有的资金费率与杠杆维度，给出 BTC 减半宏观情景切片与 Python 代码。<br><br>**工业级单因子测评 SOP**：阐述“全时序连续计算、严格 Point-in-time 条件掩码打标”机制，剖析物理切片四大暗礁，输出因子决策矩阵。<br><br>**首个落地研究项目**：基于真实 ClickHouse 全量 4h 数据，完成世坤 101 因子的批量筛选与排行榜产出。<br><br>**中性化落地**：`sherpa.risk`（`rolling_beta`/`neutralize`）已完成代码落地并有单测覆盖；`research/` 侧各体检脚本（尤其是 `alpha_research/worldquant_101/`、`factor_orthogonalization/`）改用残差分数的整合工作待后续任务同步。 |
+| **三大桥梁关卡<br>*(Portfolio Construction)*** | 因子去冗余正交化、基于微观 Regime 动态组装组合大脑 | 📘 [`docs/backtest_principle.md`](file:///d:/code-repo/Chomo/Sherpa/docs/backtest_principle.md)<br><br>🔖 *(预留规划中文档)* | **回测两层第一性原理**：系统性阐明信息预测力（第一层）与资金可变现性（第二层）的鸿沟，推导因果律 Shift-1、去均值 L1 归一化与被动持仓漂移公式。<br><br>*(后续将补充: 因子正交化实操、Regime 路由动态加权指南)* |
 | **阶段二：投资组合回测<br>*(Portfolio Backtesting)*** | 宏观多时代切片压力测试、事件驱动逐 Bar 撮合、综合净值与风控归因 | 📘 [`docs/backtest_principle.md`](file:///d:/code-repo/Chomo/Sherpa/docs/backtest_principle.md)<br><br>💻 [`examples/vectorized_research.py`](file:///d:/code-repo/Chomo/Sherpa/examples/vectorized_research.py)<br><br>💻 [`examples/runner_backtest_with_stop_loss.py`](file:///d:/code-repo/Chomo/Sherpa/examples/runner_backtest_with_stop_loss.py) | **回测第二层原理落地**：严格扣除摩擦、滑点与换手衰减。<br><br>**向量化回测范例**：极速验证组合逻辑。<br><br>**事件驱动回测范例**：基于 `Runner` + `Simulator` 运行跨 Bar 状态止损策略。 |
 | **阶段三：生产纸面交易<br>*(Paper Trading)*** | 监听真实 Redis 1m 截面通知、验证 500ms 时延预算与幂等 key 稳定性 | 📘 [`sherpa/data/DATA_STRUCTURES_AND_TRANSFORMS.md`](file:///d:/code-repo/Chomo/Sherpa/sherpa/data/DATA_STRUCTURES_AND_TRANSFORMS.md)<br><br>💻 [`examples/paper_trading_log_sink.py`](file:///d:/code-repo/Chomo/Sherpa/examples/paper_trading_log_sink.py) | **数据契约与流式规范**：阐明长表转 `BarPanel`、1m `WindowCache` 滑窗与 `MarketEvent` 信封机制。<br><br>**纸面交易标准示范**：运行 `LivePanelSource`，通过 `LogSink` 实时打印标准化的 `LiveOrderRequest`。 |
 | **阶段四：小资金实盘<br>*(Live Execution)*** | 派发信号至外部 Webhooker、监控真实撮合滑点、阶梯扩充资金容量 | 📘 [`docs/SHERPA_DESIGN.md`](file:///d:/code-repo/Chomo/Sherpa/docs/SHERPA_DESIGN.md)<br><br>🔖 *(预留规划中文档)* | **架构边界定义**：Sherpa 止步于 `WebhookSink` 生成标准化信号意图，明确下游 Webhooker 撮合与 PMS 资金清算边界。<br><br>*(后续将补充: 实盘滑点基差监控与订单执行算法 SOP)* |
@@ -96,13 +98,24 @@ flowchart TD
 ## 3. 阶段一：单因子挖掘与体检 (Alpha Research)
 
 ### 3.1 职责边界与准入准出
-* **职责边界**：纯数学与统计信息层面的假说检验。评估单个因子在微观层面是否具有超额预测力，并出具其在不同市场气候下的环境适应性体检表。**本阶段严禁构建实际交易持仓，严禁在此阶段计算夏普比率或 PnL**。
+* **职责边界**：纯数学与统计信息层面的假说检验。评估单个因子在微观层面是否具有超额预测力，并出具其在不同市场气候下的环境适应性体检表。**本阶段严禁构建实际交易持仓，严禁在此阶段计算夏普比率或 PnL**。本阶段现在包含完整的"原始分数 → 截面中性化残差 → Regime 条件体检"链路（见 §3.2），不再只是对原始因子分数直接体检。
 * **准入**：全量连续的 [`BarPanel`](file:///d:/code-repo/Chomo/Sherpa/sherpa/data/schema.py#L57-L138) 数据（通常为 3~5 年完整历史）。
 * **准出标准**：
   * 淘汰全局无条件 $\text{IC\_IR} < 0.10$ 的纯噪音因子；
-  * 输出每个因子在各微观 Regime 掩码下的条件体检矩阵（识别出哪些是全天候因子、哪些是需条件激活动态门控因子）。
+  * 淘汰"中性化后信息量大幅衰减/消失"的因子——如果一个因子的原始 $\text{IC\_IR}$ 表现优异，但剥离 Beta/Size 暴露后的残差 $\text{IC\_IR}$ 显著下降甚至转为噪音，说明其原始表现本质上是被动承担系统性风险（俗称"骑 Beta"），而不是真正的选币能力，必须淘汰，不得带着未剥离的原始分数进入关卡1；
+  * 输出每个因子（残差化后）在各微观 Regime 掩码下的条件体检矩阵（识别出哪些是全天候因子、哪些是需条件激活动态门控因子）。
 
-### 3.2 对应 Research 文档与实操指南
+### 3.2 中性化：截面风险与风格暴露残差化 (Neutralization)
+
+* **核心痛点**：许多虚假的“神级因子”本质上只是被动承担了系统性风险（如持续做多高 Beta 山寨币、做空低 Beta 稳健币）。这种因子的高 IC_IR 是"追随 Beta 换了个马甲"，一旦大盘转熊、或者 Regime 判定出现滞后/误判，策略将遭受断崖式亏损；更隐蔽的是，多个这样的因子彼此之间会呈现出很高的相关性——但那只是因为它们共享了同一份被动风险暴露，不是因为它们在表达同一份选股信息。
+* **为什么必须放在阶段一、且在关卡1（正交化）之前**：关卡1的相关性聚类衡量的应该是"两个因子是否提供重复信息"。如果先聚类、后中性化，聚类算出来的高相关性可能只是两个因子共同承担了同一份 Beta 暴露的假象，会错误地把本来互补、只是共享了风险底色的因子当成冗余因子剔除掉。只有先把每个候选因子残差化，再拿残差分数去做相关性聚类和 Regime 条件体检，才能保证聚类测的是"残差信息层面"的真实重复度。
+* **处理规范**：
+  1. **构建风险暴露矩阵**：Beta 暴露用 [`sherpa.risk.exposure.rolling_beta`](file:///d:/code-repo/Chomo/Sherpa/sherpa/risk/exposure.py) 计算每个 symbol 对 `BTCUSDT` 的滚动 beta（**逐 symbol 逐时刻都不同的 `(T,N)` 矩阵**，不能直接用 BTC 自身的涨跌幅——那是同一截面内对所有 symbol 恒定的标量，没有横截面方差，无法作为回归自变量）；Size 暴露直接复用 `panel.quote_volume`（或其 `ops.log`/`ops.rank` 变换）。
+  2. **逐期截面 OLS 回归取残差**：用 [`sherpa.risk.neutralize.neutralize`](file:///d:/code-repo/Chomo/Sherpa/sherpa/risk/neutralize.py) 对每个候选因子的原始分数矩阵，**逐个时间戳独立**做一次截面多重回归（`raw_score(t) ~ 截距 + beta(t) + size(t)`），取残差拼回一张 `(T,N)` 矩阵。逐期独立回归而不是把整个历史 pool 成一次全局 OLS，是因为因子对 Beta/Size 的敏感度不假设是跨越牛熊震荡的常数——这一点跟 Barra 风险模型的标准做法一致。
+  3. **残差矩阵替换原始分数**：后续 §3.1 的第一层统计检验（`run_alpha_check`）、Regime 条件 IC 画像、以及关卡1 的相关性聚类，全部改用这张残差矩阵，不再使用 `alpha.compute(panel)` 的原始输出。
+* **对应 Sherpa 模块归属**：[`sherpa.risk`](file:///d:/code-repo/Chomo/Sherpa/sherpa/risk)（`exposure.rolling_beta`、`neutralize.neutralize`）。跟 `sherpa.metrics`/`sherpa.portfolio` 同一条包级约定：只依赖 pandas/numpy，不 import 仓库内其他模块，可脱离 Sherpa 其余部分单独复用/测试；`BarPanel` 拆包这一步交给调用方（未来的 `sherpa.backtest` 适配层或 research 脚本）。
+
+### 3.3 对应 Research 文档与实操指南
 读者在进行本阶段研发时，应严格遵循以下四篇核心文档：
 1. **体检指标体系与经验基准**：[`docs/ALPHA_METRIC_BENCHMARKS.md`](file:///d:/code-repo/Chomo/Sherpa/docs/ALPHA_METRIC_BENCHMARKS.md)
    * **作用**：因子体检的“度量衡手册”。详述 `ic_mean`、`ic_std`、`ic_ir`、`win_rate`、`samples`、`baseline_ic_ir`、`ic_ir_gap` 的数学与物理本质，给出美股日频与加密 4h 的及格/优质/神级经验数值区间，并提供多指标交叉诊断决策树与实操避坑口诀。
@@ -111,35 +124,29 @@ flowchart TD
 3. **测评工作流 SOP**：[`research/REGIME_ALPHA_EVALUATION_WORKFLOW.md`](file:///d:/code-repo/Chomo/Sherpa/research/REGIME_ALPHA_EVALUATION_WORKFLOW.md)
    * **作用**：指导读者如何科学执行测评。阐明为什么绝不能物理切断数据（分析了冷启动缺失、后视镜前视泄露、状态切换盲区、小样本拟合四大暗礁），确立了“全时序连续计算 + 严格 Point-in-time 条件掩码打标”的工业级规范，并给出了决策分类矩阵。
 4. **实战工程项目**：[`research/alpha_research/worldquant_101/`](file:///d:/code-repo/Chomo/Sherpa/research/alpha_research/worldquant_101)
-   * **作用**：世坤 101 因子库在真实 ClickHouse 4h 数据上的筛选实战。包含取数脚本 `data.py`、批量筛选脚本 `run_screening.py` 以及各分类因子的执行模块。
+   * **作用**：世坤 101 因子库在真实 ClickHouse 4h 数据上的筛选实战。包含取数脚本 `data.py`、批量筛选脚本 `run_screening.py` 以及各分类因子的执行模块。**待更新**：目前仍对原始分数体检，接入 §3.2 中性化残差化是下一步待同步的整合工作。
 
-### 3.3 对应代码模块归属
+### 3.4 对应代码模块归属
 * **算子与因子表达**：[`sherpa.alpha`](file:///d:/code-repo/Chomo/Sherpa/sherpa/alpha/base.py)（`Alpha`、`ops.py`、`worldquant/`、`tradingview/`、`custom/`）。
 * **特征组织容器**：[`sherpa.alpha.engine.AlphaEngine`](file:///d:/code-repo/Chomo/Sherpa/sherpa/alpha/engine.py#L14-L41)（管理因子集合，输出特征矩阵）。
+* **风险暴露与中性化残差化**：[`sherpa.risk`](file:///d:/code-repo/Chomo/Sherpa/sherpa/risk)（`exposure.rolling_beta`、`neutralize.neutralize`，见 §3.2）。
 * **统计评测库**：[`sherpa.metrics.factor`](file:///d:/code-repo/Chomo/Sherpa/sherpa/metrics/factor.py)（`rank_ic`、`ic_summary`、`quantile_returns`、`is_monotonic_decreasing`）。
 
 ---
 
-## 4. 桥梁关卡：从单因子到投资组合的四大核心门槛 (The 4 Gates)
+## 4. 桥梁关卡：从残差因子到投资组合的三大核心门槛 (The 3 Gates)
 
-单因子通过了阶段一的体检后，**绝不能直接作为独立策略实盘**。必须经过以下四个严苛关卡，将其组装成抗周期的投资组合：
+因子通过了阶段一的体检（此时已经是剥离过 Beta/Size 暴露的残差 Alpha）后，**绝不能直接作为独立策略实盘**。必须经过以下三个严苛关卡，将其组装成抗周期的投资组合：
 
 ### 关卡 1：因子相关性分析与正交化 (Orthogonalization)
 * **核心痛点**：若选出 8 个在趋势市表现优秀的动量因子，其相关系数可能高达 $0.85 \sim 0.95$。同时押注它们不仅没有增量信息，反而会成倍放大特定方向的尾部风险。
 * **处理规范**：
-  1. 计算候选因子之间的 Spearman 秩相关矩阵；
+  1. 计算候选因子（**阶段一中性化残差化之后**的分数，不是原始分数——见 §3.2）之间的 Spearman 秩相关矩阵；
   2. 进行层次聚类（Hierarchical Clustering）或施密特正交化（Gram-Schmidt）；
   3. 每个高度相关的簇（Cluster）中，**仅保留信噪比最高或逻辑最简洁的一个因子**，确保进入组合的因子相互正交、彼此互补。
 * **对应 Sherpa 模块归属**：`research/` 专项聚类脚本 + [`sherpa.metrics.factor`](file:///d:/code-repo/Chomo/Sherpa/sherpa/metrics/factor.py)。
 
-### 关卡 2：风险与风格中性化 (Risk & Style Neutralization)
-* **核心痛点**：许多虚假的“神级因子”本质上只是被动承担了系统性风险（如持续做多高 Beta 山寨币、做空低 Beta 稳健币）。一旦大盘转熊，策略将遭受断崖式亏损。
-* **处理规范**：
-  1. **截面资金中性（Dollar Neutral）**：多空总敞口严格对冲（$\sum w_i = 0$）；
-  2. **风格因子剥离**：通过截面多重回归，剔除因子中对全市场成交额（Size）、BTC 走势（Beta）的被动暴露，保留残差所代表的**纯净选币能力（Pure Alpha）**。
-* **对应 Sherpa 模块归属**：[`sherpa.portfolio.weighting`](file:///d:/code-repo/Chomo/Sherpa/sherpa/portfolio/weighting.py)（`demean_l1`、`top_k_long_short` 等）。
-
-### 关卡 3：基于微观 Regime 的动态多因子合成 (Synthesis)
+### 关卡 2：基于微观 Regime 的动态多因子合成 (Synthesis)
 * **核心痛点**：因子在不同宏观/微观环境下各有利弊。如何让策略在正确的时机调用正确的因子？
 * **处理规范**：
   1. **构建组合大脑**：在策略层的 [`on_bar`](file:///d:/code-repo/Chomo/Sherpa/sherpa/strategy/base.py#L27-L29) 中，读取当期 Point-in-time 的 Regime 状态标签；
@@ -147,9 +154,9 @@ flowchart TD
      * 强趋势/高离散时，提高动量与突破因子的权重分配；
      * 窄幅震荡/低波时，切换至成交量均值回归因子；
   3. **平滑过渡约束**：引入权重变化缓冲（Hysteresis Buffer），严禁在相邻两期进行“非 0 即 100%”的极端剧烈翻转。
-* **对应 Sherpa 模块归属**：[`sherpa.strategy.base.BaseStrategy`](file:///d:/code-repo/Chomo/Sherpa/sherpa/strategy/base.py#L16-L30)（编写业务组合逻辑）+ [`sherpa.portfolio.weighting`](file:///d:/code-repo/Chomo/Sherpa/sherpa/portfolio/weighting.py)。
+* **对应 Sherpa 模块归属**：[`sherpa.strategy.base.BaseStrategy`](file:///d:/code-repo/Chomo/Sherpa/sherpa/strategy/base.py#L16-L30)（编写业务组合逻辑）+ [`sherpa.portfolio.weighting`](file:///d:/code-repo/Chomo/Sherpa/sherpa/portfolio/weighting.py)（`demean_l1` 截面资金中性、`top_k_long_short` 等，把合成后的 alpha 分数映射成目标持仓权重）。
 
-### 关卡 4：第二层可变现性与资金容量压力测试 (Friction Test)
+### 关卡 3：第二层可变现性与资金容量压力测试 (Friction Test)
 * **核心痛点**：第一层理论收益极高的多因子组合，往往因为极高的换手率，在真实扣除手续费和滑点后净值完全磨平。
 * **处理规范**：
   1. **被动持仓漂移追踪**：准确计算持有期内因各资产涨跌导致的权重偏移 $W^{\text{drift}}$，得出真实物理换手率；
@@ -167,7 +174,7 @@ flowchart TD
 ## 5. 阶段二：投资组合严格时序回测 (Portfolio Backtesting)
 
 ### 5.1 职责边界与核心规范
-* **职责边界**：将四大关卡打磨完成的组合策略注入真实的因果律时序驱动器中，考核其跨越多年历史、历经多种宏观牛熊周期（BTC 减半前中后期）下的整体净值曲线、回撤深度与风控表现。
+* **职责边界**：将三大关卡打磨完成的组合策略注入真实的因果律时序驱动器中，考核其跨越多年历史、历经多种宏观牛熊周期（BTC 减半前中后期）下的整体净值曲线、回撤深度与风控表现。
 * **核心规范**：
   * **因果律物理防线**：使用 [`HistoricalPanelSource`](file:///d:/code-repo/Chomo/Sherpa/sherpa/data/panel_source.py#L32-L87)，逐 Bar 截取 $\le t$ 的数据窗口；
   * **撮合因果律对齐**：通过 [`Simulator`](file:///d:/code-repo/Chomo/Sherpa/sherpa/backtest/event_driven.py#L34-L100) 确保 $t$ 时刻根据闭合 K 线计算的意图，严格在 $t+1$ 周期开始生效，并在收益实现时扣减调仓换手成本；
@@ -236,8 +243,8 @@ flowchart TD
 
 | 研发与生产阶段 | 核心任务与输出成果 | 主要涉及的 Sherpa 代码模块 | 核心类 / 函数 / 契约 |
 | :--- | :--- | :--- | :--- |
-| **阶段一：单因子体检<br>*(Alpha Research)*** | 因子数学实现、全量连续检验、输出各 Regime 下的条件 IC 画像 | `sherpa.alpha`<br>`sherpa.metrics.factor`<br>`research/` | [`Alpha`](file:///d:/code-repo/Chomo/Sherpa/sherpa/alpha/base.py#L12-L50), [`AlphaEngine`](file:///d:/code-repo/Chomo/Sherpa/sherpa/alpha/engine.py#L14-L41), [`ops`](file:///d:/code-repo/Chomo/Sherpa/sherpa/alpha/ops.py)<br>[`rank_ic`](file:///d:/code-repo/Chomo/Sherpa/sherpa/metrics/factor.py#L15-L30), [`ic_summary`](file:///d:/code-repo/Chomo/Sherpa/sherpa/metrics/factor.py#L41-L61)<br>`run_screening.py` |
-| **四大桥梁关卡<br>*(Portfolio Construction)*** | 因子正交去冗余、风险中性化、基于 Regime 动态合成、资金换手测试 | `sherpa.portfolio`<br>`sherpa.strategy`<br>`sherpa.backtest` | [`demean_l1`](file:///d:/code-repo/Chomo/Sherpa/sherpa/portfolio/weighting.py#L14-L27), [`top_k_long_short`](file:///d:/code-repo/Chomo/Sherpa/sherpa/portfolio/weighting.py#L29-L45)<br>[`BaseStrategy.on_bar`](file:///d:/code-repo/Chomo/Sherpa/sherpa/strategy/base.py#L27-L29)<br>[`drift_weights`](file:///d:/code-repo/Chomo/Sherpa/sherpa/portfolio/turnover.py#L12-L28), [`FixedFeeCostModel`](file:///d:/code-repo/Chomo/Sherpa/sherpa/backtest/cost_model.py#L14-L23) |
+| **阶段一：单因子体检<br>*(Alpha Research)*** | 因子数学实现、全量连续检验、**截面中性化残差化（剔除 Beta/Size 暴露）**、输出各 Regime 下的条件 IC 画像 | `sherpa.alpha`<br>`sherpa.risk`<br>`sherpa.metrics.factor`<br>`research/` | [`Alpha`](file:///d:/code-repo/Chomo/Sherpa/sherpa/alpha/base.py#L12-L50), [`AlphaEngine`](file:///d:/code-repo/Chomo/Sherpa/sherpa/alpha/engine.py#L14-L41), [`ops`](file:///d:/code-repo/Chomo/Sherpa/sherpa/alpha/ops.py)<br>[`rolling_beta`](file:///d:/code-repo/Chomo/Sherpa/sherpa/risk/exposure.py), [`neutralize`](file:///d:/code-repo/Chomo/Sherpa/sherpa/risk/neutralize.py)<br>[`rank_ic`](file:///d:/code-repo/Chomo/Sherpa/sherpa/metrics/factor.py#L15-L30), [`ic_summary`](file:///d:/code-repo/Chomo/Sherpa/sherpa/metrics/factor.py#L41-L61)<br>`run_screening.py` |
+| **三大桥梁关卡<br>*(Portfolio Construction)*** | 因子正交去冗余、基于 Regime 动态合成、资金换手测试 | `sherpa.portfolio`<br>`sherpa.strategy`<br>`sherpa.backtest` | [`demean_l1`](file:///d:/code-repo/Chomo/Sherpa/sherpa/portfolio/weighting.py#L14-L27), [`top_k_long_short`](file:///d:/code-repo/Chomo/Sherpa/sherpa/portfolio/weighting.py#L29-L45)<br>[`BaseStrategy.on_bar`](file:///d:/code-repo/Chomo/Sherpa/sherpa/strategy/base.py#L27-L29)<br>[`drift_weights`](file:///d:/code-repo/Chomo/Sherpa/sherpa/portfolio/turnover.py#L12-L28), [`FixedFeeCostModel`](file:///d:/code-repo/Chomo/Sherpa/sherpa/backtest/cost_model.py#L14-L23) |
 | **阶段二：投资组合回测<br>*(Portfolio Backtesting)*** | 多宏观时代全时序切片、事件驱动逐 Bar 撮合、输出综合 PnL 与风控报表 | `sherpa.data`<br>`sherpa.backtest`<br>`sherpa.metrics.performance`<br>`sherpa.strategy` | [`HistoricalPanelSource`](file:///d:/code-repo/Chomo/Sherpa/sherpa/data/panel_source.py#L32-L87)<br>[`Simulator`](file:///d:/code-repo/Chomo/Sherpa/sherpa/backtest/event_driven.py#L34-L100), [`run_vectorized_backtest`](file:///d:/code-repo/Chomo/Sherpa/sherpa/backtest/vectorized.py#L20-L85)<br>[`Runner.run_backtest`](file:///d:/code-repo/Chomo/Sherpa/sherpa/strategy/runner.py#L39-L42), [`BacktestSink`](file:///d:/code-repo/Chomo/Sherpa/sherpa/strategy/sink/backtest_sink.py#L15-L21)<br>[`sharpe_ratio`](file:///d:/code-repo/Chomo/Sherpa/sherpa/metrics/performance.py#L39-L51), [`max_drawdown`](file:///d:/code-repo/Chomo/Sherpa/sherpa/metrics/performance.py#L53-L59) |
 | **阶段三：生产纸面交易<br>*(Paper Trading)*** | 监听真实 Redis 1m 截面通知、验证 500ms 时延与信号幂等性、在线日志校验 | `sherpa.data`<br>`sherpa.live`<br>`sherpa.strategy` | [`LivePanelSource`](file:///d:/code-repo/Chomo/Sherpa/sherpa/data/panel_source.py#L89-L158), [`WindowCache`](file:///d:/code-repo/Chomo/Sherpa/sherpa/data/window_cache.py#L18-L67)<br>[`Runner.run_live`](file:///d:/code-repo/Chomo/Sherpa/sherpa/strategy/runner.py#L43-L46), [`LogSink`](file:///d:/code-repo/Chomo/Sherpa/sherpa/strategy/sink/log_sink.py#L20-L27)<br>[`LiveOrderRequest`](file:///d:/code-repo/Chomo/Sherpa/sherpa/live/request.py#L33-L44), `idempotency_key` |
 | **阶段四：小资金与实盘放量<br>*(Live Execution)*** | 派发信号至外部 Webhooker、订单执行算法、实盘滑点基差监控与资金阶梯放量 | `sherpa.strategy.sink`<br>*(下游系统: Webhooker / OM)* | [`WebhookSink`](file:///d:/code-repo/Chomo/Sherpa/sherpa/strategy/sink/webhook_sink.py#L14-L17)<br>*(外部: 限价单/TWAP算法/PMS资金对齐)* |

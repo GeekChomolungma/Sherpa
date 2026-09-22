@@ -28,6 +28,13 @@ research 子项目的 CSV 产出，复用它不违反"跟 research 子项目解�
 两类序列都只对全历史算一次，之后对每个 (dimension, state) 只是按 regime 分组取一行，不会
 因为拆成 12 个 state 就把计算量乘以 12。
 
+**候选因子先中性化残差化，再进相关性聚类**（`QUANT_RESEARCH_TO_LIVE_LIFECYCLE.md` §3.2/
+关卡1 的顺序结论）：`_resolve_histories()` 里每个因子的原始分数先套可流通性掩码，再用
+`sherpa.risk.neutralize.neutralize()` 剔除对 Beta/Size 的被动暴露。原因是这里做聚类判断
+的"高相关"本该衡量"两个因子是否提供重复信息"——如果不先中性化，两个因子只要共同承担了
+同一份 Beta 暴露，相关系数照样会很高，会被错误地当成"信息冗余"聚成一簇，实际上它们只是
+共享了同一份风险底色，不是在表达同一份选股信息。
+
 运行前先设好 ClickHouse 连接环境变量（同 `research/alpha_research/worldquant_101/`）：
     CH_HOST=... CH_PASSWORD=... python research/factor_orthogonalization/run_orthogonalization.py
 """
@@ -48,8 +55,10 @@ import sherpa.alpha.tradingview  # noqa: F401
 import sherpa.alpha.worldquant  # noqa: F401
 from sherpa.alpha import registry
 from sherpa.backtest.regime_screening import regime_report
+from sherpa.backtest.style_exposure import default_style_exposures
 from sherpa.metrics.factor import conditional_ic_summary, ic_summary, rank_ic
 from sherpa.metrics.tradability import tradable_mask
+from sherpa.risk.neutralize import neutralize
 
 from clustering import cluster_by_correlation
 from config import (
@@ -94,13 +103,17 @@ def _all_referenced_alphas(groups: list[tuple[str, str, list[str]]]) -> list[str
 
 
 def _resolve_histories(
-    names: list[str], panel, mask: pd.DataFrame
+    names: list[str], panel, mask: pd.DataFrame, exposures: dict[str, pd.DataFrame]
 ) -> tuple[dict[str, pd.DataFrame], dict[str, str]]:
-    """按 qualified_name 逐个算历史分数，套流通性掩码。
+    """按 qualified_name 逐个算历史分数，套流通性掩码，再中性化残差化。
 
     在 registry 里找不到（名字写错/对应家族没注册）直接 `KeyError` 崩溃，不静默跳过——
     候选池是手写的，名字打错属于配置错误，应该第一时间暴露。因子本身算不出来（占位实现
     `raise NotImplementedError`，比如缺行业分类/市值的世坤101因子）才计入 `errors` 并跳过。
+
+    先掩码、再中性化：不让插针小币的噪声分数混进当期的截面回归，跟
+    `alpha_research/worldquant_101/run_alpha_regime_profile.py` 的处理顺序一致。返回的是
+    剥离过 Beta/Size 暴露的残差分数——后续的相关性聚类、`own_ic_ir` 全部基于这份残差算。
     """
     histories: dict[str, pd.DataFrame] = {}
     errors: dict[str, str] = {}
@@ -111,7 +124,8 @@ def _resolve_histories(
         except NotImplementedError as exc:
             errors[qualified_name] = str(exc)
             continue
-        histories[qualified_name] = history.where(mask)
+        history = history.where(mask)
+        histories[qualified_name] = neutralize(history, exposures)
     return histories, errors
 
 
@@ -211,8 +225,11 @@ def main() -> None:
     print("正在计算 regime 打标（跟 regime_factor_report 体检同一套 regime_screening.regime_report）……")
     regime = regime_report(panel, benchmark_symbol=REGIME_BENCHMARK_SYMBOL)
 
-    print("正在计算候选因子历史分数……")
-    histories, errors = _resolve_histories(all_names, panel, mask)
+    print("正在计算中性化用的风险暴露矩阵（Beta 对 REGIME_BENCHMARK_SYMBOL / Size 用 log(quote_volume)）……")
+    exposures = default_style_exposures(panel, benchmark_symbol=REGIME_BENCHMARK_SYMBOL)
+
+    print("正在计算候选因子历史分数（残差化后）……")
+    histories, errors = _resolve_histories(all_names, panel, mask, exposures)
     if errors:
         print(f"  跳过 {len(errors)} 个算不出来的因子（占位实现）：{list(errors)}")
     groups = [(dim, state, [a for a in alphas if a in histories]) for dim, state, alphas in groups]

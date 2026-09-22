@@ -24,7 +24,7 @@ from sherpa.data.schema import BarPanel
 from sherpa.data.universe import Universe
 
 INTERVAL = "1d"
-START_TIME = "2020-01-01"
+START_TIME = "2024-01-01"
 END_TIME = "2026-09-15"
 
 

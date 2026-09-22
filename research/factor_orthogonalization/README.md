@@ -10,9 +10,13 @@
 
 ## 这个模块要解决什么
 
+0. **先中性化残差化，再做后面几步**（`QUANT_RESEARCH_TO_LIVE_LIFECYCLE.md` §3.2）：每个候选
+   因子的原始分数先套可流通性掩码，再用 `sherpa.risk.neutralize.neutralize()` 逐期截面 OLS
+   剔除对 Beta（滚动对 `REGIME_BENCHMARK_SYMBOL`）、Size（`log(quote_volume)`）的被动暴露，
+   只留残差。原因见下方"为什么先中性化，再做相关性聚类"。
 1. 按 `config.REGIME_ALPHA_SETS` 手动指定的"12 个 regime 状态各自的候选因子集"，**在每个
-   state 自己的历史切片内**逐对计算候选因子之间的**截面 Spearman 相关**（不是时序相关——
-   见下方"为什么用截面相关"）。
+   state 自己的历史切片内**逐对计算候选因子（残差分数）之间的**截面 Spearman 相关**（不是
+   时序相关——见下方"为什么用截面相关"）。
 2. 每个 (dimension, state) 切片各自按相关强度做单链聚类（single-linkage clustering），把
    高度相关的因子分进同一簇。
 3. 每簇里只保留该 state 切片内信噪比（`|IC_IR|`）最高的一个"代表因子"，其余标记为冗余、
@@ -97,6 +101,8 @@ CH_HOST=... CH_PASSWORD=... python research/factor_orthogonalization/run_orthogo
 
 ## 实现上复用了什么
 
+- **`sherpa.backtest.style_exposure.default_style_exposures` + `sherpa.risk.neutralize.neutralize`**：
+  Beta/Size 暴露矩阵构造 + 逐期截面 OLS 残差化，见上方"这个模块要解决什么"第 0 步。
 - **`sherpa.backtest.regime_screening.regime_report`**：产出跟 `04_regime_matrix.csv` 同一
   套 trend/volatility/dispersion/liquidity 四维度状态打标，逐 bar 对齐。
 - **`sherpa.metrics.factor.rank_ic`**：本身只是"逐期对两个 (T,N) 矩阵做截面 Spearman
@@ -154,5 +160,7 @@ CH_HOST=... CH_PASSWORD=... python research/factor_orthogonalization/run_orthogo
   `clustering.py` 顶部注释。
 - 12 个 state 是彼此独立分析的：同一个因子在 `trend.bull` 里被标记 `drop_redundant`，不代表
   它在 `trend.bear` 里也冗余，两行结果要分开看，不要跨 state 类比。
-- 这里只做「关卡1」（去冗余）。风格/风险中性化（关卡2）、基于 Regime 的动态合成（关卡3）、
-  换手摩擦压力测试（关卡4）是各自独立的下一步，不在本模块范围内。
+- 这里只做「关卡1」（去冗余）。风险与风格中性化已经前移并入阶段一体检（见
+  `QUANT_RESEARCH_TO_LIVE_LIFECYCLE.md` §3.2），本模块内部也已经接了这一步（见上方第 0
+  步），不再是独立关卡。基于 Regime 的动态合成（现为关卡2）、换手摩擦压力测试（现为关卡3）
+  仍是各自独立的下一步，不在本模块范围内。
