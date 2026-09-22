@@ -42,10 +42,19 @@ flowchart LR
 | :-- | :-- | :-- |
 | `interval` | `str` | `"1m"/"5m"/"15m"/"1h"/"4h"/"1d"` |
 | `symbols` | `tuple[str,...]` | 列顺序，构造后不变 |
-| `open/high/low/close/volume/quote_volume/taker_buy_volume/taker_buy_quote_volume/trades_count` | `pd.DataFrame` | index=`start_time`(UTC, 严格单调), columns=`symbols`, dtype=`float64` |
+| `open/high/low/close/volume/quote_volume/taker_buy_volume/taker_buy_quote_volume/trades_count`（`PANEL_FIELDS`） | `pd.DataFrame` | index=`start_time`(UTC, 严格单调), columns=`symbols`, dtype=`float64`，**必填、跨 interval 同构** |
 | `coverage` | `pd.Series` | 每行"实际到齐symbol数/universe总数" |
+| `open_interest`/`open_interest_high`/`open_interest_low`（`OPTIONAL_OI_FIELDS`） | `pd.DataFrame \| None` | **可选**，见下方"OI 字段"一节 |
 
-缺失值如实用 NaN 表示，不做 ffill/插值；`slice()`/`tail()`/`loc_until(t)` 用于窗口截断。
+缺失值如实用 NaN 表示，不做 ffill/插值；`slice()`/`tail()`/`loc_until(t)` 用于窗口截断，可选 OI 字段随之同步切片（为 `None` 时保持 `None`）。
+
+**为什么 OI 是可选字段、不是 `PANEL_FIELDS` 的第 10 个成员**：`PANEL_FIELDS` 这个元组同时驱动了 Redis `kline:{SYM}:1m` 紧凑数组的定长校验（`normalizer._REDIS_ARRAY_LEN`）——如果把 OI 塞进去，1m 场景（Redis 来源、`WindowCache`、几乎所有测试 fixture）就要被迫为一个根本不存在的字段造数据。而 open interest 只存在于 ClickHouse 的 5m 及以上级别（`market.fapi_oi_5m`/`15m`/`1h`/`4h`/`1d`，见 [`DATA_CONSUMER_GUIDE.md`](DATA_CONSUMER_GUIDE.md) §1b "ClickHouse — open interest"），Redis/1m 恒无。所以把它做成 `BarPanel` 上一个独立的、默认 `None` 的可选属性：
+
+- `open_interest`：对齐该 interval 的 `close`（同一个信息可得时点——`fapi_oi_5m` 的 `start_time` 是 K 线开盘时刻，但值是收盘时刻才知道的，等价于 5m K 线的 `close`；15m 及以上直接用 rollup 表的 `sum_open_interest_close`）。
+- `open_interest_high`/`open_interest_low`：只有 15m 及以上（rollup 表）才有，5m 原始表没有桶内高低，恒为 `None`。
+- 读取方式跟核心字段完全一致——`panel.open_interest` 就是一张普通 `(T, N)` DataFrame，`sherpa.alpha.ops` 里的算子不关心它是不是 `PANEL_FIELDS` 成员，可以直接套用（`rank`/`scale`/`ts_*` 等），因子代码里用法上跟 `panel.close` 是平级的。
+- `BarPanel.field(name)` 仍然只认 `PANEL_FIELDS`——`OPTIONAL_OI_FIELDS` 走直接属性访问，不走这个通用口子（避免调用方误以为它跟核心字段一样"保证非 None"）。
+- 产出方式：`CHReader.fetch_oi_history()`（无状态 I/O，屏蔽了 5m 原始表与 15m+ rollup 表的列名差异，并对 rollup 表按 `samples` 过滤掉还没收满的最新一桶）+ `ch_long_to_panel(..., oi_df=...)`（按主 kline 面板的 `(index, symbols)` reindex 对齐，缺失如实 NaN，不 ffill）。`HistoricalPanelSource`/`LivePanelSource` 都提供 `include_open_interest`（默认 `False`）开关；`interval="1m"` 时该开关无效，`fetch_oi_history` 直接短路返回空表。
 
 ### 3.2 `MarketEvent`
 
@@ -61,7 +70,7 @@ bar_end_time = bar_start_time + interval - 1ms   # 对齐 Binance kline close_ti
 
 | 组件 | 状态 | 职责 |
 | :-- | :-- | :-- |
-| `CHReader` / `RedisReader` | 无状态 | 纯 I/O，返回原始格式，不做业务转换 |
+| `CHReader` / `RedisReader` | 无状态 | 纯 I/O，返回原始格式，不做业务转换；`CHReader.fetch_oi_history()`/`has_open_interest()` 是 OI 专用的 I/O（§3.1） |
 | `Normalizer`（`ch_long_to_panel`/`redis_window_to_panel`） | 无状态 | 长表/Redis 结构 → `BarPanel` |
 | `WindowCache` | 有状态（仅 1m） | 1m 滚动窗口的 seed/append/evict；粗周期无常驻缓存，每次现查 ClickHouse |
 | `Universe` | — | symbol 全集 + `as_of(t)` point-in-time 过滤（防幸存者偏差） |

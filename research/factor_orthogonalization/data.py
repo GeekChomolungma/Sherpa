@@ -52,11 +52,15 @@ def load_universe_panel(
     interval: str = INTERVAL,
     start_time: str = START_TIME,
     end_time: str = END_TIME,
+    include_open_interest: bool = True,
 ) -> BarPanel:
     """拉取指定区间/周期的全市场 K 线，拼成研究用的 `BarPanel`。
 
     universe 用 `Universe.as_of(end_time)`（point-in-time 口径），避免把区间内还没上线/
     已经退市的 symbol 也当成"从头到尾都在"，防止幸存者偏差。
+
+    `include_open_interest` 默认打开，行为跟 `alpha_research/worldquant_101/data.py`
+    里同名参数一致（见那边的注释）；interval="1m" 时无效。
     """
     ch_reader = ch_reader or connect_ch_reader()
     universe = Universe.from_clickhouse(ch_reader)
@@ -65,4 +69,7 @@ def load_universe_panel(
         raise RuntimeError(f"universe.as_of({end_time!r}) 返回空列表，检查 ClickHouse 里是否真的有数据")
 
     long_df = ch_reader.fetch_history(symbols, interval, start_time=start_time, end_time=end_time)
-    return ch_long_to_panel(long_df, interval=interval, symbols=symbols)
+    oi_df = None
+    if include_open_interest and interval != "1m":
+        oi_df = ch_reader.fetch_oi_history(symbols, interval, start_time=start_time, end_time=end_time)
+    return ch_long_to_panel(long_df, interval=interval, symbols=symbols, oi_df=oi_df)

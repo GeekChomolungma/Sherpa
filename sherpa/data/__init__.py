@@ -5,6 +5,7 @@ from .normalizer import ch_long_to_panel, frames_to_panel, redis_rows_to_frame, 
 from .panel_source import HistoricalPanelSource, IPanelSource, LivePanelSource
 from .redis_reader import KlineReadyEvent, RedisReader
 from .schema import (
+    OPTIONAL_OI_FIELDS,
     PANEL_FIELDS,
     SCHEMA_VERSION,
     VALID_INTERVALS,
@@ -26,6 +27,7 @@ __all__ = [
     "BarPanel",
     "MarketEvent",
     "PANEL_FIELDS",
+    "OPTIONAL_OI_FIELDS",
     "SCHEMA_VERSION",
     "VALID_INTERVALS",
     "build_coverage",

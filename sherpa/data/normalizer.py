@@ -10,7 +10,7 @@ from typing import Mapping, Sequence
 
 import pandas as pd
 
-from .schema import PANEL_FIELDS, BarPanel, build_coverage, empty_panel
+from .schema import OPTIONAL_OI_FIELDS, PANEL_FIELDS, BarPanel, build_coverage, empty_panel
 
 # ClickHouse 长表期望列（顺序对应 PANEL_FIELDS，前面多一个 symbol/start_time）。
 CH_LONG_FORM_COLUMNS: tuple[str, ...] = ("symbol", "start_time", *PANEL_FIELDS)
@@ -74,12 +74,25 @@ def frames_to_panel(
     return BarPanel(interval=interval, symbols=symbols_final, coverage=coverage, **fields)
 
 
-def ch_long_to_panel(df: pd.DataFrame, *, interval: str, symbols: Sequence[str]) -> BarPanel:
+def ch_long_to_panel(
+    df: pd.DataFrame,
+    *,
+    interval: str,
+    symbols: Sequence[str],
+    oi_df: pd.DataFrame | None = None,
+) -> BarPanel:
     """ClickHouse 长表（一次 fetch_history 的结果）-> BarPanel。
 
     要求 df 至少包含 CH_LONG_FORM_COLUMNS 里除 start_time 类型转换外的所有列；
     不要求带 FINAL/去重——但如果 df 里有重复的 (symbol, start_time)，pivot 会直接报错，
     这本身就是"忘记 FINAL"的一个天然探测（见设计文档 §3 上游硬性要求）。
+
+    `oi_df`：可选，`CHReader.fetch_oi_history()` 的结果（列名 `symbol, start_time,
+    open_interest[, open_interest_high, open_interest_low]`）。按主 kline 面板的
+    `(index, symbols_final)` reindex 对齐——`oi_df` 的时间范围/symbol 覆盖度完全可以
+    比 kline 短（例如这套环境里 OI 历史从 2020-08-31 才开始回补，比 kline 晚约 8 个月），
+    对不上的位置如实留 NaN，不做任何前向填充。不传/传空表时 `BarPanel.open_interest`
+    等字段保持 `None`（比如 interval="1m" 时上游根本不会去查 OI）。
     """
     symbols_final = tuple(sorted(set(symbols) | (set(df["symbol"].unique()) if not df.empty else set())))
 
@@ -102,8 +115,44 @@ def ch_long_to_panel(df: pd.DataFrame, *, interval: str, symbols: Sequence[str])
         fields[field_name] = pivoted
         index = pivoted.index
 
+    assert index is not None  # PANEL_FIELDS 非空，循环至少跑一次，index 一定被赋值过
+    oi_fields = _pivot_optional_oi(oi_df, index=index, symbols_final=symbols_final)
+
     coverage = build_coverage(fields["close"], universe_size=len(symbols_final))
-    return BarPanel(interval=interval, symbols=symbols_final, coverage=coverage, **fields)
+    return BarPanel(interval=interval, symbols=symbols_final, coverage=coverage, **fields, **oi_fields)
+
+
+def _pivot_optional_oi(
+    oi_df: pd.DataFrame | None,
+    *,
+    index: pd.DatetimeIndex,
+    symbols_final: tuple[str, ...],
+) -> dict[str, pd.DataFrame]:
+    """把 OI 长表 pivot 成跟主 kline 面板同一个 (index, symbols_final) 的宽表字典。
+
+    只处理 `oi_df` 里实际存在的列（`fetch_oi_history` 对 interval="5m" 只给
+    `open_interest`，没有 high/low），缺的列对应的 `OPTIONAL_OI_FIELDS` 就不出现在返回
+    字典里，`BarPanel` 构造时自然落回默认值 `None`。`oi_df` 为 `None`/空表时返回空字典，
+    等价于完全没有 OI 数据。
+    """
+    if oi_df is None or oi_df.empty:
+        return {}
+
+    oi_df = oi_df.copy()
+    oi_df["start_time"] = pd.to_datetime(oi_df["start_time"], utc=True)
+
+    result: dict[str, pd.DataFrame] = {}
+    for field_name in OPTIONAL_OI_FIELDS:
+        if field_name not in oi_df.columns:
+            continue
+        try:
+            pivoted = oi_df.pivot(index="start_time", columns="symbol", values=field_name)
+        except ValueError as exc:
+            raise ValueError(
+                "OI 结果里存在重复的 (symbol, start_time) —— 查询是否忘记加 FINAL？"
+            ) from exc
+        result[field_name] = pivoted.reindex(index=index, columns=symbols_final).astype("float64")
+    return result
 
 
 def redis_window_to_panel(

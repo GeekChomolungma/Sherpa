@@ -15,6 +15,7 @@ Everything downstream reads from exactly two stores, written by one pipeline:
 | # | Store | What's in it | Structure | Symbols covered | History depth |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | 1 | **ClickHouse** (`market` database) | 1m raw archive + 5m/15m/1h/4h/1d rollups | SQL tables | All intervals, full market | Full history (years) |
+| 1b | **ClickHouse** — `market.fapi_oi_5m` + rollups *(optional)* | Open interest at each 5m bar's close | SQL tables | Full market | Since the module was enabled (≤ ~30 days backfilled from Binance) |
 | 2a | **Redis** — `livebar:{SYM}:1m` | The still-forming, unclosed current bar | Hash | 1m only | 1 bar (overwritten every update) |
 | 2b | **Redis** — `kline:{SYM}:1m` | The last 200 **closed** 1m bars | List | 1m only | 200 bars (~3h20m) |
 | 2c | **Redis** — `stream:market:kline_ready` | "a whole market cross-section just closed" notification | Stream | All intervals (see note below) | Last `stream_maxlen` events (default 10,000) |
@@ -24,6 +25,7 @@ Everything downstream reads from exactly two stores, written by one pipeline:
 - Need a fast rolling feature window over the last ~3 hours of closed `1m` bars, market-wide, in one round trip? → **closed window**.
 - Need to know the instant the whole market's bars for a period are ready (to trigger a computation)? → **kline_ready**, then pull the actual bars from Redis (`1m`) or ClickHouse (coarser).
 - Need anything older than ~3 hours, or any interval other than `1m`? → **ClickHouse**, always.
+- Need **open interest**? → **ClickHouse `fapi_oi_5m`** (§1b), joined to `fapi_kline_5m` on `(symbol, start_time)`. Redis has no OI.
 
 ---
 
@@ -111,6 +113,107 @@ FROM market.fapi_kline_1m FINAL
 WHERE symbol = 'BTCUSDT' ORDER BY start_time DESC LIMIT 5
 FORMAT PrettyCompact"
 ```
+
+---
+
+## 1b. ClickHouse — open interest (`fapi_oi_*`)
+
+Open interest (OI) is the total number of outstanding futures contracts of a symbol. This section is **optional data**: it exists only when the producer runs with `open_interest.hist_enabled` / `live_enabled` and the tables of `deploy/clickhouse/004`–`006` have been created. Check first:
+
+```sql
+EXISTS TABLE market.fapi_oi_5m
+```
+
+Design and measurements behind it: [`../new_requirements/oi.md`](../new_requirements/oi.md).
+
+### Tables
+
+| Table | Bucket |
+| :--- | :--- |
+| `market.fapi_oi_5m` | 5 minutes — the raw table the producer writes |
+| `market.fapi_oi_15m`, `_1h`, `_4h`, `_1d` | rollups, recomputed from the 5m table; never touched by hand |
+
+`market.fapi_oi_5m` columns:
+
+| Column | Type | Meaning |
+| :--- | :--- | :--- |
+| `symbol` | `LowCardinality(String)` | e.g. `"BTCUSDT"` |
+| `start_time` | `DateTime64(3, 'UTC')` | Open time of a **5-minute kline** — the same `start_time` as `fapi_kline_5m`. **The join key.** |
+| `sum_open_interest` | `Float64` | Open interest in contracts (base-asset units). |
+| `snap_time` | `DateTime64(3, 'UTC')` | The instant the value was actually observed (see "What a row means"). |
+| `src_rank` | `UInt8` | Who wrote the row: `1` live snapshot, `2` Binance history (`openInterestHist`), `3` Binance daily archive. The highest rank wins on merge. |
+| `created_at` | `DateTime` | Internal. Ignore it unless debugging. |
+
+> ⚠️ **Always query with `FINAL`**, exactly as for the kline tables: `ReplacingMergeTree` dedupes `(symbol, start_time)` in the background, and a live row and its later hist replacement can coexist until a merge.
+
+### What a row means (read this before joining)
+
+- **`start_time` is the bar's open time, but the value is the open interest at the bar's close** (`start_time + 5 minutes`), parallel to that kline's `close`. So the OI row and the kline with the same `start_time` become known at the same instant, `start_time + 5m` — using both as features for a decision taken at or after that instant has no lookahead.
+- **There is no notional-value column.** Binance's own value is `open interest × mark price`; `sum_open_interest * close` of the same 5m bar approximates it (measured mean deviation from Binance's value: 0.35 bp for BTCUSDT, 0.51 bp ETHUSDT, 0.90 bp SOLUSDT).
+- **A row is revised once.** It is first written as a live snapshot (`src_rank = 1`), taken roughly 10–35 seconds *before* the bar closes; usually within an hour it is replaced by Binance's own history point for the same instant (`src_rank = 2`; rows imported from the daily archive are `3`). In a real-Binance test the two differed by 0.04% on average. A live strategy therefore sees the live value at the close, a backtest reads the revised one — a small, deliberate difference. Reading with `FINAL` always returns the highest-ranked version.
+- **After calibration the whole cross-section is simultaneous.** Live snapshots of different symbols are spread over ~20 seconds; the hist values are all exactly at the bar's close.
+
+### Reading it
+
+```python
+import clickhouse_connect
+
+client = clickhouse_connect.get_client(host="localhost", port=8123, username="default", password="", database="market")
+
+# OI joined to the 5m kline of the same bar -> t, o, h, l, c, v, oi
+df = client.query_df("""
+    SELECT k.symbol, k.start_time, k.open, k.high, k.low, k.close, k.volume,
+           o.sum_open_interest,
+           o.sum_open_interest * k.close AS oi_value_approx
+    FROM market.fapi_kline_5m AS k FINAL
+    LEFT JOIN market.fapi_oi_5m AS o FINAL
+           ON o.symbol = k.symbol AND o.start_time = k.start_time
+    WHERE k.symbol = 'BTCUSDT' AND k.start_time >= now() - INTERVAL 1 DAY
+    ORDER BY k.start_time
+    SETTINGS join_use_nulls = 1
+""")
+```
+
+> ⚠️ **Use `SETTINGS join_use_nulls = 1` on a LEFT JOIN.** ClickHouse's default fills a *missing* right-hand row with `0`, so a bar without an OI row would silently read as "open interest 0" instead of `NULL`. (Verified: the default returns `0`, the setting returns `NULL`.)
+
+```sql
+-- Change in OI per bar
+SELECT start_time, sum_open_interest,
+       sum_open_interest - lagInFrame(sum_open_interest) OVER (PARTITION BY symbol ORDER BY start_time) AS d_oi
+FROM market.fapi_oi_5m FINAL
+WHERE symbol = 'BTCUSDT' AND start_time >= now() - INTERVAL 1 DAY
+ORDER BY start_time
+
+-- The whole market's OI at one closed bar
+SELECT symbol, sum_open_interest FROM market.fapi_oi_5m FINAL
+WHERE start_time = '2026-09-21 12:00:00' ORDER BY symbol
+```
+
+### The rollups
+
+`fapi_oi_{15m,1h,4h,1d}` hold, per bucket, the OI **at the bucket's close** and its range:
+
+| Column | Meaning |
+| :--- | :--- |
+| `symbol`, `start_time` | Bucket start (UTC). |
+| `samples` | Number of 5m rows in the bucket. A complete bucket has 3 / 12 / 48 / 288 (15m / 1h / 4h / 1d). **Filter on it** — the newest bucket is normally incomplete. |
+| `sum_open_interest_close` | OI at the bucket's close (the last 5m row in it). |
+| `sum_open_interest_high` / `_low` | Highest / lowest of the closing snapshots inside the bucket. |
+| `rollup_version` | Internal. |
+
+There is no `open`: a bucket's opening OI is the previous bucket's close — `lagInFrame(sum_open_interest_close) OVER (PARTITION BY symbol ORDER BY start_time)`.
+
+```sql
+SELECT start_time, samples, sum_open_interest_close, sum_open_interest_high, sum_open_interest_low
+FROM market.fapi_oi_1h FINAL
+WHERE symbol = 'BTCUSDT' AND samples = 12
+ORDER BY start_time DESC LIMIT 24
+```
+
+### How far back, and how to trust it
+
+- **History starts when the module was enabled.** At its first start the producer backfills what the database lacks from Binance (48 hours by default, at most 7 days); Binance keeps only ~30 days. Anything older needs the archive import, which is not part of the module yet.
+- Validate before relying on it: [`../cmd/test-tools/check_oi_consistency.py`](../cmd/test-tools/README.md) checks gaps, the 5-minute grid, `snap_time`, freshness, hist calibration, coverage against `fapi_kline_5m`, and (with `--vs-binance`) value-for-value against Binance.
 
 ---
 
@@ -273,6 +376,7 @@ while True:
 - **Redis never returns numbers.** Hash fields, stream fields, and the numbers inside the compact JSON array all need an explicit cast in Python (`float()`/`int()`) — `redis-py`'s `decode_responses=True` gives you strings, not typed values, for everything except the JSON array's own numeric literals (those decode as real `int`/`float` via `json.loads`).
 - **`1m` is the only interval Redis knows about.** `livebar:*` and `kline:*` only ever exist as `...:1m` — there is no `livebar:BTCUSDT:5m`. Anything coarser lives in ClickHouse only.
 - **ClickHouse read pattern is always `... FROM market.fapi_kline_<interval> FINAL WHERE ...`.** Forgetting `FINAL` is the single most common mistake — you'll occasionally see duplicate rows for the same `(symbol, start_time)`.
+- **Open interest breaks the "start_time = the value's time" habit.** In `fapi_oi_*`, `start_time` is the kline's *open* time but the value belongs to its *close* (`start_time + 5m`) — see §1b. It still joins `fapi_kline_5m` on `start_time`.
 - **`start_time` is the join key everywhere** — across ClickHouse, the Redis List's `[0]`, and the Redis Hash's `t`, the same bar carries the identical epoch-ms value. Use it to align a market-wide cross-section.
 
 ---
@@ -283,5 +387,6 @@ while True:
 | :--- | :--- |
 | How this data is actually produced internally (goroutines, concurrency, Go structs) | [`DATA_FLOW_AND_STRUCTURES.md`](DATA_FLOW_AND_STRUCTURES.md) |
 | Deploying / operating the producer itself | [`OPERATIONS.md`](OPERATIONS.md) |
-| Validating that these sources are healthy and complete before you trust them | [`../cmd/test-tools/README.md`](../cmd/test-tools/README.md) — in particular `check_redis_livebars.py`, `check_redis_closed_windows.py`, and `check_vs_binance.py` exercise exactly the reads described in this guide |
+| Validating that these sources are healthy and complete before you trust them | [`../cmd/test-tools/README.md`](../cmd/test-tools/README.md) — in particular `check_redis_livebars.py`, `check_redis_closed_windows.py`, and `check_vs_binance.py` exercise exactly the reads described in this guide; `check_oi_consistency.py` covers §1b |
 | Module-by-module architecture | [`ARCHITECTURE_MODULES.md`](ARCHITECTURE_MODULES.md) |
+| Why open interest is aligned and revised the way it is (measurements, design) | [`../new_requirements/oi.md`](../new_requirements/oi.md) |

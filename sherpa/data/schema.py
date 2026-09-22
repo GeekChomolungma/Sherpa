@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Mapping, Sequence
+from typing import Mapping, Optional, Sequence
 
 import pandas as pd
 
@@ -25,6 +25,17 @@ PANEL_FIELDS: tuple[str, ...] = (
     "taker_buy_quote_volume",
     "trades_count",
 )
+
+# 可选字段：open interest。故意不放进 PANEL_FIELDS——PANEL_FIELDS 同时驱动 Redis
+# kline:{SYM}:1m 紧凑数组的定长校验，而 OI 只存在于 ClickHouse 的 5m 及以上级别
+# （fapi_oi_5m/15m/1h/4h/1d），1m/Redis 恒无此数据（见 docs/DATA_CONSUMER_GUIDE.md §1b）。
+# 把它做成核心字段会强迫每一个 1m/Redis/合成测试场景都要"造一份不存在的 OI 数据"。
+# `open_interest` 对齐的是 5m 原始表的 sum_open_interest 或 15m+ rollup 的
+# sum_open_interest_close——跟该 interval 的 close 同一个信息可得时点，可以直接当
+# 一张普通 (T, N) DataFrame 用，跟 panel.close 用法完全一样。
+# `open_interest_high`/`_low` 只有 15m 及以上（rollup 表）才有，5m 原始表没有高低，
+# 恒为 None。
+OPTIONAL_OI_FIELDS: tuple[str, ...] = ("open_interest", "open_interest_high", "open_interest_low")
 
 VALID_INTERVALS: tuple[str, ...] = ("1m", "5m", "15m", "1h", "4h", "1d")
 
@@ -75,6 +86,14 @@ class BarPanel:
     trades_count: pd.DataFrame
 
     coverage: pd.Series
+
+    # 可选 OI 字段，见 OPTIONAL_OI_FIELDS 上面的说明；默认 None 表示"这个 panel 没有 OI 数据"
+    # ——可能是 interval=1m/Redis 来源（恒无），也可能是调用方没有请求（include_open_interest=False），
+    # 也可能是该 symbol/时间段还没有回补到 OI（真实缺失，如实 NaN/None，不做任何填充）。
+    open_interest: Optional[pd.DataFrame] = None
+    open_interest_high: Optional[pd.DataFrame] = None
+    open_interest_low: Optional[pd.DataFrame] = None
+
     schema_version: str = SCHEMA_VERSION
     schema_notes: dict = field(default_factory=dict)
 
@@ -105,6 +124,22 @@ class BarPanel:
         if not self.coverage.index.equals(index):
             raise ValueError("BarPanel.coverage index does not match BarPanel.open index")
 
+        for name in OPTIONAL_OI_FIELDS:
+            frame = getattr(self, name)
+            if frame is None:
+                continue  # 允许缺席：1m/Redis 来源恒无，或调用方没有请求 OI
+            if not isinstance(frame, pd.DataFrame):
+                raise TypeError(f"BarPanel.{name} must be a pandas.DataFrame or None")
+            if not frame.index.equals(index):
+                raise ValueError(f"BarPanel.{name} index does not match BarPanel.open index")
+            if not frame.columns.equals(expected_columns):
+                raise ValueError(f"BarPanel.{name} columns do not match BarPanel.symbols")
+
+    @property
+    def has_open_interest(self) -> bool:
+        """这个 panel 是否带了 OI 数据——1m/Redis 来源、或调用方没请求时恒为 False。"""
+        return self.open_interest is not None
+
     def field(self, name: str) -> pd.DataFrame:
         if name not in PANEL_FIELDS:
             raise KeyError(f"unknown BarPanel field {name!r}, expected one of {PANEL_FIELDS}")
@@ -121,12 +156,24 @@ class BarPanel:
         return self.slice(mask)
 
     def slice(self, selector) -> "BarPanel":
-        """按位置切片/布尔掩码取子集（不是按 label），selector 直接转给 `.iloc[]`。"""
+        """按位置切片/布尔掩码取子集（不是按 label），selector 直接转给 `.iloc[]`。
+
+        可选 OI 字段：为 None 时保持 None（不会凭空切出一张空表），非 None 时跟核心字段
+        同步切片，保证切片前后 open_interest 的 index 始终和 open/close 对齐。
+        """
         kwargs = {name: getattr(self, name).iloc[selector] for name in PANEL_FIELDS}
+
+        def _sliced_oi(name: str) -> Optional[pd.DataFrame]:
+            frame = getattr(self, name)
+            return frame.iloc[selector] if frame is not None else None
+
         return BarPanel(
             interval=self.interval,
             symbols=self.symbols,
             coverage=self.coverage.iloc[selector],
+            open_interest=_sliced_oi("open_interest"),
+            open_interest_high=_sliced_oi("open_interest_high"),
+            open_interest_low=_sliced_oi("open_interest_low"),
             schema_version=self.schema_version,
             schema_notes=dict(self.schema_notes),
             **kwargs,

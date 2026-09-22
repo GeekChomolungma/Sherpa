@@ -20,7 +20,9 @@
 ```mermaid
 flowchart LR
     A["ClickHouse 表<br/>market.fapi_kline_4h"] -->|"fetch_history()"| B["长表 DataFrame<br/>(M 行 × 11 列)"]
-    B -->|"ch_long_to_panel()"| C["BarPanel<br/>9 张 (T, N) 宽表 + coverage"]
+    A2["ClickHouse 表<br/>market.fapi_oi_4h (可选)"] -->|"fetch_oi_history()"| B2["OI 长表 DataFrame<br/>(可选)"]
+    B -->|"ch_long_to_panel(..., oi_df=...)"| C["BarPanel<br/>9 张必填 (T, N) 宽表 + coverage<br/>+ 3 张可选 OI 宽表"]
+    B2 --> C
     C -->|"HistoricalPanelSource / LivePanelSource"| D["MarketEvent<br/>(截面事件信封)"]
 ```
 
@@ -80,6 +82,11 @@ panel.close      # pd.DataFrame(shape=(3, 3))
 panel.volume     # pd.DataFrame(shape=(3, 3))
 ...              # quote_volume, taker_buy_volume, taker_buy_quote_volume, trades_count
 panel.coverage   # pd.Series(shape=(3,))
+
+# 可选字段（默认 None，需调用方显式请求）：
+panel.open_interest       # pd.DataFrame(shape=(3, 3)) 或 None
+panel.open_interest_high  # 仅 15m 及以上 interval 才有值，5m/1m 恒 None
+panel.open_interest_low   # 同上
 ```
 
 #### 输出示例 1：`panel.close`（收盘价宽表，$(3 \times 3)$）
@@ -109,6 +116,18 @@ panel.coverage   # pd.Series(shape=(3,))
 | **2026-01-01 08:00:00+00:00** | 1.000 |
 
 *(注：若某一时刻某币种停盘缺数据，对应单元格填 `NaN`，该截面覆盖率即相应下降为 `2/3 ≈ 0.667`)*
+
+#### 输出示例 4：`panel.open_interest`（可选，持仓量宽表，对齐 `close` 的信息可得时点）
+
+| start_time (UTC) | BTCUSDT | ETHUSDT | SOLUSDT |
+| :--- | :---: | :---: | :---: |
+| **2026-01-01 00:00:00+00:00** | 305000.0 | 620000.0 | 180000.0 |
+| **2026-01-01 04:00:00+00:00** | 308500.0 | 615000.0 | 182500.0 |
+| **2026-01-01 08:00:00+00:00** | 301200.0 | 630000.0 | 179800.0 |
+
+`market.fapi_oi_5m` 的 `start_time` 对齐的是那根 K 线的**开盘**时刻，但值是**收盘**时刻（`start_time + 5m`）才知道的，跟同一根 K 线的 `close` 属于同一个信息可得时点——所以直接按 `(symbol, start_time)` 对齐、补进跟 `close` 同形状的这张表，不需要额外时移，不引入前视偏差（详见 [`DATA_CONSUMER_GUIDE.md`](DATA_CONSUMER_GUIDE.md) §1b "ClickHouse — open interest"）。15m 及以上级别还会同时给出 `panel.open_interest_high`/`_low`（该 rollup 桶内 OI 快照的最高/最低值）；`interval="1m"` 或 Redis 来源时，`open_interest*` 恒为 `None`——OI 只存在于 ClickHouse 的 5m 及以上级别，这也是它没有被纳入 `PANEL_FIELDS`（那 9 个必填字段）、而是做成独立可选字段的原因：`PANEL_FIELDS` 同时是 Redis `kline:{SYM}:1m` 紧凑数组的定长契约，1m 场景无法提供 OI。
+
+因子代码里读取方式跟核心字段完全一样——`panel.open_interest` 就是一张普通 `(T, N)` DataFrame，可以直接喂给 `sherpa.alpha.ops` 里任何一个算子（`rank`/`scale`/`ts_*`……），用法上跟 `panel.close` 平级，不需要额外的适配代码。
 
 ---
 

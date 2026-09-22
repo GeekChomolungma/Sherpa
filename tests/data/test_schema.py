@@ -2,6 +2,7 @@ import pandas as pd
 import pytest
 
 from sherpa.data.schema import (
+    OPTIONAL_OI_FIELDS,
     PANEL_FIELDS,
     BarPanel,
     MarketEvent,
@@ -70,6 +71,79 @@ def test_barpanel_tail_and_loc_until():
     assert list(until.index) == list(panel.index[:3])
     # no lookahead: nothing beyond cutoff leaks into the sliced panel
     assert until.index.max() <= cutoff
+
+
+def test_barpanel_open_interest_defaults_to_none():
+    panel = _make_panel()
+    assert panel.open_interest is None
+    assert panel.open_interest_high is None
+    assert panel.open_interest_low is None
+    assert panel.has_open_interest is False
+
+
+def test_barpanel_accepts_optional_open_interest():
+    symbols = ("BTCUSDT", "ETHUSDT")
+    index = pd.date_range("2026-01-01", periods=3, freq="5min", tz="UTC", name="start_time")
+    fields = {name: pd.DataFrame(1.0, index=index, columns=list(symbols)) for name in PANEL_FIELDS}
+    coverage = pd.Series(1.0, index=index, name="coverage")
+    oi = pd.DataFrame(2.0, index=index, columns=list(symbols))
+
+    panel = BarPanel(
+        interval="5m",
+        symbols=symbols,
+        coverage=coverage,
+        open_interest=oi,
+        **fields,
+    )
+
+    assert panel.has_open_interest is True
+    assert panel.open_interest is not None
+    assert panel.open_interest.loc[index[0], "BTCUSDT"] == 2.0
+    # 没单独传的 high/low 各自独立保持 None，不会因为传了 open_interest 就被要求一起给
+    assert panel.open_interest_high is None
+    assert panel.open_interest_low is None
+
+
+def test_barpanel_rejects_mismatched_open_interest_columns():
+    symbols = ("BTCUSDT",)
+    index = pd.date_range("2026-01-01", periods=2, freq="5min", tz="UTC")
+    fields = {name: pd.DataFrame(1.0, index=index, columns=list(symbols)) for name in PANEL_FIELDS}
+    coverage = pd.Series(1.0, index=index)
+    mismatched_oi = pd.DataFrame(1.0, index=index, columns=["ETHUSDT"])  # wrong symbol
+
+    with pytest.raises(ValueError):
+        BarPanel(
+            interval="5m", symbols=symbols, coverage=coverage, open_interest=mismatched_oi, **fields
+        )
+
+
+def test_barpanel_field_does_not_expose_optional_oi_fields():
+    """field() 只认核心 PANEL_FIELDS——OPTIONAL_OI_FIELDS 是直接属性访问，不走这个通用口子。"""
+    panel = _make_panel()
+    for name in OPTIONAL_OI_FIELDS:
+        with pytest.raises(KeyError):
+            panel.field(name)
+
+
+def test_barpanel_slice_propagates_optional_open_interest():
+    symbols = ("BTCUSDT",)
+    index = pd.date_range("2026-01-01", periods=5, freq="5min", tz="UTC", name="start_time")
+    fields = {name: pd.DataFrame(1.0, index=index, columns=list(symbols)) for name in PANEL_FIELDS}
+    coverage = pd.Series(1.0, index=index, name="coverage")
+    oi = pd.DataFrame({"BTCUSDT": [10.0, 20.0, 30.0, 40.0, 50.0]}, index=index)
+
+    panel = BarPanel(interval="5m", symbols=symbols, coverage=coverage, open_interest=oi, **fields)
+
+    tail2 = panel.tail(2)
+    assert tail2.open_interest is not None
+    assert list(tail2.open_interest["BTCUSDT"]) == [40.0, 50.0]
+    assert list(tail2.open_interest.index) == list(panel.index[-2:])
+
+
+def test_barpanel_slice_keeps_none_open_interest_as_none():
+    panel = _make_panel(n=5)
+    assert panel.tail(2).open_interest is None
+    assert panel.loc_until(panel.index[2]).open_interest is None
 
 
 def test_empty_panel_shape():

@@ -54,11 +54,18 @@ def load_universe_panel(
     interval: str = INTERVAL,
     start_time: str = START_TIME,
     end_time: str = END_TIME,
+    include_open_interest: bool = True,
 ) -> BarPanel:
     """拉取指定区间/周期的全市场 K 线，拼成研究用的 `BarPanel`。
 
     universe 用 `Universe.as_of(end_time)`（设计文档 §5.3 的 point-in-time 口径）——避免
     把区间内还没上线/已经退市的 symbol 也当成"从头到尾都在"，防止幸存者偏差。
+
+    `include_open_interest` 默认打开：这批 OI 数据（`market.fapi_oi_*`，见
+    `docs/DATA_CONSUMER_GUIDE.md` §1b）在这套环境里已经从 2020-08-31 回补到位，跟本模块
+    默认的 2020-01-01 起始区间基本重合（只差开头约 8 个月），直接拼进 `panel.open_interest`
+    不吃亏；因子代码不想用就不引用这个字段，成本仅是多一次 ClickHouse 查询。
+    interval="1m" 时该参数无效——OI 最细只到 5m，`fetch_oi_history` 会自己短路。
     """
     ch_reader = ch_reader or connect_ch_reader()
     universe = Universe.from_clickhouse(ch_reader)
@@ -67,4 +74,7 @@ def load_universe_panel(
         raise RuntimeError(f"universe.as_of({end_time!r}) 返回空列表，检查 ClickHouse 里是否真的有数据")
 
     long_df = ch_reader.fetch_history(symbols, interval, start_time=start_time, end_time=end_time)
-    return ch_long_to_panel(long_df, interval=interval, symbols=symbols)
+    oi_df = None
+    if include_open_interest and interval != "1m":
+        oi_df = ch_reader.fetch_oi_history(symbols, interval, start_time=start_time, end_time=end_time)
+    return ch_long_to_panel(long_df, interval=interval, symbols=symbols, oi_df=oi_df)

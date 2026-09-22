@@ -124,6 +124,83 @@ def test_live_panel_source_coarse_interval_queries_clickhouse_each_time():
     assert event.schema_notes["coverage_source"] == "recomputed_from_ch_query"
 
 
+def test_historical_panel_source_include_open_interest_off_by_default():
+    rows = [_ch_row("BTCUSDT", "2026-01-01T00:00", 100.0)]
+    ch_client = FakeCHClient(responses=[pd.DataFrame(rows)])
+    ch_reader = CHReader(ch_client)
+    universe = _FakeUniverse(["BTCUSDT"])
+
+    source = HistoricalPanelSource(
+        ch_reader, universe=universe, interval="5m", start_time="2026-01-01", end_time="2026-01-01T00:00"
+    )
+    events = list(source)
+
+    assert len(ch_client.queries) == 1  # 没打开开关，不应该多发 OI 查询
+    assert events[0].panel.open_interest is None
+
+
+def test_historical_panel_source_include_open_interest_attaches_oi():
+    kline_rows = [_ch_row("BTCUSDT", "2026-01-01T00:00", 100.0)]
+    oi_rows = [{"symbol": "BTCUSDT", "start_time": "2026-01-01T00:00", "open_interest": 5000.0}]
+    ch_client = FakeCHClient(responses=[pd.DataFrame(kline_rows), pd.DataFrame(oi_rows)])
+    ch_reader = CHReader(ch_client)
+    universe = _FakeUniverse(["BTCUSDT"])
+
+    source = HistoricalPanelSource(
+        ch_reader,
+        universe=universe,
+        interval="5m",
+        start_time="2026-01-01",
+        end_time="2026-01-01T00:00",
+        include_open_interest=True,
+    )
+    events = list(source)
+
+    assert len(ch_client.queries) == 2
+    assert "market.fapi_oi_5m" in ch_client.queries[1]
+    assert events[0].panel.open_interest.loc[pd.Timestamp("2026-01-01T00:00", tz="UTC"), "BTCUSDT"] == 5000.0
+
+
+def test_historical_panel_source_include_open_interest_skips_1m():
+    rows = [_ch_row("BTCUSDT", "2026-01-01T00:00", 100.0)]
+    ch_client = FakeCHClient(responses=[pd.DataFrame(rows)])
+    ch_reader = CHReader(ch_client)
+    universe = _FakeUniverse(["BTCUSDT"])
+
+    source = HistoricalPanelSource(
+        ch_reader,
+        universe=universe,
+        interval="1m",
+        start_time="2026-01-01",
+        end_time="2026-01-01T00:00",
+        include_open_interest=True,
+    )
+    events = list(source)
+
+    assert len(ch_client.queries) == 1  # 1m 没有 OI 来源，不应该多发查询
+    assert events[0].panel.open_interest is None
+
+
+def test_live_panel_source_coarse_interval_include_open_interest():
+    redis_client = FakeRedisClient()
+    redis_client.push_kline_ready(interval="1h", timestamp_ms=3_600_000, symbols_count=1)
+
+    kline_rows = [_ch_row("BTCUSDT", "2026-01-01T01:00:00", 100.0)]
+    oi_rows = [{"symbol": "BTCUSDT", "start_time": "2026-01-01T01:00:00", "open_interest": 7000.0}]
+    ch_client = FakeCHClient(responses=[pd.DataFrame(kline_rows), pd.DataFrame(oi_rows)])
+    ch_reader = CHReader(ch_client)
+    redis_reader = RedisReader(redis_client)
+    universe = _FakeUniverse(["BTCUSDT"])
+
+    source = LivePanelSource(
+        ch_reader, redis_reader, universe=universe, intervals=["1h"], include_open_interest=True
+    )
+    event = next(iter(source))
+
+    assert len(ch_client.queries) == 2
+    assert event.panel.open_interest.loc[pd.Timestamp("2026-01-01T01:00:00", tz="UTC"), "BTCUSDT"] == 7000.0
+
+
 def test_live_panel_source_filters_unwanted_intervals():
     redis_client = FakeRedisClient()
     redis_client.push_kline_ready(interval="5m", timestamp_ms=300_000, symbols_count=1)  # 未订阅，应跳过

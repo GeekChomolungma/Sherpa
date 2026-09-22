@@ -59,6 +59,61 @@ def test_ch_long_to_panel_empty_input():
     assert panel.symbols == ("BTCUSDT",)
 
 
+def test_ch_long_to_panel_without_oi_df_leaves_open_interest_none():
+    rows = [_ch_row("BTCUSDT", "2026-01-01T00:00:00", 100)]
+    panel = ch_long_to_panel(pd.DataFrame(rows), interval="5m", symbols=["BTCUSDT"])
+    assert panel.open_interest is None
+
+
+def test_ch_long_to_panel_attaches_oi_aligned_to_kline_index():
+    rows = [
+        _ch_row("BTCUSDT", "2026-01-01T00:00:00", 100),
+        _ch_row("BTCUSDT", "2026-01-01T00:05:00", 101),
+        _ch_row("ETHUSDT", "2026-01-01T00:00:00", 10),
+        _ch_row("ETHUSDT", "2026-01-01T00:05:00", 11),
+    ]
+    # OI 只覆盖 BTCUSDT 在第一根的数据——ETHUSDT、以及 BTCUSDT 第二根都应该如实留 NaN，
+    # 不做任何前向填充（对齐 docs/DATA_CONSUMER_GUIDE.md §1b 的"缺失如实缺失"约定）。
+    oi_rows = [{"symbol": "BTCUSDT", "start_time": "2026-01-01T00:00:00", "open_interest": 5000.0}]
+
+    panel = ch_long_to_panel(
+        pd.DataFrame(rows), interval="5m", symbols=["BTCUSDT", "ETHUSDT"], oi_df=pd.DataFrame(oi_rows)
+    )
+
+    assert panel.open_interest is not None
+    assert panel.open_interest.loc["2026-01-01T00:00:00", "BTCUSDT"] == 5000.0
+    assert math.isnan(panel.open_interest.loc["2026-01-01T00:05:00", "BTCUSDT"])
+    assert math.isnan(panel.open_interest.loc["2026-01-01T00:00:00", "ETHUSDT"])
+    # 没传 high/low 列的时候，对应字段保持 None，不会凭空造出全 NaN 的表
+    assert panel.open_interest_high is None
+    assert panel.open_interest_low is None
+
+
+def test_ch_long_to_panel_attaches_oi_high_low_when_present():
+    rows = [_ch_row("BTCUSDT", "2026-01-01T00:00:00", 100)]
+    oi_rows = [
+        {
+            "symbol": "BTCUSDT",
+            "start_time": "2026-01-01T00:00:00",
+            "open_interest": 5000.0,
+            "open_interest_high": 5200.0,
+            "open_interest_low": 4900.0,
+        }
+    ]
+    panel = ch_long_to_panel(
+        pd.DataFrame(rows), interval="1h", symbols=["BTCUSDT"], oi_df=pd.DataFrame(oi_rows)
+    )
+    assert panel.open_interest_high.loc["2026-01-01T00:00:00", "BTCUSDT"] == 5200.0
+    assert panel.open_interest_low.loc["2026-01-01T00:00:00", "BTCUSDT"] == 4900.0
+
+
+def test_ch_long_to_panel_empty_oi_df_leaves_open_interest_none():
+    rows = [_ch_row("BTCUSDT", "2026-01-01T00:00:00", 100)]
+    empty_oi = pd.DataFrame(columns=["symbol", "start_time", "open_interest"])
+    panel = ch_long_to_panel(pd.DataFrame(rows), interval="5m", symbols=["BTCUSDT"], oi_df=empty_oi)
+    assert panel.open_interest is None
+
+
 def test_ch_long_to_panel_duplicate_rows_without_final_raises():
     rows = [
         _ch_row("BTCUSDT", "2026-01-01T00:00:00", 100),
