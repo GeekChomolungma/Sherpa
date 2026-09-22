@@ -44,6 +44,7 @@ from __future__ import annotations
 import importlib
 import sys
 from itertools import combinations
+from pathlib import Path
 
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8")
@@ -72,8 +73,13 @@ from config import (
 )
 from data import load_universe_panel
 
-PAIRS_PATH = "results/01_regime_factor_correlation_pairs.csv"
-CLUSTERS_PATH = "results/02_regime_cluster_assignments.csv"
+# 相对脚本自身所在目录解析，不依赖进程当前工作目录（cwd）——`python
+# research/factor_orthogonalization/run_orthogonalization.py` 从仓库根目录运行时，
+# cwd 是仓库根目录而不是这个脚本所在目录，如果 PAIRS_PATH/CLUSTERS_PATH 写成相对 cwd
+# 的 "results/..."，会去找一个仓库根目录下根本不存在的 results/ 文件夹，直接报错崩溃。
+_RESULTS_DIR = Path(__file__).resolve().parent / "results"
+PAIRS_PATH = _RESULTS_DIR / "01_regime_factor_correlation_pairs.csv"
+CLUSTERS_PATH = _RESULTS_DIR / "02_regime_cluster_assignments.csv"
 
 # 不区分 regime 的全历史对照组用这对哨兵值占位 dimension/state，跟真实的 4 个 regime
 # 维度、12 个 state 明显区分开，不会在输出里混淆。
@@ -316,6 +322,7 @@ def main() -> None:
             ascending=[True, True, True, False],
         ).drop(columns=["own_abs_ic_ir"])
 
+    _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     pairs_df.to_csv(PAIRS_PATH, index=False)
     clusters_df.to_csv(CLUSTERS_PATH, index=False)
 

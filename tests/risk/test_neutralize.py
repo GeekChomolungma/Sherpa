@@ -74,3 +74,40 @@ def test_neutralize_requires_at_least_one_exposure():
 
     with pytest.raises(ValueError):
         neutralize(raw_score, {})
+
+
+def test_neutralize_infinite_exposure_excluded_like_missing_not_crashing():
+    # -inf 常见来源：log(0) 算出来的 Size 代理。喂给 lstsq 会在 LAPACK 层直接崩溃，
+    # 这里必须跟 NaN 同等对待，把这个 symbol 从当期回归里剔除，而不是让整批任务崩掉。
+    columns = ["A", "B", "C", "D", "E"]
+    beta_row = [0.5, 1.0, 1.5, 2.0, 2.5]
+    raw_row = [2 * b + 1.0 for b in beta_row]
+    beta_with_inf = [0.5, 1.0, 1.5, 2.0, float("-inf")]
+
+    raw_score = _frame([raw_row], columns)
+    beta = _frame([beta_with_inf], columns)
+
+    residual = neutralize(raw_score, {"beta": beta})
+
+    assert pd.isna(residual.iloc[0]["E"])
+    assert residual.iloc[0][["A", "B", "C", "D"]].notna().all()
+    assert not np.isinf(residual.to_numpy()[~np.isnan(residual.to_numpy())]).any()
+
+
+def test_neutralize_skips_period_when_lstsq_fails_to_converge_instead_of_raising():
+    # 构造一个会让 np.linalg.lstsq 抛 LinAlgError 的病态设计矩阵（NaN 混进已经通过校验的
+    # 数值型 numpy 数组本身不现实——这里直接用 monkeypatch 模拟 LAPACK 报错的场景，验证
+    # neutralize() 把这一期当"算不出来"跳过，而不是让调用方拿到未处理的异常。
+    import unittest.mock as mock
+
+    columns = ["A", "B", "C", "D", "E"]
+    raw_row = [1.0, 2.0, 3.0, 4.0, 5.0]
+    beta_row = [0.1, 0.2, 0.3, 0.4, 0.5]
+
+    raw_score = _frame([raw_row, raw_row], columns)
+    beta = _frame([beta_row, beta_row], columns)
+
+    with mock.patch("numpy.linalg.lstsq", side_effect=np.linalg.LinAlgError("SVD did not converge")):
+        residual = neutralize(raw_score, {"beta": beta})
+
+    assert residual.isna().all().all()

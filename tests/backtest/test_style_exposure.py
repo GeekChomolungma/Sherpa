@@ -37,3 +37,20 @@ def test_default_style_exposures_beta_is_one_for_benchmark_itself():
 
     tail = exposures["beta"]["BTCUSDT"].iloc[-5:]
     assert (tail - 1.0).abs().max() < 1e-6
+
+
+def test_default_style_exposures_zero_quote_volume_gives_nan_not_negative_infinity():
+    # log(0) = -inf 会直接毒死后面 neutralize() 里的 lstsq——0 成交额应该被当缺失处理，
+    # 不能产出一个数值上"合法"但经济上没有意义的发散值。
+    import dataclasses
+
+    panel = _panel()
+    poisoned_quote_volume = panel.quote_volume.copy()
+    poisoned_quote_volume.iloc[0, 0] = 0.0
+    panel = dataclasses.replace(panel, quote_volume=poisoned_quote_volume)
+
+    exposures = default_style_exposures(panel)
+
+    zeroed_cell = exposures["size"].iloc[0, 0]
+    assert pd.isna(zeroed_cell)
+    assert not np.isinf(exposures["size"].to_numpy()[~np.isnan(exposures["size"].to_numpy())]).any()
