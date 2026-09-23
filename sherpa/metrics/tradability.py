@@ -15,8 +15,8 @@ from __future__ import annotations
 
 import pandas as pd
 
-DEFAULT_LOOKBACK = 10
-
+DEFAULT_LOOKBACK = 120
+SEASONING_PERIOD = 20
 
 def tradable_mask(
     quote_volume: pd.DataFrame,
@@ -24,9 +24,9 @@ def tradable_mask(
     *,
     lookback: int = DEFAULT_LOOKBACK,
     min_percentile: float = 0.40,
-    min_quote_volume: float = 5_000_000.0,  # 10日内的中位值要超过 500 万usdt成交才行
-    min_trades_count: float = 50_000.0,     # 10日内的中位值要超过 5 万 笔成交才行（默认关闭）
-    seasoning_period: int = DEFAULT_LOOKBACK,
+    min_quote_volume: float = 5_000_000.0,  # 120根k线内的中位值要超过 500 万usdt成交才行
+    min_trades_count: float = 50_000.0,     # 120根k线内的中位值要超过 5 万 笔成交才行（默认关闭）
+    seasoning_period: int = SEASONING_PERIOD,
 ) -> pd.DataFrame:
     """逐期判定每个 symbol 是不是"真的可流通"，输出跟 `quote_volume` 同形状的布尔矩阵。
 

@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-DEFAULT_LOOKBACK = 30 # ~30 天 @ 1d bar 的滚动分位数观察窗口
+DEFAULT_LOOKBACK = 120 # ~120 根k线的滚动分位数观察窗口
 
 
 def _quantile_bucket(
@@ -50,7 +50,7 @@ def compute_trend_regime(
     close: pd.DataFrame,
     *,
     benchmark_symbol: str,
-    ma_period: int = 30,
+    ma_period: int = DEFAULT_LOOKBACK,
     bull_breadth: float = 0.65,
     bear_breadth: float = 0.35,
 ) -> pd.DataFrame:
@@ -90,7 +90,7 @@ def compute_trend_regime(
 def compute_volatility_regime(
     close: pd.DataFrame,
     *,
-    window: int = 24,
+    window: int = DEFAULT_LOOKBACK,
     lookback: int = DEFAULT_LOOKBACK,
     high_quantile: float = 0.75,
     low_quantile: float = 0.25,
@@ -162,8 +162,8 @@ def build_regime_report(
     taker_buy_quote_volume: pd.DataFrame,
     *,
     benchmark_symbol: str,
-    ma_period: int = 30,
-    vol_window: int = 24,
+    ma_period: int = DEFAULT_LOOKBACK,
+    vol_window: int = DEFAULT_LOOKBACK,
     lookback: int = DEFAULT_LOOKBACK,
 ) -> pd.DataFrame:
     """四维度联合打标矩阵：行=时间，列=trend/volatility/dispersion/liquidity 四个维度状态，

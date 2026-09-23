@@ -31,8 +31,8 @@ def regime_report(
     panel: BarPanel,
     *,
     benchmark_symbol: str = "BTCUSDT",
-    ma_period: int = 60,
-    vol_window: int = 24,
+    ma_period: int = DEFAULT_LOOKBACK,
+    vol_window: int = DEFAULT_LOOKBACK,
     lookback: int = DEFAULT_LOOKBACK,
 ) -> pd.DataFrame:
     """对整条 `panel` 历史做全时序连续的 regime 打标（`REGIME_FRAMEWORK_GUIDE.md` §5.2）。"""

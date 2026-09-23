@@ -23,7 +23,7 @@ from sherpa.data.normalizer import ch_long_to_panel
 from sherpa.data.schema import BarPanel
 from sherpa.data.universe import Universe
 
-INTERVAL = "1d"
+INTERVAL = "4h"
 START_TIME = "2024-01-01"
 END_TIME = "2026-09-15"
 

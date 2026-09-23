@@ -9,7 +9,7 @@
 连接信息一律从环境变量读，约定跟 `scripts/smoke_test_data_layer.py` 一致：
     CH_HOST(必填) / CH_PORT(默认8123) / CH_USER(默认default) / CH_PASSWORD / CH_DATABASE(默认market)
 
-默认拉 2020-01-01 至今的 1d K 线——研究成交量分布用日线的粒度就够，频率拉太高只会徒增
+默认拉 2020-01-01 至今的 4h K 线——研究成交量分布用日线的粒度就够，频率拉太高只会徒增
 数据量、不增加这次要看的信息；以后想换区间/频率，改这三个常量或者调用
 `load_universe_panel()` 时显式传参覆盖。
 """
@@ -26,7 +26,7 @@ from sherpa.data.normalizer import ch_long_to_panel
 from sherpa.data.schema import BarPanel
 from sherpa.data.universe import Universe
 
-INTERVAL = "1d"
+INTERVAL = "4h"
 START_TIME = "2024-01-01"
 END_TIME = "2026-09-18"
 

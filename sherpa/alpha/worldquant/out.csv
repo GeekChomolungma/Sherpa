@@ -1,0 +1,318 @@
+﻿family,alpha,min_lookback,disabled,line,operator,value,meaning
+price_volume,worldquant.alpha002,8,False,30,delta,2,跟 N 根之前的差值（原始是绝对差；中性化改造后不少因子已换成 pct_change，见 docs/LOOKBACK_WINDOW_MIGRATION.md 关联的那一轮修复）
+price_volume,worldquant.alpha002,8,False,32,ts_corr,6,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+price_volume,worldquant.alpha003,10,False,48,rank_price,1,截面排名前先做 pct_change 归一化的安全替代，见 _common.rank_price
+price_volume,worldquant.alpha003,10,False,48,ts_corr,10,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+price_volume,worldquant.alpha006,10,False,62,ts_corr,10,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+price_volume,worldquant.alpha011,4,False,79,ts_max,3,窗口内最大值
+price_volume,worldquant.alpha011,4,False,79,ts_min,3,窗口内最小值（常见于“距自身滚动低点距离”类特征的分母）
+price_volume,worldquant.alpha011,4,False,80,delta,3,跟 N 根之前的差值（原始是绝对差；中性化改造后不少因子已换成 pct_change，见 docs/LOOKBACK_WINDOW_MIGRATION.md 关联的那一轮修复）
+price_volume,worldquant.alpha012,2,False,98,delta,1,跟 N 根之前的差值（原始是绝对差；中性化改造后不少因子已换成 pct_change，见 docs/LOOKBACK_WINDOW_MIGRATION.md 关联的那一轮修复）
+price_volume,worldquant.alpha012,2,False,98,pct_change,1,跟 N 根之前的百分比涨跌幅（中性化改造引入的安全替代，见 _common.rank_price docstring）
+price_volume,worldquant.alpha013,5,False,113,rank_price,1,截面排名前先做 pct_change 归一化的安全替代，见 _common.rank_price
+price_volume,worldquant.alpha013,5,False,113,ts_cov,5,窗口内两个序列的滚动协方差（不像相关系数那样自带缩放）
+price_volume,worldquant.alpha014,10,False,127,pct_change,1,跟 N 根之前的百分比涨跌幅（中性化改造引入的安全替代，见 _common.rank_price docstring）
+price_volume,worldquant.alpha014,10,False,128,delta,3,跟 N 根之前的差值（原始是绝对差；中性化改造后不少因子已换成 pct_change，见 docs/LOOKBACK_WINDOW_MIGRATION.md 关联的那一轮修复）
+price_volume,worldquant.alpha014,10,False,129,ts_corr,10,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+price_volume,worldquant.alpha015,5,False,144,rank_price,1,截面排名前先做 pct_change 归一化的安全替代，见 _common.rank_price
+price_volume,worldquant.alpha015,5,False,144,ts_corr,3,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+price_volume,worldquant.alpha015,5,False,145,ts_sum,3,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+price_volume,worldquant.alpha016,5,False,159,rank_price,1,截面排名前先做 pct_change 归一化的安全替代，见 _common.rank_price
+price_volume,worldquant.alpha016,5,False,159,ts_cov,5,窗口内两个序列的滚动协方差（不像相关系数那样自带缩放）
+price_volume,worldquant.alpha017,24,False,174,adv,20,窗口内平均成交量（Average Volume，论文里叫 adv{d}，d 原本按天）
+price_volume,worldquant.alpha017,24,False,175,ts_rank,10,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+price_volume,worldquant.alpha017,24,False,178,pct_change,1,跟 N 根之前的百分比涨跌幅（中性化改造引入的安全替代，见 _common.rank_price docstring）
+price_volume,worldquant.alpha017,24,False,178,delta,1,跟 N 根之前的差值（原始是绝对差；中性化改造后不少因子已换成 pct_change，见 docs/LOOKBACK_WINDOW_MIGRATION.md 关联的那一轮修复）
+price_volume,worldquant.alpha017,24,False,179,ts_rank,5,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+price_volume,worldquant.alpha022,20,False,194,ts_corr,5,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+price_volume,worldquant.alpha022,20,False,198,delta,5,跟 N 根之前的差值（原始是绝对差；中性化改造后不少因子已换成 pct_change，见 docs/LOOKBACK_WINDOW_MIGRATION.md 关联的那一轮修复）
+price_volume,worldquant.alpha022,20,False,198,pct_change,1,跟 N 根之前的百分比涨跌幅（中性化改造引入的安全替代，见 _common.rank_price docstring）
+price_volume,worldquant.alpha022,20,False,198,stddev,20,窗口内标准差（该字段在窗口内的离散/波动程度）
+price_volume,worldquant.alpha025,20,False,212,pct_change,1,跟 N 根之前的百分比涨跌幅（中性化改造引入的安全替代，见 _common.rank_price docstring）
+price_volume,worldquant.alpha025,20,False,213,adv,20,窗口内平均成交量（Average Volume，论文里叫 adv{d}，d 原本按天）
+price_volume,worldquant.alpha027,7,False,238,rank_price,1,截面排名前先做 pct_change 归一化的安全替代，见 _common.rank_price
+price_volume,worldquant.alpha027,7,False,238,ts_corr,6,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+price_volume,worldquant.alpha027,7,False,239,ts_sum,2,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+price_volume,worldquant.alpha030,20,False,258,delay,1,取 N 根之前的值（纯移位，不是滚动窗口统计量，但同样是“回看多少根”）
+price_volume,worldquant.alpha030,20,False,259,delay,1,取 N 根之前的值（纯移位，不是滚动窗口统计量，但同样是“回看多少根”）
+price_volume,worldquant.alpha030,20,False,259,delay,2,取 N 根之前的值（纯移位，不是滚动窗口统计量，但同样是“回看多少根”）
+price_volume,worldquant.alpha030,20,False,260,delay,2,取 N 根之前的值（纯移位，不是滚动窗口统计量，但同样是“回看多少根”）
+price_volume,worldquant.alpha030,20,False,260,delay,3,取 N 根之前的值（纯移位，不是滚动窗口统计量，但同样是“回看多少根”）
+price_volume,worldquant.alpha030,20,False,262,ts_sum,5,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+price_volume,worldquant.alpha030,20,False,262,ts_sum,20,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+price_volume,worldquant.alpha035,33,False,277,pct_change,1,跟 N 根之前的百分比涨跌幅（中性化改造引入的安全替代，见 _common.rank_price docstring）
+price_volume,worldquant.alpha035,33,False,278,ts_rank,32,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+price_volume,worldquant.alpha035,33,False,279,ts_rank,16,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+price_volume,worldquant.alpha035,33,False,280,ts_rank,32,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+price_volume,worldquant.alpha039,251,False,296,pct_change,1,跟 N 根之前的百分比涨跌幅（中性化改造引入的安全替代，见 _common.rank_price docstring）
+price_volume,worldquant.alpha039,251,False,297,adv,20,窗口内平均成交量（Average Volume，论文里叫 adv{d}，d 原本按天）
+price_volume,worldquant.alpha039,251,False,298,decay_linear,9,线性衰减加权移动平均，窗口内越新的数据权重越大
+price_volume,worldquant.alpha039,251,False,301,pct_change,7,跟 N 根之前的百分比涨跌幅（中性化改造引入的安全替代，见 _common.rank_price docstring）
+price_volume,worldquant.alpha039,251,False,302,ts_sum,250,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+price_volume,worldquant.alpha040,10,False,318,pct_change,1,跟 N 根之前的百分比涨跌幅（中性化改造引入的安全替代，见 _common.rank_price docstring）
+price_volume,worldquant.alpha040,10,False,318,stddev,10,窗口内标准差（该字段在窗口内的离散/波动程度）
+price_volume,worldquant.alpha040,10,False,318,ts_corr,10,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+price_volume,worldquant.alpha043,39,False,332,adv,20,窗口内平均成交量（Average Volume，论文里叫 adv{d}，d 原本按天）
+price_volume,worldquant.alpha043,39,False,333,ts_rank,20,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+price_volume,worldquant.alpha043,39,False,334,delta,7,跟 N 根之前的差值（原始是绝对差；中性化改造后不少因子已换成 pct_change，见 docs/LOOKBACK_WINDOW_MIGRATION.md 关联的那一轮修复）
+price_volume,worldquant.alpha043,39,False,334,ts_rank,8,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+price_volume,worldquant.alpha044,5,False,349,ts_corr,5,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+price_volume,worldquant.alpha045,25,False,364,delay,5,取 N 根之前的值（纯移位，不是滚动窗口统计量，但同样是“回看多少根”）
+price_volume,worldquant.alpha045,25,False,365,ts_sum,20,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+price_volume,worldquant.alpha045,25,False,365,rank_price,1,截面排名前先做 pct_change 归一化的安全替代，见 _common.rank_price
+price_volume,worldquant.alpha045,25,False,366,ts_corr,2,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+price_volume,worldquant.alpha045,25,False,367,ts_sum,5,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+price_volume,worldquant.alpha045,25,False,367,ts_sum,20,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+price_volume,worldquant.alpha045,25,False,367,ts_corr,2,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+price_volume,worldquant.alpha050,9,False,383,rank_price,1,截面排名前先做 pct_change 归一化的安全替代，见 _common.rank_price
+price_volume,worldquant.alpha050,9,False,383,ts_corr,5,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+price_volume,worldquant.alpha050,9,False,384,ts_max,5,窗口内最大值
+price_volume,worldquant.alpha056,1,True,,,,
+price_volume,worldquant.alpha061,180,False,416,adv,180,窗口内平均成交量（Average Volume，论文里叫 adv{d}，d 原本按天）
+price_volume,worldquant.alpha061,180,False,417,rank_price_distance_from_low,16,距自身滚动最低点的百分比距离
+price_volume,worldquant.alpha061,180,False,418,ts_corr,17,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+price_volume,worldquant.alpha062,50,False,435,adv,20,窗口内平均成交量（Average Volume，论文里叫 adv{d}，d 原本按天）
+price_volume,worldquant.alpha062,50,False,436,ts_sum,22,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+price_volume,worldquant.alpha062,50,False,436,ts_corr,9,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+price_volume,worldquant.alpha062,50,False,439,rank_price,1,截面排名前先做 pct_change 归一化的安全替代，见 _common.rank_price
+price_volume,worldquant.alpha062,50,False,439,rank_price,1,截面排名前先做 pct_change 归一化的安全替代，见 _common.rank_price
+price_volume,worldquant.alpha062,50,False,440,rank_price,1,截面排名前先做 pct_change 归一化的安全替代，见 _common.rank_price
+price_volume,worldquant.alpha062,50,False,440,rank_price,1,截面排名前先做 pct_change 归一化的安全替代，见 _common.rank_price
+price_volume,worldquant.alpha064,146,False,461,adv,120,窗口内平均成交量（Average Volume，论文里叫 adv{d}，d 原本按天）
+price_volume,worldquant.alpha064,146,False,463,ts_sum,12,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+price_volume,worldquant.alpha064,146,False,463,ts_sum,12,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+price_volume,worldquant.alpha064,146,False,463,ts_corr,16,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+price_volume,worldquant.alpha064,146,False,465,rank_price,3,截面排名前先做 pct_change 归一化的安全替代，见 _common.rank_price
+price_volume,worldquant.alpha074,81,False,482,adv,30,窗口内平均成交量（Average Volume，论文里叫 adv{d}，d 原本按天）
+price_volume,worldquant.alpha074,81,False,483,ts_sum,37,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+price_volume,worldquant.alpha074,81,False,483,ts_corr,15,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+price_volume,worldquant.alpha074,81,False,485,rank_price,1,截面排名前先做 pct_change 归一化的安全替代，见 _common.rank_price
+price_volume,worldquant.alpha074,81,False,485,ts_corr,11,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+price_volume,worldquant.alpha075,61,False,502,adv,50,窗口内平均成交量（Average Volume，论文里叫 adv{d}，d 原本按天）
+price_volume,worldquant.alpha075,61,False,503,ts_corr,4,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+price_volume,worldquant.alpha075,61,False,504,rank_price,1,截面排名前先做 pct_change 归一化的安全替代，见 _common.rank_price
+price_volume,worldquant.alpha075,61,False,504,ts_corr,12,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+price_volume,worldquant.alpha078,63,False,523,adv,40,窗口内平均成交量（Average Volume，论文里叫 adv{d}，d 原本按天）
+price_volume,worldquant.alpha078,63,False,525,ts_sum,19,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+price_volume,worldquant.alpha078,63,False,525,ts_sum,19,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+price_volume,worldquant.alpha078,63,False,525,ts_corr,6,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+price_volume,worldquant.alpha078,63,False,526,rank_price,1,截面排名前先做 pct_change 归一化的安全替代，见 _common.rank_price
+price_volume,worldquant.alpha078,63,False,526,ts_corr,5,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+momentum_reversal,worldquant.alpha004,9,False,31,rank_price,1,截面排名前先做 pct_change 归一化的安全替代，见 _common.rank_price
+momentum_reversal,worldquant.alpha004,9,False,31,ts_rank,9,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+momentum_reversal,worldquant.alpha007,67,False,46,adv,20,窗口内平均成交量（Average Volume，论文里叫 adv{d}，d 原本按天）
+momentum_reversal,worldquant.alpha007,67,False,48,delta,7,跟 N 根之前的差值（原始是绝对差；中性化改造后不少因子已换成 pct_change，见 docs/LOOKBACK_WINDOW_MIGRATION.md 关联的那一轮修复）
+momentum_reversal,worldquant.alpha007,67,False,49,ts_rank,60,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+momentum_reversal,worldquant.alpha008,16,False,65,pct_change,1,跟 N 根之前的百分比涨跌幅（中性化改造引入的安全替代，见 _common.rank_price docstring）
+momentum_reversal,worldquant.alpha008,16,False,69,pct_change,1,跟 N 根之前的百分比涨跌幅（中性化改造引入的安全替代，见 _common.rank_price docstring）
+momentum_reversal,worldquant.alpha008,16,False,69,ts_sum,5,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+momentum_reversal,worldquant.alpha008,16,False,69,ts_sum,5,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+momentum_reversal,worldquant.alpha008,16,False,70,delay,10,取 N 根之前的值（纯移位，不是滚动窗口统计量，但同样是“回看多少根”）
+momentum_reversal,worldquant.alpha009,6,False,91,pct_change,1,跟 N 根之前的百分比涨跌幅（中性化改造引入的安全替代，见 _common.rank_price docstring）
+momentum_reversal,worldquant.alpha009,6,False,92,ts_min,5,窗口内最小值（常见于“距自身滚动低点距离”类特征的分母）
+momentum_reversal,worldquant.alpha009,6,False,92,ts_max,5,窗口内最大值
+momentum_reversal,worldquant.alpha010,5,False,117,pct_change,1,跟 N 根之前的百分比涨跌幅（中性化改造引入的安全替代，见 _common.rank_price docstring）
+momentum_reversal,worldquant.alpha010,5,False,118,ts_min,4,窗口内最小值（常见于“距自身滚动低点距离”类特征的分母）
+momentum_reversal,worldquant.alpha010,5,False,118,ts_max,4,窗口内最大值
+momentum_reversal,worldquant.alpha019,251,False,136,pct_change,1,跟 N 根之前的百分比涨跌幅（中性化改造引入的安全替代，见 _common.rank_price docstring）
+momentum_reversal,worldquant.alpha019,251,False,137,delta,7,跟 N 根之前的差值（原始是绝对差；中性化改造后不少因子已换成 pct_change，见 docs/LOOKBACK_WINDOW_MIGRATION.md 关联的那一轮修复）
+momentum_reversal,worldquant.alpha019,251,False,138,delay,7,取 N 根之前的值（纯移位，不是滚动窗口统计量，但同样是“回看多少根”）
+momentum_reversal,worldquant.alpha019,251,False,140,ts_sum,250,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+momentum_reversal,worldquant.alpha020,2,False,159,delay,1,取 N 根之前的值（纯移位，不是滚动窗口统计量，但同样是“回看多少根”）
+momentum_reversal,worldquant.alpha020,2,False,160,delay,1,取 N 根之前的值（纯移位，不是滚动窗口统计量，但同样是“回看多少根”）
+momentum_reversal,worldquant.alpha020,2,False,160,rank_price_diff,(见 reference 参数，非单一窗口),两个不同价格字段差值的安全替代，用显式 reference 归一化，见 _common.py
+momentum_reversal,worldquant.alpha020,2,False,161,delay,1,取 N 根之前的值（纯移位，不是滚动窗口统计量，但同样是“回看多少根”）
+momentum_reversal,worldquant.alpha020,2,False,161,rank_price_diff,(见 reference 参数，非单一窗口),两个不同价格字段差值的安全替代，用显式 reference 归一化，见 _common.py
+momentum_reversal,worldquant.alpha020,2,False,162,delay,1,取 N 根之前的值（纯移位，不是滚动窗口统计量，但同样是“回看多少根”）
+momentum_reversal,worldquant.alpha020,2,False,162,rank_price_diff,(见 reference 参数，非单一窗口),两个不同价格字段差值的安全替代，用显式 reference 归一化，见 _common.py
+momentum_reversal,worldquant.alpha021,20,False,179,adv,20,窗口内平均成交量（Average Volume，论文里叫 adv{d}，d 原本按天）
+momentum_reversal,worldquant.alpha021,20,False,180,ts_sum,8,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+momentum_reversal,worldquant.alpha021,20,False,181,stddev,8,窗口内标准差（该字段在窗口内的离散/波动程度）
+momentum_reversal,worldquant.alpha021,20,False,182,ts_sum,2,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+momentum_reversal,worldquant.alpha023,20,False,205,ts_sum,20,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+momentum_reversal,worldquant.alpha023,20,False,210,pct_change,2,跟 N 根之前的百分比涨跌幅（中性化改造引入的安全替代，见 _common.rank_price docstring）
+momentum_reversal,worldquant.alpha024,200,False,226,ts_sum,100,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+momentum_reversal,worldquant.alpha024,200,False,228,delta,100,跟 N 根之前的差值（原始是绝对差；中性化改造后不少因子已换成 pct_change，见 docs/LOOKBACK_WINDOW_MIGRATION.md 关联的那一轮修复）
+momentum_reversal,worldquant.alpha024,200,False,228,delay,100,取 N 根之前的值（纯移位，不是滚动窗口统计量，但同样是“回看多少根”）
+momentum_reversal,worldquant.alpha024,200,False,232,ts_min,100,窗口内最小值（常见于“距自身滚动低点距离”类特征的分母）
+momentum_reversal,worldquant.alpha024,200,False,234,pct_change,3,跟 N 根之前的百分比涨跌幅（中性化改造引入的安全替代，见 _common.rank_price docstring）
+momentum_reversal,worldquant.alpha031,31,False,250,adv,20,窗口内平均成交量（Average Volume，论文里叫 adv{d}，d 原本按天）
+momentum_reversal,worldquant.alpha031,31,False,253,rank_price,10,截面排名前先做 pct_change 归一化的安全替代，见 _common.rank_price
+momentum_reversal,worldquant.alpha031,31,False,253,decay_linear,10,线性衰减加权移动平均，窗口内越新的数据权重越大
+momentum_reversal,worldquant.alpha031,31,False,255,pct_change,3,跟 N 根之前的百分比涨跌幅（中性化改造引入的安全替代，见 _common.rank_price docstring）
+momentum_reversal,worldquant.alpha031,31,False,256,ts_corr,12,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+momentum_reversal,worldquant.alpha032,235,False,276,ts_sum,7,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+momentum_reversal,worldquant.alpha032,235,False,278,delay,5,取 N 根之前的值（纯移位，不是滚动窗口统计量，但同样是“回看多少根”）
+momentum_reversal,worldquant.alpha032,235,False,278,ts_corr,230,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+momentum_reversal,worldquant.alpha033,1,False,,,,
+momentum_reversal,worldquant.alpha034,6,False,308,pct_change,1,跟 N 根之前的百分比涨跌幅（中性化改造引入的安全替代，见 _common.rank_price docstring）
+momentum_reversal,worldquant.alpha034,6,False,309,stddev,2,窗口内标准差（该字段在窗口内的离散/波动程度）
+momentum_reversal,worldquant.alpha034,6,False,309,stddev,5,窗口内标准差（该字段在窗口内的离散/波动程度）
+momentum_reversal,worldquant.alpha034,6,False,311,rank_price,1,截面排名前先做 pct_change 归一化的安全替代，见 _common.rank_price
+momentum_reversal,worldquant.alpha037,201,False,327,delay,1,取 N 根之前的值（纯移位，不是滚动窗口统计量，但同样是“回看多少根”）
+momentum_reversal,worldquant.alpha037,201,False,327,ts_corr,200,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+momentum_reversal,worldquant.alpha037,201,False,331,rank_price_diff,(见 reference 参数，非单一窗口),两个不同价格字段差值的安全替代，用显式 reference 归一化，见 _common.py
+momentum_reversal,worldquant.alpha038,10,False,346,ts_rank,10,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+momentum_reversal,worldquant.alpha046,21,True,,,,
+momentum_reversal,worldquant.alpha049,21,True,,,,
+momentum_reversal,worldquant.alpha051,21,True,,,,
+momentum_reversal,worldquant.alpha052,241,False,428,pct_change,1,跟 N 根之前的百分比涨跌幅（中性化改造引入的安全替代，见 _common.rank_price docstring）
+momentum_reversal,worldquant.alpha052,241,False,429,ts_min,5,窗口内最小值（常见于“距自身滚动低点距离”类特征的分母）
+momentum_reversal,worldquant.alpha052,241,False,430,delay,5,取 N 根之前的值（纯移位，不是滚动窗口统计量，但同样是“回看多少根”）
+momentum_reversal,worldquant.alpha052,241,False,431,ts_sum,240,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+momentum_reversal,worldquant.alpha052,241,False,431,ts_sum,20,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+momentum_reversal,worldquant.alpha052,241,False,432,ts_rank,5,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+momentum_reversal,worldquant.alpha086,57,False,449,adv,20,窗口内平均成交量（Average Volume，论文里叫 adv{d}，d 原本按天）
+momentum_reversal,worldquant.alpha086,57,False,450,ts_sum,14,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+momentum_reversal,worldquant.alpha086,57,False,450,ts_corr,6,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+momentum_reversal,worldquant.alpha086,57,False,450,ts_rank,20,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+momentum_reversal,worldquant.alpha086,57,False,453,rank_price_diff,(见 reference 参数，非单一窗口),两个不同价格字段差值的安全替代，用显式 reference 归一化，见 _common.py
+momentum_reversal,worldquant.alpha088,92,False,470,adv,60,窗口内平均成交量（Average Volume，论文里叫 adv{d}，d 原本按天）
+momentum_reversal,worldquant.alpha088,92,False,474,rank_price,1,截面排名前先做 pct_change 归一化的安全替代，见 _common.rank_price
+momentum_reversal,worldquant.alpha088,92,False,474,rank_price,1,截面排名前先做 pct_change 归一化的安全替代，见 _common.rank_price
+momentum_reversal,worldquant.alpha088,92,False,475,rank_price,1,截面排名前先做 pct_change 归一化的安全替代，见 _common.rank_price
+momentum_reversal,worldquant.alpha088,92,False,475,rank_price,1,截面排名前先做 pct_change 归一化的安全替代，见 _common.rank_price
+momentum_reversal,worldquant.alpha088,92,False,477,decay_linear,8,线性衰减加权移动平均，窗口内越新的数据权重越大
+momentum_reversal,worldquant.alpha088,92,False,478,ts_rank,8,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+momentum_reversal,worldquant.alpha088,92,False,478,ts_rank,20,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+momentum_reversal,worldquant.alpha088,92,False,478,ts_corr,8,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+momentum_reversal,worldquant.alpha088,92,False,479,decay_linear,6,线性衰减加权移动平均，窗口内越新的数据权重越大
+momentum_reversal,worldquant.alpha088,92,False,479,ts_rank,2,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+momentum_reversal,worldquant.alpha095,79,False,495,adv,40,窗口内平均成交量（Average Volume，论文里叫 adv{d}，d 原本按天）
+momentum_reversal,worldquant.alpha095,79,False,496,rank_price_distance_from_low,12,距自身滚动最低点的百分比距离
+momentum_reversal,worldquant.alpha095,79,False,499,ts_sum,19,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+momentum_reversal,worldquant.alpha095,79,False,499,ts_sum,19,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+momentum_reversal,worldquant.alpha095,79,False,499,ts_corr,12,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+momentum_reversal,worldquant.alpha095,79,False,503,ts_rank,11,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+momentum_reversal,worldquant.alpha099,85,False,519,adv,60,窗口内平均成交量（Average Volume，论文里叫 adv{d}，d 原本按天）
+momentum_reversal,worldquant.alpha099,85,False,521,ts_sum,19,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+momentum_reversal,worldquant.alpha099,85,False,521,ts_sum,19,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+momentum_reversal,worldquant.alpha099,85,False,521,ts_corr,8,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+momentum_reversal,worldquant.alpha099,85,False,523,ts_corr,6,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+momentum_reversal,worldquant.alpha101,1,False,,,,
+microstructure,worldquant.alpha005,10,False,36,ts_sum,10,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+microstructure,worldquant.alpha005,10,False,39,rank_price_diff,(见 reference 参数，非单一窗口),两个不同价格字段差值的安全替代，用显式 reference 归一化，见 _common.py
+microstructure,worldquant.alpha005,10,False,40,rank_price_diff,(见 reference 参数，非单一窗口),两个不同价格字段差值的安全替代，用显式 reference 归一化，见 _common.py
+microstructure,worldquant.alpha018,10,False,61,stddev,5,窗口内标准差（该字段在窗口内的离散/波动程度）
+microstructure,worldquant.alpha018,10,False,61,ts_corr,10,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+microstructure,worldquant.alpha028,24,False,76,adv,20,窗口内平均成交量（Average Volume，论文里叫 adv{d}，d 原本按天）
+microstructure,worldquant.alpha028,24,False,80,ts_corr,5,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+microstructure,worldquant.alpha041,1,False,,,,
+microstructure,worldquant.alpha042,1,False,119,rank_price_diff,(见 reference 参数，非单一窗口),两个不同价格字段差值的安全替代，用显式 reference 归一化，见 _common.py
+microstructure,worldquant.alpha047,20,True,,,,
+microstructure,worldquant.alpha053,10,False,159,delta,9,跟 N 根之前的差值（原始是绝对差；中性化改造后不少因子已换成 pct_change，见 docs/LOOKBACK_WINDOW_MIGRATION.md 关联的那一轮修复）
+microstructure,worldquant.alpha054,1,False,,,,
+microstructure,worldquant.alpha055,17,False,190,ts_min,12,窗口内最小值（常见于“距自身滚动低点距离”类特征的分母）
+microstructure,worldquant.alpha055,17,False,191,ts_max,12,窗口内最大值
+microstructure,worldquant.alpha055,17,False,193,ts_corr,6,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+microstructure,worldquant.alpha057,31,False,208,ts_argmax,30,窗口内最大值出现的位置索引（0~window-1），本身是无量纲整数
+microstructure,worldquant.alpha057,31,False,208,decay_linear,2,线性衰减加权移动平均，窗口内越新的数据权重越大
+microstructure,worldquant.alpha060,10,False,230,ts_argmax,10,窗口内最大值出现的位置索引（0~window-1），本身是无量纲整数
+microstructure,worldquant.alpha065,73,False,247,adv,60,窗口内平均成交量（Average Volume，论文里叫 adv{d}，d 原本按天）
+microstructure,worldquant.alpha065,73,False,249,ts_sum,8,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+microstructure,worldquant.alpha065,73,False,249,ts_corr,6,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+microstructure,worldquant.alpha065,73,False,250,rank_price_distance_from_low,13,距自身滚动最低点的百分比距离
+microstructure,worldquant.alpha066,26,False,273,pct_change,3,跟 N 根之前的百分比涨跌幅（中性化改造引入的安全替代，见 _common.rank_price docstring）
+microstructure,worldquant.alpha066,26,False,273,decay_linear,7,线性衰减加权移动平均，窗口内越新的数据权重越大
+microstructure,worldquant.alpha066,26,False,276,decay_linear,11,线性衰减加权移动平均，窗口内越新的数据权重越大
+microstructure,worldquant.alpha066,26,False,276,ts_rank,6,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+microstructure,worldquant.alpha068,34,False,292,adv,15,窗口内平均成交量（Average Volume，论文里叫 adv{d}，d 原本按天）
+microstructure,worldquant.alpha068,34,False,293,rank_price,1,截面排名前先做 pct_change 归一化的安全替代，见 _common.rank_price
+microstructure,worldquant.alpha068,34,False,293,ts_corr,8,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+microstructure,worldquant.alpha068,34,False,293,ts_rank,13,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+microstructure,worldquant.alpha068,34,False,295,rank_price,1,截面排名前先做 pct_change 归一化的安全替代，见 _common.rank_price
+microstructure,worldquant.alpha073,19,False,313,pct_change,4,跟 N 根之前的百分比涨跌幅（中性化改造引入的安全替代，见 _common.rank_price docstring）
+microstructure,worldquant.alpha073,19,False,313,decay_linear,2,线性衰减加权移动平均，窗口内越新的数据权重越大
+microstructure,worldquant.alpha073,19,False,315,delta,2,跟 N 根之前的差值（原始是绝对差；中性化改造后不少因子已换成 pct_change，见 docs/LOOKBACK_WINDOW_MIGRATION.md 关联的那一轮修复）
+microstructure,worldquant.alpha073,19,False,316,decay_linear,3,线性衰减加权移动平均，窗口内越新的数据权重越大
+microstructure,worldquant.alpha073,19,False,316,ts_rank,16,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+microstructure,worldquant.alpha077,46,False,333,adv,40,窗口内平均成交量（Average Volume，论文里叫 adv{d}，d 原本按天）
+microstructure,worldquant.alpha077,46,False,337,decay_linear,20,线性衰减加权移动平均，窗口内越新的数据权重越大
+microstructure,worldquant.alpha077,46,False,338,ts_corr,3,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+microstructure,worldquant.alpha077,46,False,339,decay_linear,5,线性衰减加权移动平均，窗口内越新的数据权重越大
+microstructure,worldquant.alpha083,7,False,356,ts_sum,5,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+microstructure,worldquant.alpha083,7,False,357,delay,2,取 N 根之前的值（纯移位，不是滚动窗口统计量，但同样是“回看多少根”）
+microstructure,worldquant.alpha092,46,False,379,adv,30,窗口内平均成交量（Average Volume，论文里叫 adv{d}，d 原本按天）
+microstructure,worldquant.alpha092,46,False,382,decay_linear,14,线性衰减加权移动平均，窗口内越新的数据权重越大
+microstructure,worldquant.alpha092,46,False,382,ts_rank,18,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+microstructure,worldquant.alpha092,46,False,383,rank_price,1,截面排名前先做 pct_change 归一化的安全替代，见 _common.rank_price
+microstructure,worldquant.alpha092,46,False,383,ts_corr,7,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+microstructure,worldquant.alpha092,46,False,384,decay_linear,6,线性衰减加权移动平均，窗口内越新的数据权重越大
+microstructure,worldquant.alpha092,46,False,384,ts_rank,6,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+composite,worldquant.alpha001,25,False,32,pct_change,1,跟 N 根之前的百分比涨跌幅（中性化改造引入的安全替代，见 _common.rank_price docstring）
+composite,worldquant.alpha001,25,False,33,stddev,20,窗口内标准差（该字段在窗口内的离散/波动程度）
+composite,worldquant.alpha001,25,False,35,ts_argmax,5,窗口内最大值出现的位置索引（0~window-1），本身是无量纲整数
+composite,worldquant.alpha026,11,False,49,ts_rank,5,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+composite,worldquant.alpha026,11,False,49,ts_rank,5,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+composite,worldquant.alpha026,11,False,49,ts_corr,5,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+composite,worldquant.alpha026,11,False,50,ts_max,3,窗口内最大值
+composite,worldquant.alpha029,12,False,68,pct_change,1,跟 N 根之前的百分比涨跌幅（中性化改造引入的安全替代，见 _common.rank_price docstring）
+composite,worldquant.alpha029,12,False,71,pct_change,5,跟 N 根之前的百分比涨跌幅（中性化改造引入的安全替代，见 _common.rank_price docstring）
+composite,worldquant.alpha029,12,False,73,ts_min,2,窗口内最小值（常见于“距自身滚动低点距离”类特征的分母）
+composite,worldquant.alpha029,12,False,78,delay,6,取 N 根之前的值（纯移位，不是滚动窗口统计量，但同样是“回看多少根”）
+composite,worldquant.alpha029,12,False,78,ts_rank,5,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+composite,worldquant.alpha036,200,False,97,pct_change,1,跟 N 根之前的百分比涨跌幅（中性化改造引入的安全替代，见 _common.rank_price docstring）
+composite,worldquant.alpha036,200,False,99,adv,20,窗口内平均成交量（Average Volume，论文里叫 adv{d}，d 原本按天）
+composite,worldquant.alpha036,200,False,102,delay,1,取 N 根之前的值（纯移位，不是滚动窗口统计量，但同样是“回看多少根”）
+composite,worldquant.alpha036,200,False,102,ts_corr,15,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+composite,worldquant.alpha036,200,False,106,rank_price_diff,(见 reference 参数，非单一窗口),两个不同价格字段差值的安全替代，用显式 reference 归一化，见 _common.py
+composite,worldquant.alpha036,200,False,107,delay,6,取 N 根之前的值（纯移位，不是滚动窗口统计量，但同样是“回看多少根”）
+composite,worldquant.alpha036,200,False,107,ts_rank,5,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+composite,worldquant.alpha036,200,False,108,ts_corr,6,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+composite,worldquant.alpha036,200,False,112,ts_sum,200,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+composite,worldquant.alpha071,226,False,132,adv,180,窗口内平均成交量（Average Volume，论文里叫 adv{d}，d 原本按天）
+composite,worldquant.alpha071,226,False,133,ts_rank,3,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+composite,worldquant.alpha071,226,False,133,ts_rank,12,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+composite,worldquant.alpha071,226,False,133,ts_corr,18,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+composite,worldquant.alpha071,226,False,134,decay_linear,4,线性衰减加权移动平均，窗口内越新的数据权重越大
+composite,worldquant.alpha071,226,False,134,ts_rank,15,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+composite,worldquant.alpha071,226,False,136,decay_linear,16,线性衰减加权移动平均，窗口内越新的数据权重越大
+composite,worldquant.alpha071,226,False,136,ts_rank,4,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+composite,worldquant.alpha072,57,False,154,adv,40,窗口内平均成交量（Average Volume，论文里叫 adv{d}，d 原本按天）
+composite,worldquant.alpha072,57,False,155,ts_corr,8,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+composite,worldquant.alpha072,57,False,156,decay_linear,10,线性衰减加权移动平均，窗口内越新的数据权重越大
+composite,worldquant.alpha072,57,False,157,ts_rank,3,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+composite,worldquant.alpha072,57,False,157,ts_rank,18,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+composite,worldquant.alpha072,57,False,157,ts_corr,6,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+composite,worldquant.alpha072,57,False,158,decay_linear,2,线性衰减加权移动平均，窗口内越新的数据权重越大
+composite,worldquant.alpha081,78,False,175,adv,10,窗口内平均成交量（Average Volume，论文里叫 adv{d}，d 原本按天）
+composite,worldquant.alpha081,78,False,176,ts_sum,49,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+composite,worldquant.alpha081,78,False,176,ts_corr,8,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+composite,worldquant.alpha081,78,False,177,ts_product,14,窗口内累乘
+composite,worldquant.alpha081,78,False,179,rank_price,1,截面排名前先做 pct_change 归一化的安全替代，见 _common.rank_price
+composite,worldquant.alpha081,78,False,179,ts_corr,5,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+composite,worldquant.alpha084,34,False,201,ts_max,15,窗口内最大值
+composite,worldquant.alpha084,34,False,201,ts_rank,20,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+composite,worldquant.alpha084,34,False,202,pct_change,4,跟 N 根之前的百分比涨跌幅（中性化改造引入的安全替代，见 _common.rank_price docstring）
+composite,worldquant.alpha085,39,False,219,adv,30,窗口内平均成交量（Average Volume，论文里叫 adv{d}，d 原本按天）
+composite,worldquant.alpha085,39,False,221,ts_corr,9,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+composite,worldquant.alpha085,39,False,222,ts_rank,3,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+composite,worldquant.alpha085,39,False,222,ts_rank,10,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+composite,worldquant.alpha085,39,False,222,ts_corr,7,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+composite,worldquant.alpha094,82,False,240,adv,60,窗口内平均成交量（Average Volume，论文里叫 adv{d}，d 原本按天）
+composite,worldquant.alpha094,82,False,241,rank_price_distance_from_low,11,距自身滚动最低点的百分比距离
+composite,worldquant.alpha094,82,False,242,ts_rank,19,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+composite,worldquant.alpha094,82,False,242,ts_rank,4,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+composite,worldquant.alpha094,82,False,242,ts_corr,18,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+composite,worldquant.alpha094,82,False,243,ts_rank,2,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+composite,worldquant.alpha096,101,False,261,adv,60,窗口内平均成交量（Average Volume，论文里叫 adv{d}，d 原本按天）
+composite,worldquant.alpha096,101,False,262,rank_price,1,截面排名前先做 pct_change 归一化的安全替代，见 _common.rank_price
+composite,worldquant.alpha096,101,False,262,ts_corr,3,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+composite,worldquant.alpha096,101,False,263,decay_linear,4,线性衰减加权移动平均，窗口内越新的数据权重越大
+composite,worldquant.alpha096,101,False,263,ts_rank,8,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+composite,worldquant.alpha096,101,False,264,ts_rank,7,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+composite,worldquant.alpha096,101,False,264,ts_rank,4,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+composite,worldquant.alpha096,101,False,264,ts_corr,3,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+composite,worldquant.alpha096,101,False,265,ts_argmax,12,窗口内最大值出现的位置索引（0~window-1），本身是无量纲整数
+composite,worldquant.alpha096,101,False,266,decay_linear,14,线性衰减加权移动平均，窗口内越新的数据权重越大
+composite,worldquant.alpha096,101,False,266,ts_rank,13,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+composite,worldquant.alpha098,53,False,284,adv,5,窗口内平均成交量（Average Volume，论文里叫 adv{d}，d 原本按天）
+composite,worldquant.alpha098,53,False,285,adv,15,窗口内平均成交量（Average Volume，论文里叫 adv{d}，d 原本按天）
+composite,worldquant.alpha098,53,False,286,ts_sum,26,"窗口内求和（常见于均线分子 sum(x,N)/N，或窗口累计量）"
+composite,worldquant.alpha098,53,False,286,ts_corr,4,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+composite,worldquant.alpha098,53,False,287,decay_linear,7,线性衰减加权移动平均，窗口内越新的数据权重越大
+composite,worldquant.alpha098,53,False,288,rank_price,1,截面排名前先做 pct_change 归一化的安全替代，见 _common.rank_price
+composite,worldquant.alpha098,53,False,288,ts_corr,20,窗口内两个序列的滚动皮尔逊相关系数（对每条腿的线性缩放不敏感）
+composite,worldquant.alpha098,53,False,289,ts_argmin,8,窗口内最小值出现的位置索引（0~window-1），本身是无量纲整数
+composite,worldquant.alpha098,53,False,290,ts_rank,6,逐 symbol 自比较的时序百分位排名——只跟自己历史比，不跨 symbol 比较，天然不受绝对价格量级影响，见 _common.rank_price docstring
+composite,worldquant.alpha098,53,False,291,decay_linear,8,线性衰减加权移动平均，窗口内越新的数据权重越大

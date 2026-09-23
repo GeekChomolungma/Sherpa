@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-DEFAULT_BETA_WINDOW = 90
+DEFAULT_BETA_WINDOW = 120  # ~120 根k线的滚动窗口
 
 
 def _broadcast(series: pd.Series, columns) -> pd.DataFrame:
