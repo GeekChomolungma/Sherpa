@@ -19,9 +19,19 @@ from .fixtures import make_panel, make_single_symbol_panel
 
 # industry 分类 18 个 + price_volume 里的 Alpha056，全部依赖 BarPanel 不支持的字段
 # （行业分类 / 市值），compute() 统一 raise，不参与"能不能正常算出结果"的通用测试。
+#
+# Alpha046/049/051（美股语境下拍出来的绝对美元/天斜率阈值，换算成百分比没有原则性依据）
+# 和 Alpha047（"低价股效应"在加密市场不成立，不是单位问题，是经济假设本身不适用）同理
+# 归入占位——跟缺字段的占位因子是同一种"不臆造数值/前提，宁可不实现"的态度，见各自 docstring。
 PLACEHOLDER_ALPHAS = [
     getattr(industry, name) for name in industry.__all__ if name != "IndustryNeutralPlaceholder"
-] + [price_volume.Alpha056]
+] + [
+    price_volume.Alpha056,
+    momentum_reversal.Alpha046,
+    momentum_reversal.Alpha049,
+    momentum_reversal.Alpha051,
+    microstructure.Alpha047,
+]
 _PLACEHOLDER_NAMES = {cls().name for cls in PLACEHOLDER_ALPHAS}
 
 # 按分类模块的 __all__ 自动收集，不用 101 个类名各写一遍——新增/调整一个 alpha 只要维护
@@ -130,12 +140,16 @@ def test_cross_sectional_base_is_not_registered():
 
 
 def test_alpha101_matches_direct_formula():
+    # epsilon 从 0.001（美股语境下的绝对美元防除零常量）换成 1e-7（跟 microstructure
+    # 模块统一的防护标准），见 Alpha101 docstring。
     panel = make_panel(n=10)
-    expected = (panel.close - panel.open) / ((panel.high - panel.low) + 0.001)
+    expected = (panel.close - panel.open) / ((panel.high - panel.low) + 1e-7)
     pd.testing.assert_frame_equal(momentum_reversal.Alpha101().compute(panel), expected)
 
 
 def test_alpha012_hand_computed_values():
+    # Alpha#12 现在用 close 的百分比涨跌幅而不是绝对美元差值（见 _common.rank_price
+    # docstring 说明的同一个跨 symbol 价格量级问题），期望值相应换成百分比版本。
     panel = make_single_symbol_panel(
         closes=[100.0, 102.0, 101.0, 105.0],
         volumes=[500.0, 600.0, 550.0, 700.0],
@@ -144,26 +158,29 @@ def test_alpha012_hand_computed_values():
     result = Alpha012().compute(panel)["BTCUSDT"].tolist()
 
     assert math.isnan(result[0])
-    assert result[1:] == pytest.approx([-2.0, -1.0, -4.0])
+    assert result[1:] == pytest.approx([-0.02, -0.00980392156862745, -0.039603960396039604])
 
 
 def test_alpha009_trending_up_keeps_positive_delta():
-    # 连续5根都在涨 (delta 恒为 +1)：trending=True，输出应该直接是 delta(=1)，不是反转
+    # 连续5根都在涨（百分比涨跌幅恒为正，虽然每天涨跌幅不完全相等）：trending=True，
+    # 输出应该直接等于 d（百分比涨跌幅），不是反转。d 换成百分比是这次修复的内容
+    # （见 _common.rank_price docstring 的同一个跨 symbol 价格量级问题）。
     closes = [100.0 + i for i in range(7)]
     panel = make_single_symbol_panel(closes=closes, symbol="BTCUSDT")
+    d = pd.Series(closes).pct_change()
     result = Alpha009().compute(panel)["BTCUSDT"]
 
     # 前 5 根 (min_lookback=6, warmup=5) 应该是 NaN
     assert result.iloc[:5].isna().all()
-    # 第 6 根开始，5根窗口都在涨，trending=True -> 输出 = delta = 1
-    assert result.iloc[5:].tolist() == pytest.approx([1.0] * len(result.iloc[5:]))
+    # 第 6 根开始，5根窗口都在涨，trending=True -> 输出 = d，不反转
+    assert result.iloc[5:].tolist() == pytest.approx(d.iloc[5:].tolist())
 
 
 def test_alpha009_non_trending_reverses_delta():
-    # 涨跌交替：5根窗口内既有正也有负，不满足"连续5根同向"，应该输出 -delta
+    # 涨跌交替：5根窗口内既有正也有负，不满足"连续5根同向"，应该输出 -d
     closes = [100.0, 101.0, 100.0, 101.0, 100.0, 101.0, 100.0]
     panel = make_single_symbol_panel(closes=closes, symbol="BTCUSDT")
-    d = pd.Series(closes).diff()
+    d = pd.Series(closes).pct_change()
     result = Alpha009().compute(panel)["BTCUSDT"]
 
     last_delta = d.iloc[-1]

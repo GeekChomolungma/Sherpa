@@ -14,7 +14,7 @@ from sherpa.data.schema import BarPanel
 
 from ... import ops
 from ...base import WorldQuantAlpha, register_alpha
-from .._common import bool_to_signal, ternary
+from .._common import bool_to_signal, rank_price, rank_price_diff, rank_price_distance_from_low, ternary
 
 
 @register_alpha
@@ -28,7 +28,7 @@ class Alpha004(WorldQuantAlpha):
     min_lookback = 9
 
     def compute(self, panel: BarPanel) -> pd.DataFrame:
-        return -1 * ops.ts_rank(ops.rank(panel.low), 9)
+        return -1 * ops.ts_rank(rank_price(panel.low), 9)
 
 
 @register_alpha
@@ -63,7 +63,10 @@ class Alpha008(WorldQuantAlpha):
 
     def compute(self, panel: BarPanel) -> pd.DataFrame:
         returns = panel.close.pct_change()
-        product = ops.ts_sum(panel.open, 5) * ops.ts_sum(returns, 5)
+        # sum(open,5) 是绝对美元量级，跟 sum(returns,5)（已经是无量纲的）相乘后整体还是
+        # 美元量级，同一个跨 symbol 价格问题（见 _common.rank_price docstring）；换成
+        # sum(open 的百分比涨跌幅, 5)，跟 sum(returns,5) 同一个量纲。
+        product = ops.ts_sum(panel.open.pct_change(), 5) * ops.ts_sum(returns, 5)
         return -1 * ops.rank(product - ops.delay(product, 10))
 
 
@@ -82,7 +85,10 @@ class Alpha009(WorldQuantAlpha):
     min_lookback = 6
 
     def compute(self, panel: BarPanel) -> pd.DataFrame:
-        d = ops.delta(panel.close, 1)
+        # d 用百分比涨跌幅而不是绝对美元差值：trending/ts_min/ts_max 只看符号，不受影响，
+        # 但最终返回值会被下游 rank_ic()/组合构建跨 symbol 比较，绝对美元差值会被 BTC 这类
+        # 高价 symbol 的量级支配（见 _common.rank_price docstring 的同一个病根）。
+        d = panel.close.pct_change()
         ts_min, ts_max = ops.ts_min(d, 5), ops.ts_max(d, 5)
         trending = (ts_min > 0) | (ts_max < 0)
         result = d.where(trending, -1 * d)
@@ -104,7 +110,11 @@ class Alpha010(WorldQuantAlpha):
     min_lookback = 5
 
     def compute(self, panel: BarPanel) -> pd.DataFrame:
-        d = ops.delta(panel.close, 1)
+        # d 用百分比涨跌幅而不是绝对美元差值——trending/ts_min/ts_max 的判断只看符号，跟 d
+        # 是美元还是百分比无关，但最后 rank(result) 排的必须是可跨 symbol 比较的量（见
+        # _common.rank_price docstring）。跟 Alpha#9 不同：这里外层有 rank()，Alpha#9 没有，
+        # 所以 Alpha#9 暂不在这一轮修（那是没有 rank() 包裹的"零散"情形，留到下一轮单独处理）。
+        d = panel.close.pct_change()
         ts_min, ts_max = ops.ts_min(d, 4), ops.ts_max(d, 4)
         trending = (ts_min > 0) | (ts_max < 0)
         result = d.where(trending, -1 * d).where(ts_min.notna())
@@ -143,9 +153,13 @@ class Alpha020(WorldQuantAlpha):
     min_lookback = 2
 
     def compute(self, panel: BarPanel) -> pd.DataFrame:
-        part1 = -1 * ops.rank(panel.open - ops.delay(panel.high, 1))
-        part2 = ops.rank(panel.open - ops.delay(panel.close, 1))
-        part3 = ops.rank(panel.open - ops.delay(panel.low, 1))
+        # 三个跳空缺口都是绝对美元差值，跟 rank_price 要解决的同一个跨 symbol 价格量级
+        # 问题（见 _common.rank_price docstring），但差值本身可能跨 0，不能直接取
+        # pct_change，统一用昨收 delay(close,1) 当锚点换成百分比缺口（标准的 gap % 定义）。
+        prev_close = ops.delay(panel.close, 1)
+        part1 = -1 * rank_price_diff(panel.open, ops.delay(panel.high, 1), prev_close)
+        part2 = rank_price_diff(panel.open, ops.delay(panel.close, 1), prev_close)
+        part3 = rank_price_diff(panel.open, ops.delay(panel.low, 1), prev_close)
         return part1 * part2 * part3
 
 
@@ -189,8 +203,11 @@ class Alpha023(WorldQuantAlpha):
 
     def compute(self, panel: BarPanel) -> pd.DataFrame:
         ma20 = ops.ts_sum(panel.high, 20) / 20
+        # cond 是同一个 symbol 自己的均线 vs 自己的当前高点，跟绝对价格量级无关，不用改；
+        # true_branch 是绝对美元差值，换成百分比涨跌幅（同一个病根，见 _common.rank_price
+        # docstring；这里没有 rank() 包裹，但最终返回值一样被下游跨 symbol 比较）。
         cond = ma20 < panel.high
-        true_branch = -1 * ops.delta(panel.high, 2)
+        true_branch = -1 * panel.high.pct_change(periods=2)
         return ternary(cond, true_branch, 0.0, ma20, panel.high)
 
 
@@ -207,10 +224,14 @@ class Alpha024(WorldQuantAlpha):
 
     def compute(self, panel: BarPanel) -> pd.DataFrame:
         ma100 = ops.ts_sum(panel.close, 100) / 100
+        # ratio 本身已经是无量纲比值（[价格]/[价格]），0.05 这个阈值不用换算，可以直接保留。
         ratio = ops.delta(ma100, 100) / ops.delay(panel.close, 100)
         cond = ratio <= 0.05  # 合并 "< 0.05" 与 "== 0.05" 两支
-        true_branch = -1 * (panel.close - ops.ts_min(panel.close, 100))
-        false_branch = -1 * ops.delta(panel.close, 3)
+        # 两个分支都是绝对美元量，换成百分比（同一个病根，见 _common.rank_price docstring）：
+        # true_branch 用距 100 日低点的百分比距离，false_branch 用 3 日百分比涨跌幅。
+        ts_min_close100 = ops.ts_min(panel.close, 100)
+        true_branch = -1 * (panel.close - ts_min_close100) / ts_min_close100
+        false_branch = -1 * panel.close.pct_change(periods=3)
         return ternary(cond, true_branch, false_branch, ratio)
 
 
@@ -227,9 +248,11 @@ class Alpha031(WorldQuantAlpha):
 
     def compute(self, panel: BarPanel) -> pd.DataFrame:
         adv20 = ops.adv(panel.volume, 20)
-        inner = ops.decay_linear(-1 * ops.rank(ops.rank(ops.delta(panel.close, 10))), 10)
+        # rank(delta(close,10)) 排的是绝对美元涨跌，跟 rank(close) 同一个病根（见
+        # _common.rank_price docstring）；rank_price(close, periods=10) 换成排百分比涨跌幅。
+        inner = ops.decay_linear(-1 * ops.rank(rank_price(panel.close, periods=10)), 10)
         part1 = ops.rank(ops.rank(ops.rank(inner)))
-        part2 = ops.rank(-1 * ops.delta(panel.close, 3))
+        part2 = ops.rank(-1 * panel.close.pct_change(periods=3))
         part3 = ops.sign(ops.scale(ops.ts_corr(adv20, panel.low, 12)))
         return part1 + part2 + part3
 
@@ -247,7 +270,11 @@ class Alpha032(WorldQuantAlpha):
 
     def compute(self, panel: BarPanel) -> pd.DataFrame:
         vwap = ops.vwap(panel.quote_volume, panel.volume)
-        part1 = ops.scale(ops.ts_sum(panel.close, 7) / 7 - panel.close)
+        # ops.scale() 是按行绝对值之和归一化，属于截面操作，跟 ops.rank() 面临同一个问题
+        # （见 _common.rank_price docstring）：sum(close,7)/7 - close 是绝对美元差值，
+        # 高价 symbol 会在 scale() 的分母里占掉几乎全部权重，以 close 为锚点换成百分比。
+        ma7_deviation = (ops.ts_sum(panel.close, 7) / 7 - panel.close) / panel.close
+        part1 = ops.scale(ma7_deviation)
         part2 = 20 * ops.scale(ops.ts_corr(vwap, ops.delay(panel.close, 5), 230))
         return part1 + part2
 
@@ -281,7 +308,7 @@ class Alpha034(WorldQuantAlpha):
         returns = panel.close.pct_change()
         ratio = ops.stddev(returns, 2) / ops.stddev(returns, 5)
         part1 = 1 - ops.rank(ratio)
-        part2 = 1 - ops.rank(ops.delta(panel.close, 1))
+        part2 = 1 - rank_price(panel.close)
         return ops.rank(part1 + part2)
 
 
@@ -298,7 +325,10 @@ class Alpha037(WorldQuantAlpha):
     def compute(self, panel: BarPanel) -> pd.DataFrame:
         open_close = panel.open - panel.close
         part1 = ops.rank(ops.ts_corr(ops.delay(open_close, 1), panel.close, 200))
-        part2 = ops.rank(open_close)
+        # part1 用 open_close 当 ts_corr 的一条腿是安全的（Pearson 相关系数本身对每条腿的
+        # 线性缩放不敏感）；part2 是直接对 open_close 这个绝对美元差值截面排名，差值可能
+        # 跨 0，换成以 close 为锚点的百分比（见 _common.rank_price_diff docstring）。
+        part2 = rank_price_diff(panel.open, panel.close, panel.close)
         return part1 + part2
 
 
@@ -322,18 +352,21 @@ class Alpha046(WorldQuantAlpha):
 
     ((0.25 < slope) ? (-1 * 1) : ((slope < 0) ? 1 : ((-1 * 1) * (close - delay(close, 1)))))
     其中 slope = ((delay(close,20)-delay(close,10))/10) - ((delay(close,10)-close)/10)
+
+    `slope` 是绝对美元/天量纲，`0.25` 这个判定阈值是美股语境下拍出来的绝对数字——换成
+    百分比斜率后，等价阈值该定多少（0.0025？0.001？）没有任何原则性依据，纯粹是猜。
+    跟 alpha056/行业因子缺数据不硬凑代理维度是同一个态度：不臆造换算系数，宁可不实现。
+    `Alpha049`/`Alpha051` 用同一个 `slope` 和同样拍出来的阈值，一并禁用。
     """
 
     name = "alpha046"
     min_lookback = 21
 
     def compute(self, panel: BarPanel) -> pd.DataFrame:
-        slope = self._slope(panel)
-        cond1 = slope > 0.25
-        cond2 = slope < 0
-        false_branch = -1 * (panel.close - ops.delay(panel.close, 1))
-        middle = ternary(cond2, 1.0, false_branch, slope)
-        return ternary(cond1, -1.0, middle, slope)
+        raise NotImplementedError(
+            "alpha046 的判定阈值 0.25 是美股语境下绝对美元/天斜率的经验值，"
+            "换算成加密市场的百分比斜率阈值没有原则性依据，不臆造数值，宁可不实现"
+        )
 
     @staticmethod
     def _slope(panel: BarPanel) -> pd.DataFrame:
@@ -347,16 +380,18 @@ class Alpha049(WorldQuantAlpha):
     """Alpha#49：跟 Alpha#46 同一个 slope，急剧减速（< -0.1）时反转，否则跟随昨日变化。
 
     (slope < -0.1) ? 1 : ((-1 * 1) * (close - delay(close, 1)))
+
+    禁用原因见 `Alpha046` docstring：阈值 -0.1 换算成百分比没有原则性依据。
     """
 
     name = "alpha049"
     min_lookback = 21
 
     def compute(self, panel: BarPanel) -> pd.DataFrame:
-        slope = Alpha046._slope(panel)
-        cond = slope < -0.1
-        false_branch = -1 * (panel.close - ops.delay(panel.close, 1))
-        return ternary(cond, 1.0, false_branch, slope)
+        raise NotImplementedError(
+            "alpha049 的判定阈值 -0.1 是美股语境下绝对美元/天斜率的经验值，"
+            "换算成加密市场的百分比斜率阈值没有原则性依据，不臆造数值，宁可不实现"
+        )
 
 
 @register_alpha
@@ -364,16 +399,18 @@ class Alpha051(WorldQuantAlpha):
     """Alpha#51：跟 Alpha#49 同结构，阈值改成 -0.05（更容易触发反转）。
 
     (slope < -0.05) ? 1 : ((-1 * 1) * (close - delay(close, 1)))
+
+    禁用原因见 `Alpha046` docstring：阈值 -0.05 换算成百分比没有原则性依据。
     """
 
     name = "alpha051"
     min_lookback = 21
 
     def compute(self, panel: BarPanel) -> pd.DataFrame:
-        slope = Alpha046._slope(panel)
-        cond = slope < -0.05
-        false_branch = -1 * (panel.close - ops.delay(panel.close, 1))
-        return ternary(cond, 1.0, false_branch, slope)
+        raise NotImplementedError(
+            "alpha051 的判定阈值 -0.05 是美股语境下绝对美元/天斜率的经验值，"
+            "换算成加密市场的百分比斜率阈值没有原则性依据，不臆造数值，宁可不实现"
+        )
 
 
 @register_alpha
@@ -411,7 +448,9 @@ class Alpha086(WorldQuantAlpha):
         vwap = ops.vwap(panel.quote_volume, panel.volume)
         adv20 = ops.adv(panel.volume, 20)
         left = ops.ts_rank(ops.ts_corr(panel.close, ops.ts_sum(adv20, 14), 6), 20)
-        right = ops.rank((panel.open + panel.close) - (vwap + panel.open))
+        # (open+close)-(vwap+open) 代数化简等于 close-vwap，绝对美元差值可能跨 0，
+        # 以 vwap 为锚点换成百分比（见 _common.rank_price_diff docstring）。
+        right = rank_price_diff(panel.close, vwap, vwap)
         return -1 * bool_to_signal(left < right, left, right)
 
 
@@ -429,8 +468,11 @@ class Alpha088(WorldQuantAlpha):
 
     def compute(self, panel: BarPanel) -> pd.DataFrame:
         adv60 = ops.adv(panel.volume, 60)
-        left_inner = (ops.rank(panel.open) + ops.rank(panel.low)) - (
-            ops.rank(panel.high) + ops.rank(panel.close)
+        # 原公式在同一根K线内部比较 open/high/low/close 四个绝对价格排名——加密市场里价格
+        # 断层领先的 symbol（比如 BTC）四个值会被压缩成几乎同一个排名，日内多空信息读不出来
+        # （见 _common.rank_price docstring），换成排各自相对上一根的百分比涨跌幅。
+        left_inner = (rank_price(panel.open) + rank_price(panel.low)) - (
+            rank_price(panel.high) + rank_price(panel.close)
         )
         left = ops.rank(ops.decay_linear(left_inner, 8))
         corr = ops.ts_corr(ops.ts_rank(panel.close, 8), ops.ts_rank(adv60, 20), 8)
@@ -451,7 +493,7 @@ class Alpha095(WorldQuantAlpha):
 
     def compute(self, panel: BarPanel) -> pd.DataFrame:
         adv40 = ops.adv(panel.volume, 40)
-        left = ops.rank(panel.open - ops.ts_min(panel.open, 12))
+        left = rank_price_distance_from_low(panel.open, window=12)
         mid = (
             ops.rank(
                 ops.ts_corr(ops.ts_sum((panel.high + panel.low) / 2, 19), ops.ts_sum(adv40, 19), 12)
@@ -487,10 +529,15 @@ class Alpha101(WorldQuantAlpha):
     """Alpha#101：当根K线实体涨跌幅相对振幅的占比——经典"收盘强弱"形态因子。
 
     ((close - open) / ((high - low) + .001))
+
+    公式本身已经是无量纲比值（分子分母同为 [价格]），不受跨 symbol 价格量级问题影响；
+    但原始的防除零 epsilon `0.001` 是美股语境下的绝对美元数字，对几美分以下的山寨币，
+    这个 epsilon 可能比它自己真实的日内振幅还大，会人为压扁信号。换成
+    `microstructure/alphas.py` 里统一用的 `1e-7`（同一份工程指引的防护标准）。
     """
 
     name = "alpha101"
     min_lookback = 1
 
     def compute(self, panel: BarPanel) -> pd.DataFrame:
-        return (panel.close - panel.open) / ((panel.high - panel.low) + 0.001)
+        return (panel.close - panel.open) / ((panel.high - panel.low) + 1e-7)

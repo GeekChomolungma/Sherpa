@@ -16,7 +16,7 @@ from sherpa.data.schema import BarPanel
 
 from ... import ops
 from ...base import WorldQuantAlpha, register_alpha
-from .._common import bool_to_signal
+from .._common import bool_to_signal, rank_price, rank_price_diff, rank_price_distance_from_low
 
 _EPS = 1e-7
 
@@ -33,8 +33,11 @@ class Alpha005(WorldQuantAlpha):
 
     def compute(self, panel: BarPanel) -> pd.DataFrame:
         vwap = ops.vwap(panel.quote_volume, panel.volume)
-        part1 = ops.rank(panel.open - (ops.ts_sum(vwap, 10) / 10))
-        part2 = -1 * ops.rank(panel.close - vwap).abs()
+        avg_vwap = ops.ts_sum(vwap, 10) / 10
+        # 两个都是绝对美元差值，可能跨 0，分别以各自的参照价格为锚点换成百分比
+        # （见 _common.rank_price_diff docstring）。
+        part1 = rank_price_diff(panel.open, avg_vwap, avg_vwap)
+        part2 = -1 * rank_price_diff(panel.close, vwap, vwap).abs()
         return part1 * part2
 
 
@@ -50,8 +53,12 @@ class Alpha018(WorldQuantAlpha):
     min_lookback = 10
 
     def compute(self, panel: BarPanel) -> pd.DataFrame:
-        open_close = panel.close - panel.open
-        inner = ops.stddev(open_close.abs(), 5) + open_close + ops.ts_corr(panel.close, panel.open, 10)
+        # 原始写法把绝对美元量纲的项（stddev(|close-open|,5)、close-open）跟无量纲的相关
+        # 系数直接加在一起，量纲上本来就不该相加；换成 (close-open)/open 的百分比版本，
+        # 三项才是真正同一量级、可以相加的量（见 _common.rank_price docstring 的同一个
+        # 跨 symbol 价格问题）。
+        pct_open_close = (panel.close - panel.open) / panel.open
+        inner = ops.stddev(pct_open_close.abs(), 5) + pct_open_close + ops.ts_corr(panel.close, panel.open, 10)
         return -1 * ops.rank(inner)
 
 
@@ -67,7 +74,10 @@ class Alpha028(WorldQuantAlpha):
 
     def compute(self, panel: BarPanel) -> pd.DataFrame:
         adv20 = ops.adv(panel.volume, 20)
-        inner = ops.ts_corr(adv20, panel.low, 5) + ((panel.high + panel.low) / 2) - panel.close
+        # ts_corr 项无量纲，((high+low)/2 - close) 是绝对美元差值——同一个跨 symbol 价格
+        # 问题（见 _common.rank_price docstring），以 close 为锚点换成百分比。
+        midpoint_deviation = ((panel.high + panel.low) / 2 - panel.close) / panel.close
+        inner = ops.ts_corr(adv20, panel.low, 5) + midpoint_deviation
         return ops.scale(inner)
 
 
@@ -83,7 +93,11 @@ class Alpha041(WorldQuantAlpha):
 
     def compute(self, panel: BarPanel) -> pd.DataFrame:
         vwap = ops.vwap(panel.quote_volume, panel.volume)
-        return (panel.high * panel.low) ** 0.5 - vwap
+        # 原始写法没有任何截面/时序比较算子包裹，是纯逐元素计算，但返回值本身仍带着绝对
+        # 美元量纲——最终会被下游 rank_ic()/组合构建跨 symbol 比较（见 _common.rank_price
+        # docstring 的同一个病根），以 vwap 为锚点换成百分比偏离。
+        geometric_mean = (panel.high * panel.low) ** 0.5
+        return (geometric_mean - vwap) / vwap
 
 
 @register_alpha
@@ -98,7 +112,11 @@ class Alpha042(WorldQuantAlpha):
 
     def compute(self, panel: BarPanel) -> pd.DataFrame:
         vwap = ops.vwap(panel.quote_volume, panel.volume)
-        return ops.rank(vwap - panel.close) / ops.rank(vwap + panel.close)
+        # 分子 vwap-close 可能跨 0，以 close 为锚点换成百分比；分母 vwap+close 恒正，但
+        # 仍是绝对美元量纲，注意 rank(x/c) 和 rank(x/c + 1) 排名完全一样（常数不改变
+        # 相对顺序），所以 rank(vwap/close) 等价于 rank((vwap+close)/close)，写法更简单
+        # （见 _common.rank_price/rank_price_diff docstring 的同一个病根）。
+        return rank_price_diff(vwap, panel.close, panel.close) / ops.rank(vwap / panel.close)
 
 
 @register_alpha
@@ -107,18 +125,22 @@ class Alpha047(WorldQuantAlpha):
 
     ((((rank((1 / close)) * volume) / adv20) * ((high * rank((high - close))) /
      (sum(high, 5) / 5))) - rank((vwap - delay(vwap, 5))))
+
+    核心项 `rank(1/close)` 想捕捉美股语境下的"低价股效应"（绝对价格低的股票有系统性的
+    行为差异，比如更容易被散户炒作）——这不是单位换算能修的问题，是整个经济假设在加密
+    市场不成立：币的绝对价格只是发行总量决定的任意数字（一个项目把总量发多 100 倍，
+    单价就变成 1/100，不代表任何行为差异），不存在"低价币效应"这回事。跟 alpha046/049/051
+    缺原则性阈值依据同理，不硬凑一个"修好"的版本，宁可不实现。
     """
 
     name = "alpha047"
     min_lookback = 20
 
     def compute(self, panel: BarPanel) -> pd.DataFrame:
-        vwap = ops.vwap(panel.quote_volume, panel.volume)
-        adv20 = ops.adv(panel.volume, 20)
-        part1 = (ops.rank(1 / panel.close) * panel.volume) / adv20
-        part2 = (panel.high * ops.rank(panel.high - panel.close)) / (ops.ts_sum(panel.high, 5) / 5)
-        part3 = ops.rank(vwap - ops.delay(vwap, 5))
-        return part1 * part2 - part3
+        raise NotImplementedError(
+            "alpha047 核心项 rank(1/close) 依赖的'低价股效应'是美股语境下的行为假设，"
+            "加密市场里币的绝对单价只是发行量决定的任意数字，这个前提不成立，不臆造替代，宁可不实现"
+        )
 
 
 @register_alpha
@@ -184,7 +206,10 @@ class Alpha057(WorldQuantAlpha):
     def compute(self, panel: BarPanel) -> pd.DataFrame:
         vwap = ops.vwap(panel.quote_volume, panel.volume)
         decay = ops.decay_linear(ops.rank(ops.ts_argmax(panel.close, 30)), 2)
-        return -1 * (panel.close - vwap) / (decay + _EPS)
+        # decay 本身是位置索引（ts_argmax）经过 rank/decay_linear，天然无量纲；分子
+        # close-vwap 是绝对美元差值，除以一个无量纲分母并不能消除这个量纲问题（见
+        # _common.rank_price docstring），以 vwap 为锚点先换成百分比。
+        return -1 * ((panel.close - vwap) / vwap) / (decay + _EPS)
 
 
 @register_alpha
@@ -222,7 +247,7 @@ class Alpha065(WorldQuantAlpha):
         adv60 = ops.adv(panel.volume, 60)
         weighted = panel.open * 0.00817205 + vwap * (1 - 0.00817205)
         left = ops.rank(ops.ts_corr(weighted, ops.ts_sum(adv60, 8), 6))
-        right = ops.rank(panel.open - ops.ts_min(panel.open, 13))
+        right = rank_price_distance_from_low(panel.open, window=13)
         return -1 * bool_to_signal(left < right, left, right)
 
 
@@ -243,7 +268,9 @@ class Alpha066(WorldQuantAlpha):
 
     def compute(self, panel: BarPanel) -> pd.DataFrame:
         vwap = ops.vwap(panel.quote_volume, panel.volume)
-        part1 = ops.rank(ops.decay_linear(ops.delta(vwap, 3), 7))
+        # delta(vwap,3) 是绝对美元变化，外面还要 rank——跟 rank_price 要解决的同一个病根
+        # （见 _common.rank_price docstring），这里换成百分比涨跌幅，decay_linear/rank 结构不变。
+        part1 = ops.rank(ops.decay_linear(vwap.pct_change(periods=3), 7))
         denom = (panel.open - ((panel.high + panel.low) / 2)) + _EPS
         inner2 = (panel.low - vwap) / denom
         part2 = ops.ts_rank(ops.decay_linear(inner2, 11), 6)
@@ -263,9 +290,9 @@ class Alpha068(WorldQuantAlpha):
 
     def compute(self, panel: BarPanel) -> pd.DataFrame:
         adv15 = ops.adv(panel.volume, 15)
-        left = ops.ts_rank(ops.ts_corr(ops.rank(panel.high), ops.rank(adv15), 8), 13)
+        left = ops.ts_rank(ops.ts_corr(rank_price(panel.high), ops.rank(adv15), 8), 13)
         weighted = panel.close * 0.518371 + panel.low * (1 - 0.518371)
-        right = ops.rank(ops.delta(weighted, 1))
+        right = rank_price(weighted)
         return -1 * bool_to_signal(left < right, left, right)
 
 
@@ -283,7 +310,7 @@ class Alpha073(WorldQuantAlpha):
 
     def compute(self, panel: BarPanel) -> pd.DataFrame:
         vwap = ops.vwap(panel.quote_volume, panel.volume)
-        left = ops.rank(ops.decay_linear(ops.delta(vwap, 4), 2))
+        left = ops.rank(ops.decay_linear(vwap.pct_change(periods=4), 2))
         weighted = panel.open * 0.147155 + panel.low * (1 - 0.147155)
         inner2 = (ops.delta(weighted, 2) / (weighted + _EPS)) * -1
         right = ops.ts_rank(ops.decay_linear(inner2, 3), 16)
@@ -304,8 +331,10 @@ class Alpha077(WorldQuantAlpha):
     def compute(self, panel: BarPanel) -> pd.DataFrame:
         vwap = ops.vwap(panel.quote_volume, panel.volume)
         adv40 = ops.adv(panel.volume, 40)
-        left_inner = (((panel.high + panel.low) / 2) + panel.high) - (vwap + panel.high)
-        left = ops.rank(ops.decay_linear(left_inner, 20))
+        # 代数化简：((high+low)/2 + high) - (vwap+high) = (high+low)/2 - vwap，绝对美元
+        # 差值可能跨 0，以 vwap 为锚点换成百分比（见 _common.rank_price_diff docstring）。
+        midpoint = (panel.high + panel.low) / 2
+        left = ops.rank(ops.decay_linear((midpoint - vwap) / vwap, 20))
         corr = ops.ts_corr((panel.high + panel.low) / 2, adv40, 3)
         right = ops.rank(ops.decay_linear(corr, 5))
         return np.minimum(left, right)
@@ -326,7 +355,11 @@ class Alpha083(WorldQuantAlpha):
         vwap = ops.vwap(panel.quote_volume, panel.volume)
         ratio = (panel.high - panel.low) / (ops.ts_sum(panel.close, 5) / 5)
         numerator = ops.rank(ops.delay(ratio, 2)) * ops.rank(ops.rank(panel.volume))
-        denom = (ratio / ((vwap - panel.close) + _EPS)) + _EPS
+        # (vwap-close) 是绝对美元差值——分母整体本来应该是无量纲比值，混进一个带价格
+        # 量纲的项，会让最终结果也带上价格量纲（见 _common.rank_price docstring 的同一个
+        # 病根）。以 close 为锚点换成百分比。
+        pct_vwap_close = (vwap - panel.close) / panel.close
+        denom = (ratio / (pct_vwap_close + _EPS)) + _EPS
         return numerator / denom
 
 
@@ -347,6 +380,6 @@ class Alpha092(WorldQuantAlpha):
         cond = (((panel.high + panel.low) / 2) + panel.close) < (panel.low + panel.open)
         signal = bool_to_signal(cond, panel.high, panel.low, panel.close, panel.open)
         left = ops.ts_rank(ops.decay_linear(signal, 14), 18)
-        corr = ops.ts_corr(ops.rank(panel.low), ops.rank(adv30), 7)
+        corr = ops.ts_corr(rank_price(panel.low), ops.rank(adv30), 7)
         right = ops.ts_rank(ops.decay_linear(corr, 6), 6)
         return np.minimum(left, right)

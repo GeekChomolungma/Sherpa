@@ -15,7 +15,7 @@ from sherpa.data.schema import BarPanel
 
 from ... import ops
 from ...base import WorldQuantAlpha, register_alpha
-from .._common import bool_to_signal
+from .._common import bool_to_signal, rank_price, rank_price_diff, rank_price_distance_from_low
 
 
 @register_alpha
@@ -66,7 +66,9 @@ class Alpha029(WorldQuantAlpha):
 
     def compute(self, panel: BarPanel) -> pd.DataFrame:
         returns = panel.close.pct_change()
-        step1 = -1 * ops.rank(ops.delta(panel.close, 5))
+        # rank(delta(close,5)) 排的是绝对美元涨跌，同一个病根见 _common.rank_price docstring，
+        # 换成百分比涨跌幅。
+        step1 = -1 * ops.rank(panel.close.pct_change(periods=5))
         step2 = ops.rank(ops.rank(step1))
         step3 = ops.ts_min(step2, 2)
         step4 = np.log(step3)
@@ -98,10 +100,18 @@ class Alpha036(WorldQuantAlpha):
         open_close = panel.close - panel.open
 
         part1 = 2.21 * ops.rank(ops.ts_corr(open_close, ops.delay(panel.volume, 1), 15))
-        part2 = 0.7 * ops.rank(panel.open - panel.close)
+        # part2：open-close 是绝对美元差值，可能跨 0，以 close 为锚点换成百分比
+        # （见 _common.rank_price_diff docstring）。系数 0.7 是给 rank() 输出（值域固定在
+        # (0,1]）配权重，不受价格量级影响，不用跟着换算。
+        part2 = 0.7 * rank_price_diff(panel.open, panel.close, panel.close)
         part3 = 0.73 * ops.rank(ops.ts_rank(ops.delay(-1 * returns, 6), 5))
         part4 = ops.rank(ops.ts_corr(vwap, adv20, 6).abs())
-        part5 = 0.6 * ops.rank(((ops.ts_sum(panel.close, 200) / 200) - panel.open) * open_close)
+        # part5：((sum(close,200)/200)-open) 和 open_close 都是绝对美元差值，相乘后量纲
+        # 是 [价格]^2，同一个跨 symbol 价格问题；分别以 open 为锚点换成百分比再相乘，
+        # 乘积才是无量纲的。
+        ma200_deviation = ((ops.ts_sum(panel.close, 200) / 200) - panel.open) / panel.open
+        pct_open_close = open_close / panel.open
+        part5 = 0.6 * ops.rank(ma200_deviation * pct_open_close)
         return part1 + part2 + part3 + part4 + part5
 
 
@@ -166,7 +176,7 @@ class Alpha081(WorldQuantAlpha):
         corr_pow4 = ops.rank(ops.ts_corr(vwap, ops.ts_sum(adv10, 49), 8)) ** 4
         product = ops.ts_product(ops.rank(corr_pow4), 14)
         left = ops.rank(np.log(product))
-        right = ops.rank(ops.ts_corr(ops.rank(vwap), ops.rank(panel.volume), 5))
+        right = ops.rank(ops.ts_corr(rank_price(vwap), ops.rank(panel.volume), 5))
         return -1 * bool_to_signal(left < right, left, right)
 
 
@@ -182,8 +192,14 @@ class Alpha084(WorldQuantAlpha):
 
     def compute(self, panel: BarPanel) -> pd.DataFrame:
         vwap = ops.vwap(panel.quote_volume, panel.volume)
+        # base 是 ts_rank 的输出，逐 symbol 自比较，天然跟绝对价格量级无关，不用改。
+        # exponent 是绝对美元 4 日差分——这不是"跨 symbol 排名"意义上的病根，而是更隐蔽的
+        # 第三种表现形式：signed_power(base, exponent) 里 exponent 直接决定了这个幂函数
+        # 的形状，BTC 的 exponent 可能是几百，山寨币可能是 0.0001，同一个 base 在不同
+        # symbol 上被抬到天差地别的次方，曲线形状完全不可比。换成百分比涨跌幅，exponent
+        # 变成一个小的、跨 symbol 量级可比的分数。
         base = ops.ts_rank(vwap - ops.ts_max(vwap, 15), 20)
-        exponent = ops.delta(panel.close, 4)
+        exponent = panel.close.pct_change(periods=4)
         return ops.signed_power(base, exponent)
 
 
@@ -222,7 +238,7 @@ class Alpha094(WorldQuantAlpha):
     def compute(self, panel: BarPanel) -> pd.DataFrame:
         vwap = ops.vwap(panel.quote_volume, panel.volume)
         adv60 = ops.adv(panel.volume, 60)
-        left = ops.rank(vwap - ops.ts_min(vwap, 11))
+        left = rank_price_distance_from_low(vwap, window=11)
         corr = ops.ts_corr(ops.ts_rank(vwap, 19), ops.ts_rank(adv60, 4), 18)
         right = ops.ts_rank(corr, 2)
         return -1 * (left**right)
@@ -243,7 +259,7 @@ class Alpha096(WorldQuantAlpha):
     def compute(self, panel: BarPanel) -> pd.DataFrame:
         vwap = ops.vwap(panel.quote_volume, panel.volume)
         adv60 = ops.adv(panel.volume, 60)
-        corr1 = ops.ts_corr(ops.rank(vwap), ops.rank(panel.volume), 3)
+        corr1 = ops.ts_corr(rank_price(vwap), ops.rank(panel.volume), 3)
         left = ops.ts_rank(ops.decay_linear(corr1, 4), 8)
         corr2 = ops.ts_corr(ops.ts_rank(panel.close, 7), ops.ts_rank(adv60, 4), 3)
         argmax = ops.ts_argmax(corr2, 12)
@@ -269,7 +285,7 @@ class Alpha098(WorldQuantAlpha):
         adv15 = ops.adv(panel.volume, 15)
         corr1 = ops.ts_corr(vwap, ops.ts_sum(adv5, 26), 4)
         left = ops.rank(ops.decay_linear(corr1, 7))
-        corr2 = ops.ts_corr(ops.rank(panel.open), ops.rank(adv15), 20)
+        corr2 = ops.ts_corr(rank_price(panel.open), ops.rank(adv15), 20)
         argmin = ops.ts_argmin(corr2, 8)
         ts_ranked = ops.ts_rank(argmin, 6)
         right = ops.rank(ops.decay_linear(ts_ranked, 8))
