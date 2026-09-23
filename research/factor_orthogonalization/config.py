@@ -32,100 +32,107 @@ from __future__ import annotations
 # `trend.bull` 只有 54 个样本（占该维度 ALL 样本的 ~6%），`04_regime_matrix.csv` 里
 # `low_sample=True`——这个 state 的排行榜可信度比其余 11 个低，解读这里的聚类结果时要打
 # 折扣，不能跟其它样本充足的 state 同等看待。
+#
+# 下面两行 BEGIN/END 标记之间的内容可以被 `refresh_candidates.py`（根目录 `run_research.sh
+# --refresh-candidates` 会调用它）整块重写成最新 `04_regime_matrix.csv` 的 Top-K——只有
+# 显式传了那个开关才会覆盖，平时手动维护这块完全不受影响。
+# >>> REGIME_ALPHA_SETS BEGIN
 REGIME_ALPHA_SETS: dict[str, dict[str, list[str]]] = {
     "trend": {
+        # trend.bull low_sample=True：样本偏少，排行榜可信度打折扣
         "bull": [
-            "worldquant.alpha088",
-            "worldquant.alpha054",
-            "worldquant.alpha003",
-            "worldquant.alpha010",
-            "worldquant.alpha068",
-        ],
-        "bear": [
-            "worldquant.alpha088",
+            "worldquant.alpha040",
+            "worldquant.alpha094",
             "worldquant.alpha016",
             "worldquant.alpha044",
-            "worldquant.alpha050",
-            "worldquant.alpha027",
+            "worldquant.alpha055",
+        ],
+        "bear": [
+            "worldquant.alpha101",
+            "worldquant.alpha094",
+            "worldquant.alpha040",
+            "worldquant.alpha038",
+            "worldquant.alpha035",
         ],
         "neutral": [
-            "worldquant.alpha016",
-            "worldquant.alpha013",
-            "worldquant.alpha088",
-            "worldquant.alpha050",
-            "worldquant.alpha015",
+            "worldquant.alpha094",
+            "worldquant.alpha033",
+            "worldquant.alpha038",
+            "worldquant.alpha040",
+            "worldquant.alpha009",
         ],
     },
     "volatility": {
         "high": [
+            "worldquant.alpha094",
+            "worldquant.alpha038",
+            "worldquant.alpha033",
             "worldquant.alpha016",
-            "worldquant.alpha050",
-            "worldquant.alpha088",
-            "worldquant.alpha027",
-            "worldquant.alpha013",
+            "worldquant.alpha037",
         ],
         "normal": [
-            "worldquant.alpha016",
-            "worldquant.alpha044",
-            "worldquant.alpha088",
-            "worldquant.alpha050",
-            "worldquant.alpha013",
+            "worldquant.alpha038",
+            "worldquant.alpha033",
+            "worldquant.alpha101",
+            "worldquant.alpha094",
+            "worldquant.alpha040",
         ],
         "low": [
-            "worldquant.alpha016",
-            "worldquant.alpha088",
-            "worldquant.alpha050",
-            "worldquant.alpha013",
-            "worldquant.alpha015",
+            "worldquant.alpha094",
+            "worldquant.alpha040",
+            "worldquant.alpha033",
+            "worldquant.alpha038",
+            "worldquant.alpha009",
         ],
     },
     "dispersion": {
         "high": [
-            "worldquant.alpha016",
-            "worldquant.alpha013",
-            "worldquant.alpha088",
-            "worldquant.alpha015",
-            "worldquant.alpha050",
+            "worldquant.alpha033",
+            "worldquant.alpha094",
+            "worldquant.alpha038",
+            "worldquant.alpha036",
+            "worldquant.alpha034",
         ],
         "normal": [
-            "worldquant.alpha088",
-            "worldquant.alpha016",
-            "worldquant.alpha050",
-            "worldquant.alpha044",
-            "worldquant.alpha015",
+            "worldquant.alpha094",
+            "worldquant.alpha040",
+            "worldquant.alpha038",
+            "worldquant.alpha033",
+            "worldquant.alpha101",
         ],
         "low": [
-            "worldquant.alpha016",
-            "worldquant.alpha013",
-            "worldquant.alpha088",
-            "worldquant.alpha050",
-            "worldquant.alpha044",
+            "worldquant.alpha094",
+            "worldquant.alpha038",
+            "worldquant.alpha101",
+            "worldquant.alpha033",
+            "worldquant.alpha009",
         ],
     },
     "liquidity": {
         "high": [
-            "worldquant.alpha088",
-            "worldquant.alpha053",
-            "worldquant.alpha050",
+            "worldquant.alpha094",
+            "worldquant.alpha040",
             "worldquant.alpha016",
-            "worldquant.alpha027",
+            "worldquant.alpha050",
+            "worldquant.alpha044",
         ],
         "normal": [
-            "worldquant.alpha016",
-            "worldquant.alpha088",
-            "worldquant.alpha044",
-            "worldquant.alpha013",
-            "worldquant.alpha050",
+            "worldquant.alpha033",
+            "worldquant.alpha101",
+            "worldquant.alpha038",
+            "worldquant.alpha094",
+            "worldquant.alpha009",
         ],
         "starved": [
-            "worldquant.alpha016",
+            "worldquant.alpha094",
             "worldquant.alpha038",
-            "worldquant.alpha050",
-            "worldquant.alpha015",
-            "worldquant.alpha013",
+            "worldquant.alpha040",
+            "worldquant.alpha029",
+            "worldquant.alpha101",
         ],
     },
 }
+# <<< REGIME_ALPHA_SETS END
 
 # 可选：不区分 regime、直接用全历史算的对照组。默认空列表即跳过——只有显式填了才会额外
 # 产出一组 `dimension=unconditional, state=ALL` 的结果行，用来对比"某对因子是只在特定

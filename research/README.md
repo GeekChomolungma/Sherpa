@@ -9,6 +9,20 @@
 一回事，放在同一棵目录树下容易让人以为它们是同一套产线的延续。等那些目录真正开出来，会在
 这里补一条指向它们的链接；目前只有阶段一 + 关卡1 有实际内容。
 
+## 一键跑全流程
+
+仓库根目录的 [`run_research.sh`](../run_research.sh) 按依赖顺序把阶段一到关卡1 串起来跑
+（regime 打标 → 全局筛选 → regime 条件体检 → 汇总报告 → 正交化），失败立刻停下并提示怎么续跑：
+
+```bash
+export CH_HOST=... CH_PASSWORD=...
+bash run_research.sh --dry-run                # 先看一遍要跑哪些命令
+bash run_research.sh --refresh-candidates     # 正式跑，并用新的 04 矩阵 Top5 刷新正交化候选池
+bash run_research.sh --from-step 4            # 某一步失败修好后，从第 4 步继续
+```
+
+可选步骤（`--with-calibration` 流动性掩码校准、`--with-vectorized` 单因子迷你回测）和全部参数见脚本开头的说明。
+
 ## 子目录 -> 生命周期阶段 对照表
 
 | 子目录 | 生命周期阶段 | 角色 |

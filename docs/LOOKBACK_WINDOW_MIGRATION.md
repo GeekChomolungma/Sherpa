@@ -11,6 +11,8 @@
 ## 目录
 1. [背景：为什么 1d → 4h 不是简单改个字符串](#1-背景为什么-1d--4h-不是简单改个字符串)
 2. [已完成的改动](#2-已完成的改动)
+   - [2.1 阈值缩放口径：为什么是 `/ 5`，为什么保留除法写法](#21-阈值缩放口径为什么是--5为什么保留除法写法)
+   - [2.2 设计取舍：alpha 用全截面计算，流通性 mask 只盖在输出上](#22-设计取舍alpha-用全截面计算流通性-mask-只盖在输出上)
 3. [尚待决策：世坤101因子内部窗口](#3-尚待决策世坤101因子内部窗口)
 4. [Low-sample 阈值（受频率间接影响）](#4-low-sample-阈值受频率间接影响)
 5. [`sherpa/data/` 数据层：现在不影响，未来何时会影响](#5-sherpadata-数据层现在不影响未来何时会影响)
@@ -46,12 +48,62 @@ Sherpa 的很多统计量（可流通性掩码、regime 打标、beta 中性化�
 |---|---|---|---|---|
 | 可流通性掩码 | `DEFAULT_LOOKBACK` | 10 | **120** | [`sherpa/metrics/tradability.py:18`](file:///d:/code-repo/Chomo/Sherpa/sherpa/metrics/tradability.py#L18) |
 | 可流通性掩码 | `SEASONING_PERIOD`（冷启动缓冲） | 10（原本跟 `DEFAULT_LOOKBACK` 绑定） | **20**（拆成独立常量，不再跟 `DEFAULT_LOOKBACK` 绑定） | [`tradability.py:19`](file:///d:/code-repo/Chomo/Sherpa/sherpa/metrics/tradability.py#L19) |
+| 可流通性掩码 | `min_quote_volume`（绝对成交额地板，比较对象是 `DEFAULT_LOOKBACK` 根 bar 的滚动**中位数**） | 5,000,000 USDT（按日线一根 bar 的量级校准） | **`5_000_000.0 / 5`**（= 100 万 USDT，见下方"阈值缩放口径"） | [`tradability.py:27`](file:///d:/code-repo/Chomo/Sherpa/sherpa/metrics/tradability.py#L27) |
+| 可流通性掩码 | `min_trades_count`（绝对成交笔数地板，同样比较滚动中位数） | 50,000 笔（按日线校准） | **`50_000.0 / 5`**（= 1 万笔） | [`tradability.py:28`](file:///d:/code-repo/Chomo/Sherpa/sherpa/metrics/tradability.py#L28) |
 | Regime 打标 | `DEFAULT_LOOKBACK`（波动率/离散度/流动性三个维度的滚动分位数窗口，以及 `compute_trend_regime`/`build_regime_report` 的 `ma_period`/`vol_window` 全部统一指向同一个常量） | 30（`compute_trend_regime` 的 `ma_period` 另外还各自维护过 30/60 两套不一致的默认值） | **120**，四个维度、`ma_period`、`vol_window` 现在全部共用同一个常量，三处不一致已解决 | [`sherpa/metrics/regime.py:26`](file:///d:/code-repo/Chomo/Sherpa/sherpa/metrics/regime.py#L26)，透传见 [`regime_screening.py:34-36`](file:///d:/code-repo/Chomo/Sherpa/sherpa/backtest/regime_screening.py#L34-L36) |
 | Beta 中性化 | `DEFAULT_BETA_WINDOW` | 90 | **120** | [`sherpa/risk/exposure.py:14`](file:///d:/code-repo/Chomo/Sherpa/sherpa/risk/exposure.py#L14) |
 | Research 数据入口 | `INTERVAL` | `"1d"` | **`"4h"`** | [`research/alpha_research/worldquant_101/data.py:26`](file:///d:/code-repo/Chomo/Sherpa/research/alpha_research/worldquant_101/data.py#L26)、[`research/factor_orthogonalization/data.py:24`](file:///d:/code-repo/Chomo/Sherpa/research/factor_orthogonalization/data.py#L24)、[`research/tradability_calibration/data.py:29`](file:///d:/code-repo/Chomo/Sherpa/research/tradability_calibration/data.py#L29) |
 
 **换算口径**：新值统一按"约20个日历天 × 6根/天(4h) = 120根"确定，除了 `SEASONING_PERIOD` 单独定为
 20 根（约3.3天）冷启动缓冲，是刻意跟主窗口脱钩的独立选择，不是遗漏。
+
+### 2.1 阈值缩放口径：为什么是 `/ 5`，为什么保留除法写法
+
+`min_quote_volume`/`min_trades_count` 不是窗口，是**绝对量级门槛**——但它们比较的是"`DEFAULT_LOOKBACK`
+根 bar 的滚动中位数"，而一根 4h bar 的成交额/成交笔数只有日线一根的约 1/6。同样的市场活跃度，
+门槛不缩放的话，4h 下会系统性偏严（原值 500 万/5 万在 4h 下把大量正常币筛掉）。
+
+- **除数取 5 而不是 6**：6 不好整除，且取 5 略宽松于严格的 1/6——对"原本就偏严"的筛选，
+  偏宽是安全方向。这是有意的取舍，不是算错。
+- **代码里保留 `5_000_000.0 / 5` 的写法，不写成 `1_000_000.0`**：一眼能看出这个数是从原日线值缩放
+  来的、缩放因子是多少，以后换频率（比如 1h）或者想回到日线时，知道该改哪个除数，不用去猜
+  这个数当初是怎么来的。（同一行的注释里写的还是"500/5 万"，是这个意思。）
+- **注意 `tradability.py` 里"默认关闭"的说法已经过期**：函数签名里这两个门槛的默认值是非零的，
+  `passes_floor` 每次都在生效，只有显式传 0 才是关闭；docstring/行内注释里"默认 0 即关闭/默认关闭"
+  是早期遗留的描述，不代表当前行为。
+
+### 2.2 设计取舍：alpha 用全截面计算，流通性 mask 只盖在输出上
+
+研究脚本里（`run_alpha_regime_profile.py`、`factor_orthogonalization/run_orthogonalization.py` 的
+`_resolve_histories`）处理顺序是：
+
+```text
+alpha.compute(panel)          # 用【全部 symbol】的截面算原始分数（内部的 ops.rank 也是全截面）
+   -> .where(tradable_mask)   # 再把流通性差的 (t, symbol) 格子置 NaN
+   -> neutralize(...)         # 只对剩下的 symbol 做残差回归
+   -> rank_ic(...)            # NaN 被成对丢掉，流通性差的币不进 IC / 因子间相关
+```
+
+`forward_returns` 也套同一个 mask。所以**进入 IC 统计和因子相关性的都是可交易标的**；被保留"全截面"的只是
+因子公式内部的中间计算。
+
+**为什么不把 mask 提前到输入侧**：mask 会随时间变化（一个币可能暂时不可流通又恢复），提前盖在
+`panel` 上会让滚动窗口（`ts_corr`/`ts_rank`/`decay_linear` 等）里出现 NaN 空洞，破坏时序算子的连续性。
+另外，全截面给每个好币的分位排名提供了一个稳定、较大的参照集，不会因为某期有几个币临时不可流通就
+让排名剧烈抖动。
+
+**代价（要记得）**：流通性差的币的价格/成交量是噪声（插针、成交量近乎为零），它们会混进内部
+`ops.rank` 的分母。对 `rank(volume)` 这种影响比较稳定（死币永远排最底，整体把好币分位往上推）；
+对 `rank_price(...)`、`ts_corr(rank(...), rank(...))` 这类"逐期排名再做时序相关"的公式，死币的插针会
+通过排名扰动好币的输入序列。所以这是"用一点噪声换稳定性"的取舍，不是纯收益。
+
+**怎么判断代价大不大**：看死币占全截面的比例。`run_alpha_regime_profile.py` 会打印"每期平均 X / Y 个
+symbol 通过流通性筛选"，X/Y 大致在 40%~60% 时这个设计基本没问题；X/Y 只有 10%~20% 时，全截面
+里大部分是死币，"稳定参照集"的好处会被噪声盖过，值得回头重新考虑（比如改成输入侧 mask，
+同时处理 NaN 空洞）。`run_orthogonalization.py` 目前不打印这个比例。
+
+**什么时候回头重新评估**：改了 `tradable_mask` 的门槛/窗口之后（通过率会变）；发现某些用
+`rank_price`/`ts_corr(rank...)` 的因子表现异常时；universe 里新币占比大幅变化时。
 
 ---
 
