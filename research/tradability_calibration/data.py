@@ -2,21 +2,21 @@
 
 跟 `research/alpha_research/worldquant_101/data.py` 是同一套连接方式，特意原样复制一份、不共用——
 `connect_ch_reader()` 是纯客户端代码（读环境变量、建连接），不含任何项目专属常量，让每个
-研究项目自己维护一份更简单；而且这次要看的是成交量/成交笔数这几年的非平稳性，时间窗天然
-想尽量拉长，跟 alpha_research/worldquant_101 现在的区间不需要绑在一起，共用一份反而会让两边的默认参数
-互相牵制。
+研究项目自己维护一份更简单。
 
 连接信息一律从环境变量读，约定跟 `scripts/smoke_test_data_layer.py` 一致：
     CH_HOST(必填) / CH_PORT(默认8123) / CH_USER(默认default) / CH_PASSWORD / CH_DATABASE(默认market)
 
-默认拉 2020-01-01 至今的 4h K 线——研究成交量分布用日线的粒度就够，频率拉太高只会徒增
-数据量、不增加这次要看的信息；以后想换区间/频率，改这三个常量或者调用
-`load_universe_panel()` 时显式传参覆盖。
+默认区间/周期统一读 `research/research_window.json` 的研究段：这里校准出来的掩码门槛要给
+阶段一、关卡1 所有体检复用，用同一段历史校准最一致，也顺带不碰 holdout 段。想临时换区间，
+调用 `load_universe_panel()` 时显式传参覆盖。
 """
 
 from __future__ import annotations
 
+import json
 import os
+from pathlib import Path
 
 import clickhouse_connect
 import pandas as pd
@@ -26,9 +26,14 @@ from sherpa.data.normalizer import ch_long_to_panel
 from sherpa.data.schema import BarPanel
 from sherpa.data.universe import Universe
 
-INTERVAL = "4h"
-START_TIME = "2024-01-01"
-END_TIME = "2026-09-18"
+# 时间窗统一从 `research/research_window.json` 读——阶段一、关卡1、关卡2 必须看同一段历史，
+# 否则"阶段一在 A 区间选出的因子，关卡1 在 B 区间检验冗余"，两边结论对不上。说明见
+# `research/README.md`「统一时间窗与样本外 holdout」。`END_TIME` 是研究段截止（= holdout
+# 起点），默认取数永远不碰 holdout 段；临时换区间就调用 `load_universe_panel()` 时显式传参。
+_WINDOW = json.loads((Path(__file__).resolve().parents[1] / "research_window.json").read_text(encoding="utf-8"))
+INTERVAL: str = _WINDOW["interval"]
+START_TIME: str = _WINDOW["research_start"]
+END_TIME: str = _WINDOW["research_end"]
 
 
 def _env(name: str, default: str | None = None, *, required: bool = False) -> str | None:

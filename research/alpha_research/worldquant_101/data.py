@@ -6,14 +6,16 @@
 
     CH_HOST(必填) / CH_PORT(默认8123) / CH_USER(默认default) / CH_PASSWORD / CH_DATABASE(默认market)
 
-默认取 2026-01-01 ~ 2026-09-01 的 4 小时 K 线全市场数据（`INTERVAL`/`START_TIME`/`END_TIME`
-三个常量），这是当前这一批世坤101研究要跑的具体区间；以后如果要换区间/周期，改这三个常量
-或者调用 `load_universe_panel()` 时显式传参覆盖，不用碰其余代码。
+默认区间/周期（`INTERVAL`/`START_TIME`/`END_TIME`）统一读 `research/research_window.json`
+的研究段，不在这里单独维护；想整体换区间就改那份 JSON，只想临时换一次就调用
+`load_universe_panel()` 时显式传参覆盖。
 """
 
 from __future__ import annotations
 
+import json
 import os
+from pathlib import Path
 
 import clickhouse_connect
 import pandas as pd
@@ -23,9 +25,14 @@ from sherpa.data.normalizer import ch_long_to_panel
 from sherpa.data.schema import BarPanel
 from sherpa.data.universe import Universe
 
-INTERVAL = "4h"
-START_TIME = "2024-01-01"
-END_TIME = "2026-09-15"
+# 时间窗统一从 `research/research_window.json` 读——阶段一、关卡1、关卡2 必须看同一段历史，
+# 否则"阶段一在 A 区间选出的因子，关卡1 在 B 区间检验冗余"，两边结论对不上。说明见
+# `research/README.md`「统一时间窗与样本外 holdout」。`END_TIME` 是研究段截止（= holdout
+# 起点），默认取数永远不碰 holdout 段；临时换区间就调用 `load_universe_panel()` 时显式传参。
+_WINDOW = json.loads((Path(__file__).resolve().parents[2] / "research_window.json").read_text(encoding="utf-8"))
+INTERVAL: str = _WINDOW["interval"]
+START_TIME: str = _WINDOW["research_start"]
+END_TIME: str = _WINDOW["research_end"]
 
 
 def _env(name: str, default: str | None = None, *, required: bool = False) -> str | None:

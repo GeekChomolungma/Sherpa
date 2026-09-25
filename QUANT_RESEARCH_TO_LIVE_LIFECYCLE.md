@@ -145,6 +145,7 @@ flowchart TD
   2. 进行层次聚类（Hierarchical Clustering）或施密特正交化（Gram-Schmidt）；
   3. 每个高度相关的簇（Cluster）中，**仅保留信噪比最高或逻辑最简洁的一个因子**，确保进入组合的因子相互正交、彼此互补。
 * **对应 Sherpa 模块归属**：`research/` 专项聚类脚本 + [`sherpa.metrics.factor`](file:///d:/code-repo/Chomo/Sherpa/sherpa/metrics/factor.py)。
+* **实操与后续规划**：[`research/factor_orthogonalization/`](research/factor_orthogonalization)（现有实现）；新因子增量检验的规划见 [`INCREMENTAL_TODO.md`](research/factor_orthogonalization/INCREMENTAL_TODO.md)。
 
 ### 关卡 2：基于微观 Regime 的动态多因子合成 (Synthesis)
 * **核心痛点**：因子在不同宏观/微观环境下各有利弊。如何让策略在正确的时机调用正确的因子？
@@ -154,6 +155,7 @@ flowchart TD
      * 强趋势/高离散时，提高动量与突破因子的权重分配；
      * 窄幅震荡/低波时，切换至成交量均值回归因子；
   3. **平滑过渡约束**：引入权重变化缓冲（Hysteresis Buffer），严禁在相邻两期进行“非 0 即 100%”的极端剧烈翻转。
+* **执行文档（设计阶段）**：[`research/factor_synthesis/README.md`](research/factor_synthesis/README.md)（基线 → Regime 路由 → 平滑的方案阶梯、walk-forward 验证、holdout 规矩）。
 * **对应 Sherpa 模块归属**：[`sherpa.strategy.base.BaseStrategy`](file:///d:/code-repo/Chomo/Sherpa/sherpa/strategy/base.py#L16-L30)（编写业务组合逻辑）+ [`sherpa.portfolio.weighting`](file:///d:/code-repo/Chomo/Sherpa/sherpa/portfolio/weighting.py)（`demean_l1` 截面资金中性、`top_k_long_short` 等，把合成后的 alpha 分数映射成目标持仓权重）。
 
 ### 关卡 3：第二层可变现性与资金容量压力测试 (Friction Test)

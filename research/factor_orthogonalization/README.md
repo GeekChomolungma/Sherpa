@@ -1,4 +1,4 @@
-# Factor Orthogonalization — 四大工程关卡 · 关卡1
+# Factor Orthogonalization — 三大工程关卡 · 关卡1
 
 对应 [`QUANT_RESEARCH_TO_LIVE_LIFECYCLE.md`](../../QUANT_RESEARCH_TO_LIVE_LIFECYCLE.md) §4
 「关卡1：因子相关性分析与正交化 (Orthogonalization)」。
@@ -44,8 +44,9 @@
   清单（默认值取自 `regime_factor_report/results/04_regime_matrix.csv` 的 Top3，只是作为
   示例抄了一份数字，运行时不读那份 CSV），不读取 `regime_factor_report/results/*.csv`、也
   不读取 `alpha_research/worldquant_101/regime_alpha_profile.csv`。想测哪些因子，自己往清单里加/删。
-- **数据接入自成一份**（`data.py`），跟 `alpha_research/worldquant_101/data.py` 内容相似但完全独立维护，
-  改这边的取数区间/频率不会影响那边，反之亦然。
+- **数据接入自成一份**（`data.py`），跟 `alpha_research/worldquant_101/data.py` 内容相似但独立维护。
+  唯一共享的是时间窗：两边都读 `research/research_window.json` 的研究段，保证关卡1 检验冗余用的
+  历史和阶段一选出候选因子用的历史是同一段（见 `research/README.md`「统一时间窗与样本外 holdout」）。
 - **regime 打标复用核心模块，不是解耦对象**。这里说的"解耦"针对的是其它 research 子项目
   的 CSV 中间产出（文件格式/目录结构可能随时变），不针对 `sherpa` 包本身——regime 归类直接
   调用 `sherpa.backtest.regime_screening.regime_report()`，这正是
@@ -162,5 +163,7 @@ CH_HOST=... CH_PASSWORD=... python research/factor_orthogonalization/run_orthogo
   它在 `trend.bear` 里也冗余，两行结果要分开看，不要跨 state 类比。
 - 这里只做「关卡1」（去冗余）。风险与风格中性化已经前移并入阶段一体检（见
   `QUANT_RESEARCH_TO_LIVE_LIFECYCLE.md` §3.2），本模块内部也已经接了这一步（见上方第 0
-  步），不再是独立关卡。基于 Regime 的动态合成（现为关卡2）、换手摩擦压力测试（现为关卡3）
-  仍是各自独立的下一步，不在本模块范围内。
+  步），不再是独立关卡。基于 Regime 的动态合成（现为关卡2，见 `research/factor_synthesis/`）、
+  换手摩擦压力测试（现为关卡3）仍是各自独立的下一步，不在本模块范围内。
+- 两两聚类抓不到"C ≈ A + B"这类联合冗余，也还没有"新因子相对已入库因子"的增量检验。
+  缺口和后续计划见 [`INCREMENTAL_TODO.md`](INCREMENTAL_TODO.md)。

@@ -133,6 +133,8 @@ if grep -Eq '^USE_NEUTRALIZATION[[:space:]]*=[[:space:]]*False' "$ALPHA_DIR/run_
 else
   echo "[模式] 中性化（剥离 Beta/Size）：USE_NEUTRALIZATION=True"
 fi
+# 各步骤的取数区间统一来自 research/research_window.json（研究段，不含 holdout），打印出来方便核对。
+echo "[时间窗] $(tr -d ' \r\n' < "$ROOT/research/research_window.json")"
 
 step 0 "流动性掩码校准 · 分布研究"   "$CAL_DIR" "$PYTHON" run_distribution_study.py
 step 0 "流动性掩码校准 · 分位数敏感性" "$CAL_DIR" "$PYTHON" run_percentile_sensitivity.py

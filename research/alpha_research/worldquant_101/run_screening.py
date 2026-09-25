@@ -1,6 +1,6 @@
 """世坤101研究项目 · 第一步：批量跑 `run_alpha_check`（`sherpa.backtest.screening.screen_alphas`）。
 
-拉真实 ClickHouse `data.START_TIME` ~ `data.END_TIME`（当前是 2026-01-01 ~ 2026-09-01）的
+拉真实 ClickHouse `data.START_TIME` ~ `data.END_TIME`（取自 `research/research_window.json` 的研究段）的
 `data.INTERVAL`（当前是 4h）K 线，跑一遍全部 101 个已注册的世坤101因子，产出按 IC_IR 排序
 的报告，写成 CSV 落盘。跟 `examples/alpha_screening_101.py` 是同一套调用方式，区别只是这里
 接的是真实数据，不是合成数据。

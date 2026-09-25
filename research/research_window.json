@@ -1,0 +1,6 @@
+{
+  "interval": "4h",
+  "research_start": "2020-01-01",
+  "research_end": "2026-03-15",
+  "holdout_end": "2026-09-15"
+}
