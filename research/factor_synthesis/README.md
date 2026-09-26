@@ -75,7 +75,8 @@ t = 2025-03-10 08:00   trend=bear  volatility=high  dispersion=normal  liquidity
 
 | 级别 | 名称 | 权重怎么来 | 用不用 regime |
 |---|---|---|---|
-| **L0** | 等权基线 | 全部保留因子（各 state 保留名单的并集）方向对齐后等权 | 否 |
+| **G0** | 全局对照组 | 不看 regime 选出的因子（`config.GLOBAL_FACTORS`）方向对齐后等权 | 选因子、合成都不用 |
+| **L0** | 等权基线 | 全部保留因子（各 state 保留名单的并集）方向对齐后等权 | 选因子用，合成不用 |
 | **L1** | 静态 ICIR 加权 | 训练段上每个因子全历史的 IC_IR 作为权重 | 否 |
 | **L2** | Regime 路由（硬切换） | 当前 state 下，用该 state 条件 IC_IR 作为权重，只用该 state 的保留因子 | 是 |
 | **L3** | Regime 路由 + 平滑 | L2 的基础上加迟滞 / 权重平滑（§5.3），避免 state 边界来回翻转 | 是 |
@@ -83,6 +84,19 @@ t = 2025-03-10 08:00   trend=bear  volatility=high  dispersion=normal  liquidity
 
 **如果 L2/L3 打不赢 L1，结论就是"regime 路由在当前因子池上不值得"**，直接用 L1 进关卡3。
 这是一个正常、有价值的结论，不是失败。
+
+**为什么还要一个 G0**：L0 虽然合成时不看 regime，但它的候选池是"在某个 state 里排进 Top K"的因子
+并集——选因子这一步已经用了 regime。只拿 L2 比 L0，比较的是"合成时用不用 regime"，测不出"按
+regime 选因子"本身值不值得。G0 的候选池来自阶段一**完整 IC 序列**（`dimension=unconditional`）的同一套
+选因子规则（|t| ≥ 3 + |IC_IR| Top-K）、关卡1 按全历史去冗余，是完全不经过 regime 的对照组：
+
+```text
+阶段一 profile（unconditional 行）→ 05_global_matrix.csv → 关卡1 UNCONDITIONAL_ALPHAS 去冗余
+      → 02 里 dimension=unconditional 的 keep 行 → 关卡2 config.GLOBAL_FACTORS
+```
+
+- G0 ≈ L0 ≈ L2：regime 框架在当前因子池上没有带来增量，主要增加了复杂度；
+- L0 / L2 明显好于 G0：按 regime 选因子这条路有价值。
 
 ---
 
@@ -134,6 +148,27 @@ score(t, ·) = Σ_i  w_i(t) · 标准化并方向对齐后的 f_i(t, ·)
 
 这是关卡2 最容易自欺的地方：阶段一在研究段上选了因子，关卡1 在研究段上去了冗余，
 如果关卡2 还在**同一段数据**上拟合权重、再在**同一段数据**上看效果，得到的合成 IC 一定虚高。
+而且自由度越大的方案（L2 每个 state 各挑一套）虚高得越多，比较结果会系统性地偏向 regime 方案。
+
+### 6.0 三段切分（M1 已落地）
+
+`research/research_config.json` 的 `window` 把历史切成三段，这是机器学习里标准的训练 / 验证 / 测试切分：
+
+```text
+research_start ── 选择段 ── validation_start ── 验证段 ── research_end ── holdout ── holdout_end
+2020-01-01                   2024-09-15                   2026-03-15                2026-09-15
+│ 阶段一体检 + 关卡1 去冗余      │ 比较各合成方案            │ 最终方案只跑一次
+│ 关卡2 估计各因子方向          │（名单和方向都已固定）      │
+```
+
+- **选择段**：阶段一、关卡1 的 `data.py` 只取这一段（`END_TIME = validation_start`），候选名单就在这里产生；
+  关卡2 也只在这一段上估计每个因子的方向（IC 符号）。选择段末尾去掉 `horizon_bars + execution_delay_bars`
+  根 bar（purge），因为这几根 bar 的标签会伸进验证段；
+- **验证段**：对"选因子"和"估方向"来说都是没见过的数据，**方案之间的比较以这一段为准**；
+- **holdout**：选定方案后只跑一次（§6.4）。
+
+M1 的方案（G0 / L0 / L2 等权）只需要估方向、不需要估权重，用这个一次性切分就够了。等 L1 / L2 要估
+权重、L3 要调平滑参数时，再在选择段内部加上下面的 walk-forward。
 
 ### 6.1 Walk-forward（滚动前推）
 
@@ -185,27 +220,30 @@ score(t, ·) = Σ_i  w_i(t) · 标准化并方向对齐后的 f_i(t, ·)
 
 ---
 
-## 7. 计划中的目录结构
+## 7. 目录结构
 
 ```text
 factor_synthesis/
 ├── README.md                 本文件
-├── config.py                 【已有】候选因子 REGIME_FACTOR_SETS（由 refresh_candidates.py 自动刷新）；
-│                             以后再加：主维度、收缩强度 n_0、平滑参数 m / β、walk-forward 参数
-├── refresh_candidates.py     【已有】读关卡1 的 02_regime_cluster_assignments.csv，重写 config.py 的候选池
-├── data.py                   取数入口（按 research 约定自成一份；时间窗与标签读 research_config.json）
-├── signals.py                纯函数：截面标准化、按 state 方向对齐
-├── weighting.py              纯函数：L0 / L1 / L2 / L3 的权重计算，收缩，迟滞与平滑
-├── walk_forward.py           纯函数：切分训练 / 测试窗（含 purge + embargo），拼接样本外合成分数
-├── run_synthesis.py          主脚本：取数 → 残差化 → 打标 → 各方案 walk-forward → 对比 → 落盘
+├── config.py                 【已有】候选池 REGIME_FACTOR_SETS / GLOBAL_FACTORS（refresh_candidates.py 自动刷新）
+│                             + 方案参数（路由维度、方向估计的最少样本数）；以后再加收缩强度 n_0、平滑参数 m / β
+├── refresh_candidates.py     【已有】读关卡1 的 02_regime_cluster_assignments.csv，重写 config.py 的两份候选池
+├── data.py                   【已有】取数入口（从关卡1 拷贝后独立维护；取整个研究段，VALIDATION_START 切分）
+├── signals.py                【已有】纯函数：截面标准化、方向估计、等权合成、路由合成、分段切分、评估指标
+├── run_synthesis.py          【已有】主脚本（M1）：取数 → 残差化 → 打标 → 各方案合成 → 验证段对比 → 落盘
+├── weighting.py              （以后）L1 / L2 的 ICIR 权重、收缩、迟滞与平滑
+├── walk_forward.py           （以后）选择段内的滚动训练 / 测试切分（含 purge + embargo）
 └── results/
-    ├── 01_scheme_comparison.csv       每个方案一行：样本外 IC / IC_IR / 胜率 / 分数稳定性 / 粗略净 Sharpe
-    ├── 02_conditional_ic_by_scheme.csv 方案 × regime state 的条件 IC
-    ├── 03_weights_by_state.csv         最后一个训练窗估出的权重（用于解读，也是将来实盘用的权重）
-    └── 04_walk_forward_detail.csv      每个 walk-forward 窗口的训练区间、测试区间、测试段 IC
+    ├── 01_scheme_comparison.csv       方案（含单因子参照）× 段：IC / IC_IR / t / 胜率 / 分数稳定性
+    ├── 02_validation_ic_by_state.csv  各合成方案在验证段、分 regime state 的条件 IC
+    └── 03_factor_signs.csv            选择段上估出的每个因子的全局方向 / 各 state 方向
 ```
 
-`signals.py` / `weighting.py` / `walk_forward.py` 刻意写成**只吃 pandas、不碰 IO 的纯函数**，原因见 §8。
+`signals.py` 刻意写成**只吃 pandas、不碰 IO 的纯函数**，原因见 §8。
+
+**怎么读 `01_scheme_comparison.csv`**：只看 `segment` 以 `validation` 开头的行（`selection` 行是样本内，
+仅作参考）。先比 G0 / L0 / L2-* 的 `ic_ir` 和 `t_stat`，再看 `score_autocorr`（越高越稳定、换手越低）；
+`kind=single` 的行是各候选因子单独使用时的表现——合成方案至少要打赢其中最强的那个，否则合成没有意义。
 
 ---
 
@@ -227,14 +265,15 @@ factor_synthesis/
 
 ## 9. 执行步骤（里程碑）
 
-前置：先用新时间窗（2020-01-01 ~ 2026-03-15）重跑阶段一和关卡1（`run_research.sh --refresh-candidates`），
-确认新的保留名单。
+前置：用三段切分后的时间窗重跑阶段一和关卡1，一路刷新到关卡2：
+`run_research.sh --refresh-candidates --refresh-synthesis-candidates`（步骤 9 会顺带跑 M1 对比）。
 
 - [x] **M0 入口**：`config.py` + `refresh_candidates.py`，关卡1 的 keep 名单自动写进候选池（`run_research.sh` 步骤 8）
-- [ ] **M0 准备**：建 `data.py`；
-      用阶段一的条件 IC 表选出主维度（§3），把选择依据写进 `config.py` 注释
-- [ ] **M1 基线**：`signals.py` + L0、L1 + `walk_forward.py`（含 purge/embargo）+ `01_scheme_comparison.csv`。
-      L0/L1 的样本外 IC_IR 是之后所有方案的及格线
+- [x] **M0 准备**：`data.py`（整个研究段 + `VALIDATION_START`）；三段切分（§6.0）
+- [x] **M1 方案对比**：`signals.py` + `run_synthesis.py`（`run_research.sh` 步骤 9）：G0 / L0 / L2（4 个路由维度
+      各一版）等权合成，选择段估方向、验证段比较，产出 `01~03` 三个 CSV。它回答"要不要按 regime 选因子"，
+      也给出之后所有方案的及格线
+- [ ] **M1.5 L1 ICIR 加权**：在 M1 结论基础上加 ICIR 权重，看"加权"是否比"等权"有增量
 - [ ] **M2 Regime 路由**：L2（方案 A 主维度路由）+ 小样本收缩 + `02_conditional_ic_by_scheme.csv`；
       同时做方案 B（多维度平均）作为对照
 - [ ] **M3 平滑**：L3（迟滞 / 指数平滑），观察分数稳定性的改善和 IC 的代价

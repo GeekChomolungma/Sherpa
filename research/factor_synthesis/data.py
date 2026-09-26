@@ -1,10 +1,13 @@
-"""本项目专用的取数入口：接真实 ClickHouse，不是合成数据。
+"""关卡2（factor_synthesis）专用的取数入口：接真实 ClickHouse，不是合成数据。
 
-刻意不 import `research/alpha_research/worldquant_101/data.py`（两者内容看起来相似，但故意各自维护一份）
-——本模块要求跟其它 research 子项目解耦：不共享代码、不共享中间结果，改任何一边都不会
-波及另一边。唯一的例外是研究配置：它统一读 `research/research_config.json`（时间窗 + IC 标签
-口径），必须跟阶段一体检用同一段历史、同一种标签，否则候选因子是在 A 口径下选出来的、冗余和
-代表因子却在 B 口径下检验，结论对不上。
+从 `research/factor_orthogonalization/data.py` 拷贝后独立维护，刻意不 import 其它 research 子项目的
+`data.py`——子项目之间不共享代码、不共享中间结果，改任何一边都不会波及另一边。唯一共享的是研究
+配置 `research/research_config.json`（时间窗 + IC 标签口径），必须跟阶段一、关卡1 用同一种标签，
+否则候选因子是在 A 口径下选出来的、合成效果却在 B 口径下评估，结论对不上。
+
+跟阶段一 / 关卡1 的 `data.py` 唯一的区别是**取数区间**：它们只取选择段（截止 `validation_start`），
+这里取**整个研究段**（截止 `research_end`）——关卡2 要在选择段上估计方向、在验证段上比较各合成方案，
+两段都要用到。
 
 连接信息一律从环境变量读，不写进代码/仓库，跟仓库里其它 research 脚本同一套约定：
 
@@ -28,18 +31,19 @@ from sherpa.metrics.factor import forward_returns
 
 # 研究配置统一从 `research/research_config.json` 读（说明见 `research/README.md`「统一研究配置」）。
 # `window` 一节把历史切成三段（说明见 `research/README.md`「统一研究配置」）：
-#   选择段 research_start ~ validation_start：阶段一体检、关卡1 去冗余只在这一段上做（本模块取的就是它）；
+#   选择段 research_start ~ validation_start：阶段一体检、关卡1 去冗余只在这一段上做；关卡2 在这一段上
+#                                            估计各因子的方向（IC 符号）；
 #   验证段 validation_start ~ research_end：关卡2 比较各合成方案，对"选因子"来说是没见过的数据；
-#   holdout research_end ~ holdout_end：最终方案只跑一次。
-# 阶段一和关卡1 必须看同一段历史，否则"阶段一在 A 区间选出的因子，关卡1 在 B 区间检验冗余"，
-# 两边结论对不上。临时换区间就调用 `load_universe_panel()` 时显式传参。
+#   holdout research_end ~ holdout_end：最终方案只跑一次，本模块默认不取。
+# 本模块取整个研究段 research_start ~ research_end，再用 `VALIDATION_START` 切成两段。
 _CONFIG = json.loads((Path(__file__).resolve().parents[1] / "research_config.json").read_text(encoding="utf-8"))
 INTERVAL: str = _CONFIG["window"]["interval"]
 START_TIME: str = _CONFIG["window"]["research_start"]
-END_TIME: str = _CONFIG["window"]["validation_start"]  # 选择段截止，不是 research_end
+END_TIME: str = _CONFIG["window"]["research_end"]  # 整个研究段（选择段 + 验证段），不含 holdout
+VALIDATION_START: str = _CONFIG["window"]["validation_start"]
 
 # `label` 一节：IC 检验用的"未来收益"标签口径（持有几根 bar、信号出来后延迟几根 bar 才成交）。
-# 所有算 IC 的脚本（阶段一体检、关卡1 挑代表因子……）必须用同一个口径，否则阶段一按"延迟 1 根"
+# 所有算 IC 的脚本（阶段一体检、关卡1 挑代表因子、关卡2 评估合成分数）必须用同一个口径，否则阶段一按"延迟 1 根"
 # 选出的因子，关卡1 却按"不延迟"比强弱，前后对不上。一律通过下面的 `label_forward_returns()` 取标签。
 HORIZON_BARS: int = int(_CONFIG["label"]["horizon_bars"])
 EXECUTION_DELAY_BARS: int = int(_CONFIG["label"]["execution_delay_bars"])

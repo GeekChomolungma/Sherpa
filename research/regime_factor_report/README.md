@@ -619,6 +619,23 @@ volatility_high_top.csv
 
 ---
 
+## 6.7b `05_global_matrix.csv`
+
+用途：**不分 regime 的全局候选（关卡2 全局对照组 G0 的来源）。**
+
+输入 profile 里 `dimension=unconditional, state=ALL` 的行（`run_alpha_regime_profile.py` 用完整 IC 序列算出，
+不做任何 regime 过滤）单独走这条旁路：不参与 regime 诊断、排行榜和 04 矩阵，只按**跟 04 矩阵完全相同的规则**
+（|t| ≥ `--min-abs-t` 做门槛、|IC_IR| 排序取 Top K、不凑数）产出一行，列与 04 矩阵一致。
+`leaderboards/unconditional_ALL_top.csv` 是它的完整排行榜。
+
+下游：`factor_orthogonalization/refresh_candidates.py` 把它写进关卡1 的 `UNCONDITIONAL_ALPHAS`，按全历史去冗余后，
+再由 `factor_synthesis/refresh_candidates.py` 读成关卡2 的 `GLOBAL_FACTORS`。
+
+注意它跟各维度自己的 `ALL` 行不是一回事：那 4 行 `ALL` 会剔除该维度 regime warm-up 期的 bar，样本量彼此略有差异，
+都不是真正的全样本。
+
+---
+
 ## 6.8 `IMPORTANT_FINDINGS.md`
 
 这是脚本自动生成的文字摘要。

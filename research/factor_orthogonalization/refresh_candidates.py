@@ -6,6 +6,9 @@
 只重写 config.py 里 `# >>> REGIME_ALPHA_SETS BEGIN` 和 `# <<< REGIME_ALPHA_SETS END` 两个
 标记之间的内容，文件其它部分一个字不动。
 
+同时用 `05_global_matrix.csv`（不分 regime 的同一套选因子规则）重写 `UNCONDITIONAL_ALPHAS`
+（`# >>> UNCONDITIONAL_ALPHAS BEGIN/END` 之间），作为关卡2 全局对照组 G0 的候选来源。
+
 04 矩阵本身已经做过显著性筛选（`regime_factor_report.py --min-abs-t`，默认 |t| >= 3），
 这里照单全收、不再二次过滤；某个 state 显著因子不足 Top-K 时，名单就只有那几个，并在
 config.py 里写一行注释说明原因。
@@ -24,9 +27,12 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 CONFIG_PATH = HERE / "config.py"
 DEFAULT_MATRIX = HERE.parent / "regime_factor_report" / "results" / "04_regime_matrix.csv"
+DEFAULT_GLOBAL_MATRIX = HERE.parent / "regime_factor_report" / "results" / "05_global_matrix.csv"
 
 BEGIN = "# >>> REGIME_ALPHA_SETS BEGIN"
 END = "# <<< REGIME_ALPHA_SETS END"
+GLOBAL_BEGIN = "# >>> UNCONDITIONAL_ALPHAS BEGIN"
+GLOBAL_END = "# <<< UNCONDITIONAL_ALPHAS END"
 
 # 跟 config.py 原有的维度/state 顺序保持一致，diff 时只看到因子名变化，不看到顺序抖动。
 ORDER: dict[str, list[str]] = {
@@ -76,6 +82,37 @@ def _fmt_number(value: str) -> str:
         return str(value)
 
 
+def _render_global(global_matrix: dict[tuple[str, str], dict], top_k: int) -> str:
+    """05_global_matrix.csv（不分 regime 的 |t| 门槛 + |IC_IR| Top-K）-> UNCONDITIONAL_ALPHAS。
+
+    选因子规则跟 04 矩阵完全一样，只是统计量来自完整 IC 序列，不看 regime。这份名单在关卡1
+    里按全历史去冗余，结果再被关卡2 读成全局对照组 G0 的候选（见 config.py 注释）。
+    """
+    row = global_matrix.get(("unconditional", "ALL"))
+    if row is None:
+        raise SystemExit("05_global_matrix.csv 里没有 (unconditional, ALL) 这一行，无法生成全局候选池")
+    names = [row[f"top{i}_alpha"] for i in range(1, top_k + 1) if row.get(f"top{i}_alpha")]
+    lines = []
+    if len(names) < top_k and row.get("significant_count", "") != "":
+        lines.append(
+            f"# 全局（不分 regime）只有 {row['significant_count']}/{row.get('candidate_count', '?')} "
+            f"个因子通过显著性门槛 |t| >= {_fmt_number(row.get('min_abs_t', '?'))}"
+        )
+    lines.append("UNCONDITIONAL_ALPHAS: list[str] = [")
+    lines.extend(f'    "{name}",' for name in names)
+    lines.append("]")
+    return "\n".join(lines)
+
+
+def _replace_block(text: str, begin: str, end: str, block: str, newline: str) -> str:
+    """只替换 begin/end 标记之间的内容，标记和文件其它部分原样保留。"""
+    if begin not in text or end not in text:
+        raise SystemExit(f"{CONFIG_PATH} 里缺少 {begin!r} / {end!r} 标记，无法定位要重写的区块")
+    head, rest = text.split(begin, 1)
+    _, tail = rest.split(end, 1)
+    return f"{head}{begin}{newline}{block.replace(chr(10), newline)}{newline}{end}{tail}"
+
+
 def path_hint() -> str:
     return "04_regime_matrix.csv"
 
@@ -84,25 +121,29 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--top-k", type=int, default=5, help="每个 state 取前几名（04 矩阵最多有 top1~top5）")
     parser.add_argument("--matrix", type=Path, default=DEFAULT_MATRIX, help="04_regime_matrix.csv 路径")
+    parser.add_argument(
+        "--global-matrix", type=Path, default=DEFAULT_GLOBAL_MATRIX,
+        help="05_global_matrix.csv 路径（不分 regime 的候选，写进 UNCONDITIONAL_ALPHAS）",
+    )
     args = parser.parse_args()
 
-    if not args.matrix.exists():
-        raise SystemExit(f"找不到 {args.matrix}，先跑 regime_factor_report 生成它")
+    for path in (args.matrix, args.global_matrix):
+        if not path.exists():
+            raise SystemExit(f"找不到 {path}，先跑 regime_factor_report 生成它")
 
     # 按字节读写并沿用文件原有的换行风格，避免整份 config.py 因为换行符变化在 diff 里全红。
     text = CONFIG_PATH.read_bytes().decode("utf-8")
     newline = "\r\n" if "\r\n" in text else "\n"
-    if BEGIN not in text or END not in text:
-        raise SystemExit(f"{CONFIG_PATH} 里缺少 BEGIN/END 标记，无法定位要重写的区块")
-
-    head, rest = text.split(BEGIN, 1)
-    _, tail = rest.split(END, 1)
-    block = _render(_load_matrix(args.matrix), args.top_k).replace("\n", newline)
-    CONFIG_PATH.write_bytes(f"{head}{BEGIN}{newline}{block}{newline}{END}{tail}".encode("utf-8"))
+    text = _replace_block(text, BEGIN, END, _render(_load_matrix(args.matrix), args.top_k), newline)
+    text = _replace_block(
+        text, GLOBAL_BEGIN, GLOBAL_END, _render_global(_load_matrix(args.global_matrix), args.top_k), newline
+    )
+    CONFIG_PATH.write_bytes(text.encode("utf-8"))
 
     if sys.platform == "win32":
         sys.stdout.reconfigure(encoding="utf-8")
     print(f"已用 {args.matrix} 的 Top{args.top_k} 重写 {CONFIG_PATH} 的 REGIME_ALPHA_SETS")
+    print(f"已用 {args.global_matrix} 的 Top{args.top_k} 重写 {CONFIG_PATH} 的 UNCONDITIONAL_ALPHAS")
 
 
 if __name__ == "__main__":

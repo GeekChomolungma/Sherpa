@@ -186,7 +186,9 @@ def main() -> None:
     regime = regime_report(panel, benchmark_symbol=BENCHMARK_SYMBOL)
 
     print("正在做条件 IC 切片体检……")
-    profile = profile_alphas_by_regime(ic_series_by_alpha, regime)
+    # include_unconditional=True：每个因子额外输出一行 dimension=unconditional（完整 IC 序列、不看 regime），
+    # 供 regime_factor_report 产出 05_global_matrix.csv —— 关卡2 全局对照组 G0 的选因子来源。
+    profile = profile_alphas_by_regime(ic_series_by_alpha, regime, include_unconditional=True)
     profile.to_csv(OUTPUT_PATH, index=False)
     print(f"\n完整 alpha × regime 体检长表已写入 research/alpha_research/worldquant_101/{OUTPUT_PATH}")
 

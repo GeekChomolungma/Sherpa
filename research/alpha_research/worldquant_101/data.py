@@ -27,13 +27,16 @@ from sherpa.data.universe import Universe
 from sherpa.metrics.factor import forward_returns
 
 # 研究配置统一从 `research/research_config.json` 读（说明见 `research/README.md`「统一研究配置」）。
-# `window` 一节：阶段一、关卡1、关卡2 必须看同一段历史，否则"阶段一在 A 区间选出的
-# 因子，关卡1 在 B 区间检验冗余"，两边结论对不上。`END_TIME` 是研究段截止（= holdout 起点），
-# 默认取数永远不碰 holdout 段；临时换区间就调用 `load_universe_panel()` 时显式传参。
+# `window` 一节把历史切成三段（说明见 `research/README.md`「统一研究配置」）：
+#   选择段 research_start ~ validation_start：阶段一体检、关卡1 去冗余只在这一段上做（本模块取的就是它）；
+#   验证段 validation_start ~ research_end：关卡2 比较各合成方案，对"选因子"来说是没见过的数据；
+#   holdout research_end ~ holdout_end：最终方案只跑一次。
+# 阶段一和关卡1 必须看同一段历史，否则"阶段一在 A 区间选出的因子，关卡1 在 B 区间检验冗余"，
+# 两边结论对不上。临时换区间就调用 `load_universe_panel()` 时显式传参。
 _CONFIG = json.loads((Path(__file__).resolve().parents[2] / "research_config.json").read_text(encoding="utf-8"))
 INTERVAL: str = _CONFIG["window"]["interval"]
 START_TIME: str = _CONFIG["window"]["research_start"]
-END_TIME: str = _CONFIG["window"]["research_end"]
+END_TIME: str = _CONFIG["window"]["validation_start"]  # 选择段截止，不是 research_end
 
 # `label` 一节：IC 检验用的"未来收益"标签口径（持有几根 bar、信号出来后延迟几根 bar 才成交）。
 # 所有算 IC 的脚本（阶段一体检、关卡1 挑代表因子……）必须用同一个口径，否则阶段一按"延迟 1 根"

@@ -35,8 +35,13 @@ bash run_research.sh --refresh-candidates --refresh-synthesis-candidates
 | 字段 | 当前值 | 含义 |
 |---|---|---|
 | `interval` | `4h` | K 线周期 |
-| `research_start` ~ `research_end` | `2020-01-01` ~ `2026-03-15` | **研究段**：阶段一体检、关卡1 去冗余、关卡2 调权重都只在这一段上做 |
+| `research_start` ~ `validation_start` | `2020-01-01` ~ `2024-09-15` | **选择段**：阶段一体检、关卡1 去冗余只在这一段上做（这几个子目录的 `data.py` 取数截止到 `validation_start`）；关卡2 在这一段上估计因子方向 |
+| `validation_start` ~ `research_end` | `2024-09-15` ~ `2026-03-15` | **验证段**：关卡2 比较各合成方案。对"选因子"来说是没见过的数据，比较才公平 |
 | `research_end` ~ `holdout_end` | `2026-03-15` ~ `2026-09-15` | **样本外 holdout**：任何筛选、调参都不碰，只在关卡2 定稿后做一次性验收 |
+
+选择段 + 验证段合称**研究段**（`research_start ~ research_end`）。为什么要把研究段再切一刀：候选因子是在
+选择段上挑出来的，如果关卡2 还在同一段上比较合成方案，就是"在考自己出的题"，而且自由度越大的方案
+（按 regime 各挑一套）虚高得越多。详见 `factor_synthesis/README.md` §6.0。
 
 **`label`：IC 检验用的"未来收益"标签口径**
 
@@ -58,7 +63,8 @@ t 行的标签 = 从 `close[t + delay]` 持有到 `close[t + delay + horizon]` �
 冗余和挑代表，否则两边结论对不上（统一之前，阶段一从 2024 开始、关卡1 从 2020 开始）。这是
 "子目录之间不共享代码、不共享中间结果"原则的唯一例外：共享的是一份配置，不是代码或产出。
 
-- 想整体换区间或标签口径：只改 `research_config.json`，改完要从阶段一开始整条链重跑；
+- 想整体换区间或标签口径：只改 `research_config.json`，改完要从阶段一开始整条链重跑
+  （`run_research.sh --refresh-candidates --refresh-synthesis-candidates`）；
 - **对比两种口径**（比如延迟 0 和延迟 1）：结果文件会被覆盖，跑第二版之前先把 `results/` 等产出复制一份；
 - 想临时换一次区间做实验：调用 `load_universe_panel(start_time=..., end_time=...)` 显式传参，不要改 JSON；
 - holdout 的用法规矩和预热（warm-up）注意事项见

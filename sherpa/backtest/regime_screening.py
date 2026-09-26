@@ -21,7 +21,7 @@ from typing import Mapping, Sequence
 import pandas as pd
 
 from sherpa.data.schema import BarPanel
-from sherpa.metrics.factor import conditional_ic_summary
+from sherpa.metrics.factor import conditional_ic_summary, ic_significance, ic_summary
 from sherpa.metrics.regime import DEFAULT_LOOKBACK, build_regime_report
 
 DEFAULT_REGIME_DIMENSIONS: tuple[str, ...] = ("trend", "volatility", "dispersion", "liquidity")
@@ -52,10 +52,17 @@ def profile_alphas_by_regime(
     regime: pd.DataFrame,
     *,
     dimensions: Sequence[str] = DEFAULT_REGIME_DIMENSIONS,
+    include_unconditional: bool = False,
 ) -> pd.DataFrame:
     """对 `ic_series_by_alpha` 里每个 alpha，分别在 `regime` 的每个维度上做条件 IC 切片统计，
     汇总成一张长表：列为 `alpha, dimension, state, samples, ic_mean, ic_std, ic_ir, win_rate, t_stat, p_value`
     （`state` 里含每个维度自己的 `"ALL"` 基线行）。
+
+    `include_unconditional=True` 时，每个 alpha 再追加一行 `dimension="unconditional", state="ALL"`：
+    用**完整的** `ic_series` 算，不做任何 regime 过滤。它跟各维度自己的 `"ALL"` 行不是一回事——
+    `conditional_ic_summary` 会先剔除该维度 regime 为 NA 的 bar（滚动窗口 warm-up 期），所以 4 个
+    维度的 `"ALL"` 行样本量彼此略有差异、也都不是真正的全样本。需要"完全不看 regime"的统计时
+    （比如关卡2 的全局对照组 G0 选因子），用这一行。`UNCONDITIONAL_DIMENSION` 常量就是这个维度名。
 
     长表而不是宽表（`REGIME_ALPHA_EVALUATION_WORKFLOW.md` §6 那种"一行一个 alpha、一列一个
     命名状态"的决策矩阵），是因为现在四个维度各自的状态还没有归并/挑选出"哪几个组合值得单独
@@ -70,4 +77,30 @@ def profile_alphas_by_regime(
             profile.insert(0, "dimension", dim)
             profile.insert(0, "alpha", alpha_name)
             rows.append(profile)
+        if include_unconditional:
+            rows.append(_unconditional_row(alpha_name, ic_series))
     return pd.concat(rows, ignore_index=True)
+
+
+UNCONDITIONAL_DIMENSION = "unconditional"
+
+
+def _unconditional_row(alpha_name: str, ic_series: pd.Series) -> pd.DataFrame:
+    """完整 `ic_series`（不做 regime 过滤）的统计，列口径跟 `conditional_ic_summary` 的一行完全一致。"""
+    summary = ic_summary(ic_series)
+    significance = ic_significance(ic_series)
+    clean = ic_series.dropna()
+    return pd.DataFrame(
+        [{
+            "alpha": alpha_name,
+            "dimension": UNCONDITIONAL_DIMENSION,
+            "state": "ALL",
+            "samples": int(clean.shape[0]),
+            "ic_mean": summary.mean,
+            "ic_std": summary.std,
+            "ic_ir": summary.ic_ir,
+            "win_rate": float((clean > 0).mean()) if not clean.empty else float("nan"),
+            "t_stat": significance.t_stat,
+            "p_value": significance.p_value,
+        }]
+    )

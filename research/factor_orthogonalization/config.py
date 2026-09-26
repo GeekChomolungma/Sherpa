@@ -131,11 +131,16 @@ REGIME_ALPHA_SETS: dict[str, dict[str, list[str]]] = {
 }
 # <<< REGIME_ALPHA_SETS END
 
-# 可选：不区分 regime、直接用全历史算的对照组。默认空列表即跳过——只有显式填了才会额外
-# 产出一组 `dimension=unconditional, state=ALL` 的结果行，用来对比"某对因子是只在特定
-# regime 下冗余，还是从头到尾都冗余"这两种情况（后者说明这对因子的重复关系更根本，换个
-# regime 也大概率还是冗余）。
+# 不区分 regime、直接用全历史做去冗余的一组候选。非空时会额外产出一组
+# `dimension=unconditional, state=ALL` 的结果行。两个用途：
+# 1. 关卡2 全局对照组 G0 的候选池：`refresh_candidates.py` 会用阶段一 `05_global_matrix.csv`
+#    （完整 IC 序列、不看 regime 的 |t| >= 3 + |IC_IR| Top-K）重写下面 BEGIN/END 之间的名单；
+#    它的去冗余结果（02 里 unconditional 的 keep 行）再被关卡2 读成 GLOBAL_FACTORS。
+# 2. 对比"某对因子是只在特定 regime 下冗余，还是从头到尾都冗余"（后者说明重复关系更根本）。
+# 设成空列表即跳过。
+# >>> UNCONDITIONAL_ALPHAS BEGIN
 UNCONDITIONAL_ALPHAS: list[str] = []
+# <<< UNCONDITIONAL_ALPHAS END
 
 # 新家族/自定义模块接入：worldquant / tradingview / custom 三个内置家族已经在
 # `run_orthogonalization.py` 里统一 import 触发 `@register_alpha` 注册，这里不用管。如果

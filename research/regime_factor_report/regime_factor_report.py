@@ -45,6 +45,12 @@ SIGNIFICANCE_COLUMNS = ["t_stat", "p_value"]
 # positives, versus ~55 at the classic |t| >= 2 (Harvey, Liu & Zhu 2016 argue for 3.0).
 DEFAULT_MIN_ABS_T = 3.0
 
+# Rows with this dimension carry unconditional statistics (the full IC series, no regime
+# filtering; see `sherpa.backtest.regime_screening.profile_alphas_by_regime`). They bypass the
+# regime diagnostics / 04 matrix and only feed 05_global_matrix.csv, the candidate source of
+# the no-regime control group G0 in factor_synthesis (gate 2).
+UNCONDITIONAL_DIMENSION = "unconditional"
+
 
 def parse_float(value: str) -> Optional[float]:
     if value is None or value.strip() == "":
@@ -562,6 +568,27 @@ def build_regime_matrix(
     return matrix
 
 
+def build_global_matrix(
+    global_rows: List[Dict[str, Any]],
+    thresholds: Dict[str, float],
+    top_k: int,
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Unconditional counterpart of the 04 matrix: one row, same selection rule
+    (|t_stat| >= min_abs_t gate, then |IC_IR| ranking, no padding), same columns.
+
+    `build_leaderboard` deliberately skips state == "ALL" (per-dimension baselines), so the
+    unconditional rows are relabelled to a placeholder state for the build and back to "ALL"
+    afterwards -- output keys stay `dimension=unconditional, state=ALL`, matching gate 1.
+    """
+    placeholder = "__all__"
+    pseudo = [dict(r, state=placeholder) for r in global_rows]
+    leaderboard = build_leaderboard(pseudo, thresholds)
+    matrix = build_regime_matrix(leaderboard, [UNCONDITIONAL_DIMENSION], pseudo, thresholds, top_k=top_k)
+    for r in leaderboard + matrix:
+        r["state"] = "ALL"
+    return matrix, leaderboard
+
+
 def build_dimension_wide(
     rows: List[Dict[str, Any]], dimension: str, diagnostics: List[Dict[str, Any]], thresholds: Dict[str, float]
 ) -> List[Dict[str, Any]]:
@@ -782,6 +809,11 @@ def main() -> None:
     (output / "dimensions").mkdir(exist_ok=True)
     (output / "leaderboards").mkdir(exist_ok=True)
 
+    # Unconditional rows take a separate path (05_global_matrix.csv) and are kept out of every
+    # regime-level output below, including the data-derived thresholds.
+    global_rows = [r for r in rows if r["dimension"] == UNCONDITIONAL_DIMENSION]
+    rows = [r for r in rows if r["dimension"] != UNCONDITIONAL_DIMENSION]
+
     thresholds = derive_thresholds(rows)
     thresholds["min_abs_t"] = args.min_abs_t
     diagnostics = build_dimension_diagnostics(rows, thresholds)
@@ -797,6 +829,16 @@ def main() -> None:
     dimensions = sorted(set(r["dimension"] for r in rows))
     matrix = build_regime_matrix(leaderboard, dimensions, rows, thresholds, top_k=args.matrix_top_k)
     write_csv(output / "04_regime_matrix.csv", matrix)
+
+    if global_rows:
+        global_matrix, global_leaderboard = build_global_matrix(global_rows, thresholds, args.matrix_top_k)
+        write_csv(output / "05_global_matrix.csv", global_matrix)
+        write_csv(output / "leaderboards" / f"{UNCONDITIONAL_DIMENSION}_ALL_top.csv", global_leaderboard[: args.top_n])
+    else:
+        print(
+            "Warning: input has no dimension=unconditional rows, 05_global_matrix.csv not written "
+            "(re-run run_alpha_regime_profile.py to produce them)."
+        )
 
     for dim in dimensions:
         wide = build_dimension_wide(rows, dim, diagnostics, thresholds)

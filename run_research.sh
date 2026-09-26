@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 一键跑 research/ 全流程（阶段一 -> 关卡1 -> 关卡2 候选池），按依赖顺序依次执行，任何一步失败立刻停下。
+# 一键跑 research/ 全流程（阶段一 -> 关卡1 -> 关卡2 方案对比），按依赖顺序依次执行，任何一步失败立刻停下。
 #
 # 需要先设好 ClickHouse 连接环境变量（只有 CH_HOST 是必填）：
 #   bash / Git Bash :  export CH_HOST=... CH_PASSWORD=...
@@ -14,6 +14,10 @@
 #   4  regime_factor_report.py       -> regime_factor_report/results/（含 04_regime_matrix.csv；
 #                                       每个 state 只收 |t| >= MIN_ABS_T 的显著因子，再按 |IC_IR| 取 Top5）
 #   7  run_orthogonalization.py      -> factor_orthogonalization/results/
+#   9  run_synthesis.py              -> factor_synthesis/results/（关卡2：G0 / L0 / L2 各方案在验证段上的对比）
+#
+# 时间切分（research/research_config.json 的 window）：步骤 1~7 只用选择段（截止 validation_start），
+# 步骤 9 用整个研究段（选择段估方向、验证段比较方案），holdout 全程不碰。
 #
 # 可选步骤（默认不跑）：
 #   --with-calibration     步骤0  tradability_calibration 三个脚本（流动性掩码门槛校准，纯参考）
@@ -96,9 +100,9 @@ will_run() {  # will_run <步骤号>：这一步在当前参数下会不会执�
   esac
 }
 
-# 需要连 ClickHouse 的步骤：0 1 2 3 5 7。提前检查，别跑了半小时才发现没设环境变量。
+# 需要连 ClickHouse 的步骤：0 1 2 3 5 7 9。提前检查，别跑了半小时才发现没设环境变量。
 if [ "$DRY" -eq 0 ]; then
-  for n in 0 1 2 3 5 7; do
+  for n in 0 1 2 3 5 7 9; do
     if will_run "$n" && [ -z "${CH_HOST:-}" ]; then
       echo "缺少环境变量 CH_HOST（步骤 $n 需要连 ClickHouse）。设置方法见本脚本开头的说明。" >&2
       exit 1
@@ -178,6 +182,13 @@ step 7 "关卡1 · 因子正交化聚类"        "$ORTHO_DIR" "$PYTHON" run_orth
 step 8 "关卡2 入口 · 刷新合成候选池（02 keep 名单 -> factor_synthesis/config.py）" \
   "$SYNTH_DIR" "$PYTHON" refresh_candidates.py
 
+if will_run 9 && [ "$REFRESH_SYNTH" -eq 0 ]; then
+  echo
+  echo "[提示] 关卡2 沿用 factor_synthesis/config.py 现有的候选池，没有跟着关卡1 的新结果刷新。"
+  echo "       如果上游刚重跑过，建议加 --refresh-synthesis-candidates。"
+fi
+step 9 "关卡2 · 合成方案对比（选择段估方向，验证段比较）" "$SYNTH_DIR" "$PYTHON" run_synthesis.py
+
 CURRENT="(完成)"
 echo
 echo "=================================================================="
@@ -188,4 +199,5 @@ echo "    research/factor_orthogonalization/results/02_regime_cluster_assignment
 if [ "$REFRESH_SYNTH" -eq 1 ]; then
   echo "    research/factor_synthesis/config.py   关卡2 候选池（已按关卡1 keep 名单刷新）"
 fi
+echo "    research/factor_synthesis/results/01_scheme_comparison.csv   关卡2 各方案验证段对比"
 echo "=================================================================="

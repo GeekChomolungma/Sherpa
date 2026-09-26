@@ -87,7 +87,9 @@ CH_HOST=... CH_PASSWORD=... python research/factor_orthogonalization/run_orthogo
 - `REGIME_ALPHA_SETS`：12 个 regime 状态（`trend.bull/bear/neutral`、
   `volatility.high/normal/low`、`dispersion.high/normal/low`、
   `liquidity.high/normal/starved`）各自要测试哪些因子；
-- `UNCONDITIONAL_ALPHAS`（可选）：要不要额外跑一组不区分 regime 的全历史对照；
+- `UNCONDITIONAL_ALPHAS`：一组不区分 regime、按全历史去冗余的候选。`--refresh-candidates` 时由
+  `refresh_candidates.py` 用阶段一的 `05_global_matrix.csv` 自动重写（BEGIN/END 标记之间），它的结果
+  （02 里 `dimension=unconditional` 的 keep 行）是关卡2 全局对照组 G0 的候选来源；
 - `CORRELATION_THRESHOLD`：多高的相关性算冗余。
 
 ## 为什么用「截面相关」而不是「IC 时序相关」

@@ -6,6 +6,9 @@
 
 候选池的来源和含义
 ------------------
+两份候选池：`REGIME_FACTOR_SETS`（按 regime state 分别选出的因子）和 `GLOBAL_FACTORS`（不看 regime
+选出的因子，全局对照组 G0 用），都由 `refresh_candidates.py` 自动重写。下面以前者为例说明：
+
 `REGIME_FACTOR_SETS` 来自关卡1 的产出 `factor_orthogonalization/results/02_regime_cluster_assignments.csv`
 里被建议保留（`recommendation` 为 keep）的因子，由同目录的 `refresh_candidates.py` 自动重写
 （`run_research.sh --refresh-synthesis-candidates` 会调用它）。名单里的因子已经依次通过了：
@@ -123,6 +126,34 @@ REGIME_FACTOR_SETS: dict[str, dict[str, list[str]]] = {
     },
 }
 # <<< REGIME_FACTOR_SETS END
+
+
+# 全局对照组 G0 的候选：不看 regime 选出来的因子。来源链路是
+#   阶段一 05_global_matrix.csv（完整 IC 序列的 |t| >= 3 + |IC_IR| Top-K）
+#   -> 关卡1 UNCONDITIONAL_ALPHAS 按全历史去冗余
+#   -> 02_regime_cluster_assignments.csv 里 dimension=unconditional 的 keep 行
+#   -> 这里（refresh_candidates.py 整块重写）。
+# 它和 REGIME_FACTOR_SETS 经过完全相同的显著性门槛和去冗余，唯一区别是"选因子时看不看 regime"，
+# 所以 G0 与 regime 方案的差距，才能归因到 regime 本身（README §4 方案阶梯）。
+# >>> GLOBAL_FACTORS BEGIN
+GLOBAL_FACTORS: list[str] = []
+# <<< GLOBAL_FACTORS END
+
+
+# ---------------------------------------------------------------------------
+# 合成方案参数（run_synthesis.py 用；以下不会被 refresh_candidates.py 改动）
+# ---------------------------------------------------------------------------
+
+# L2 路由方案按哪些 regime 维度分别跑一版。每根 bar 同时属于 4 个维度的 state，路由必须先定
+# "按哪个维度选名单"（README §3 方案 A）；这里 4 个维度各跑一版，在验证段上直接比较，不凭感觉预先指定。
+ROUTING_DIMENSIONS: tuple[str, ...] = ("trend", "volatility", "dispersion", "liquidity")
+
+# regime 打标的大盘锚点，必须跟阶段一、关卡1 一致，state 的含义才对得上。
+REGIME_BENCHMARK_SYMBOL: str = "BTCUSDT"
+
+# 估计因子方向（IC 符号）的最少样本数：全局方向 / 按 state 的方向。state 样本不足时退回全局方向。
+SIGN_MIN_SAMPLES_GLOBAL: int = 30
+SIGN_MIN_SAMPLES_STATE: int = 100
 
 
 def all_factors() -> list[str]:

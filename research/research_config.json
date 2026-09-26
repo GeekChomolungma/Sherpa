@@ -2,6 +2,7 @@
   "window": {
     "interval": "4h",
     "research_start": "2020-01-01",
+    "validation_start": "2024-09-15",
     "research_end": "2026-03-15",
     "holdout_end": "2026-09-15"
   },

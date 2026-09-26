@@ -6,7 +6,7 @@
             regime_factor_report.py      → 04_regime_matrix.csv        （显著 + |IC_IR| Top-K）
     关卡1  factor_orthogonalization/refresh_candidates.py → 关卡1 config.REGIME_ALPHA_SETS
             run_orthogonalization.py     → 02_regime_cluster_assignments.csv（keep / drop 建议）
-    关卡2  本脚本                        → 关卡2 config.REGIME_FACTOR_SETS   ← 这里
+    关卡2  本脚本                        → 关卡2 config.REGIME_FACTOR_SETS / GLOBAL_FACTORS   ← 这里
 
 `run_research.sh --refresh-synthesis-candidates`（步骤 8）会在关卡1 跑完后调用本脚本。
 只重写 config.py 里 `# >>> REGIME_FACTOR_SETS BEGIN` 与 `# <<< REGIME_FACTOR_SETS END`
@@ -37,6 +37,12 @@
 5. **某个 state 在 CSV 里完全没有行**（上游这个 state 没有任何可用因子），就写一个空列表并加
    注释说明。关卡2 遇到空列表时应退回全局（不分 regime）的权重。
 
+6. **`dimension=unconditional, state=ALL` 的保留行单独写进 `GLOBAL_FACTORS`**。这组因子是阶段一
+   按完整 IC 序列（不看 regime）选出、关卡1 按全历史去冗余的结果，是全局对照组 G0 的候选池。
+   它和 12 个 state 的名单走的是完全相同的门槛和去冗余，唯一区别是选因子时不看 regime，
+   所以关卡2 里 G0 和 regime 方案的差距，才能归因到"要不要按 regime 选因子"。
+   上游没有这组结果时（关卡1 的 UNCONDITIONAL_ALPHAS 为空）直接报错，不静默写空名单。
+
 用法：
     python research/factor_synthesis/refresh_candidates.py [--assignments PATH]
 """
@@ -55,6 +61,12 @@ DEFAULT_ASSIGNMENTS = HERE.parent / "factor_orthogonalization" / "results" / "02
 
 BEGIN = "# >>> REGIME_FACTOR_SETS BEGIN"
 END = "# <<< REGIME_FACTOR_SETS END"
+GLOBAL_BEGIN = "# >>> GLOBAL_FACTORS BEGIN"
+GLOBAL_END = "# <<< GLOBAL_FACTORS END"
+
+# 关卡1 里"不分 regime、按全历史去冗余"那一组结果的 (dimension, state)。它不属于 12 个 regime
+# state，单独写进 GLOBAL_FACTORS（全局对照组 G0 的候选），见模块 docstring 第 6 条。
+UNCONDITIONAL_KEY = ("unconditional", "ALL")
 
 # 视为"保留"的 recommendation 取值，含义见模块 docstring 第 1 条。
 KEEP_RECOMMENDATIONS = frozenset({"keep", "keep_complementary"})
@@ -115,6 +127,29 @@ def _factor_comment(row: dict) -> str:
     return "  ".join(parts)
 
 
+def render_global(kept: dict[tuple[str, str], list[dict]]) -> str:
+    rows = kept.get(UNCONDITIONAL_KEY)
+    if not rows:
+        raise SystemExit(
+            "02_regime_cluster_assignments.csv 里没有 dimension=unconditional 的保留行：检查关卡1 config 的 "
+            "UNCONDITIONAL_ALPHAS 是否已由 refresh_candidates.py 按 05_global_matrix.csv 填好，再重跑关卡1"
+        )
+    lines = ["GLOBAL_FACTORS: list[str] = ["]
+    for row in rows:
+        lines.append(f'    "{row["qualified_name"]}",  # {_factor_comment(row)}')
+    lines.append("]")
+    return "\n".join(lines)
+
+
+def _replace_block(text: str, begin: str, end: str, block: str, newline: str) -> str:
+    """只替换 begin/end 标记之间的内容，标记和文件其它部分原样保留。"""
+    if begin not in text or end not in text:
+        raise SystemExit(f"{CONFIG_PATH} 里缺少 {begin!r} / {end!r} 标记，无法定位要重写的区块")
+    head, rest = text.split(begin, 1)
+    _, tail = rest.split(end, 1)
+    return f"{head}{begin}{newline}{block.replace(chr(10), newline)}{newline}{end}{tail}"
+
+
 def render(kept: dict[tuple[str, str], list[dict]], seen_states: set[tuple[str, str]]) -> str:
     lines = ["REGIME_FACTOR_SETS: dict[str, dict[str, list[str]]] = {"]
     for dimension, states in ORDER.items():
@@ -153,17 +188,15 @@ def main() -> None:
     # 按字节读写并沿用文件原有的换行风格，避免整份 config.py 因为换行符变化在 diff 里全红。
     text = CONFIG_PATH.read_bytes().decode("utf-8")
     newline = "\r\n" if "\r\n" in text else "\n"
-    if BEGIN not in text or END not in text:
-        raise SystemExit(f"{CONFIG_PATH} 里缺少 BEGIN/END 标记，无法定位要重写的区块")
+    text = _replace_block(text, BEGIN, END, render(kept, seen_states), newline)
+    text = _replace_block(text, GLOBAL_BEGIN, GLOBAL_END, render_global(kept), newline)
+    CONFIG_PATH.write_bytes(text.encode("utf-8"))
 
-    head, rest = text.split(BEGIN, 1)
-    _, tail = rest.split(END, 1)
-    block = render(kept, seen_states).replace("\n", newline)
-    CONFIG_PATH.write_bytes(f"{head}{BEGIN}{newline}{block}{newline}{END}{tail}".encode("utf-8"))
-
-    distinct = {row["qualified_name"] for rows in kept.values() for row in rows}
-    print(f"已用 {args.assignments} 的保留名单重写 {CONFIG_PATH} 的 REGIME_FACTOR_SETS")
-    print(f"  覆盖 {len(kept)} 个 (dimension, state)，去重后共 {len(distinct)} 个因子")
+    regime_kept = {key: rows for key, rows in kept.items() if key != UNCONDITIONAL_KEY}
+    distinct = {row["qualified_name"] for rows in regime_kept.values() for row in rows}
+    print(f"已用 {args.assignments} 的保留名单重写 {CONFIG_PATH}")
+    print(f"  REGIME_FACTOR_SETS：覆盖 {len(regime_kept)} 个 (dimension, state)，去重后共 {len(distinct)} 个因子")
+    print(f"  GLOBAL_FACTORS：{len(kept[UNCONDITIONAL_KEY])} 个因子（全局对照组 G0）")
 
 
 if __name__ == "__main__":
