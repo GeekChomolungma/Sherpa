@@ -94,10 +94,10 @@ def test_neutralize_infinite_exposure_excluded_like_missing_not_crashing():
     assert not np.isinf(residual.to_numpy()[~np.isnan(residual.to_numpy())]).any()
 
 
-def test_neutralize_skips_period_when_lstsq_fails_to_converge_instead_of_raising():
-    # 构造一个会让 np.linalg.lstsq 抛 LinAlgError 的病态设计矩阵（NaN 混进已经通过校验的
-    # 数值型 numpy 数组本身不现实——这里直接用 monkeypatch 模拟 LAPACK 报错的场景，验证
-    # neutralize() 把这一期当"算不出来"跳过，而不是让调用方拿到未处理的异常。
+def test_neutralize_skips_period_when_solver_fails_to_converge_instead_of_raising():
+    # 求解器（批量伪逆，底层是 SVD）抛 LinAlgError 的场景很难用真实数据构造——这里直接用
+    # monkeypatch 模拟 LAPACK 报错，验证 neutralize() 先退回逐期求解、逐期仍失败就把这一期当
+    # "算不出来"跳过，而不是让调用方拿到未处理的异常。
     import unittest.mock as mock
 
     columns = ["A", "B", "C", "D", "E"]
@@ -107,7 +107,7 @@ def test_neutralize_skips_period_when_lstsq_fails_to_converge_instead_of_raising
     raw_score = _frame([raw_row, raw_row], columns)
     beta = _frame([beta_row, beta_row], columns)
 
-    with mock.patch("numpy.linalg.lstsq", side_effect=np.linalg.LinAlgError("SVD did not converge")):
+    with mock.patch("numpy.linalg.pinv", side_effect=np.linalg.LinAlgError("SVD did not converge")):
         residual = neutralize(raw_score, {"beta": beta})
 
     assert residual.isna().all().all()

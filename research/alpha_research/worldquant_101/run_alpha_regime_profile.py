@@ -78,9 +78,16 @@ from sherpa.metrics.factor import rank_ic
 from sherpa.metrics.tradability import tradable_mask
 from sherpa.risk.neutralize import neutralize
 
-from data import END_TIME, EXECUTION_DELAY_BARS, HORIZON_BARS, INTERVAL, START_TIME, label_forward_returns, load_universe_panel
-
-BENCHMARK_SYMBOL = "BTCUSDT"
+from data import (
+    BENCHMARK_SYMBOL,
+    END_TIME,
+    EXECUTION_DELAY_BARS,
+    HORIZON_BARS,
+    INTERVAL,
+    START_TIME,
+    label_forward_returns,
+    load_universe_panel,
+)
 
 # 中性化开关：默认 True，剥离 Beta/Size 被动暴露算残差 ic_series（`QUANT_RESEARCH_TO_LIVE_LIFECYCLE.md`
 # §3.2 的标准做法）。手动改成 False 会直接用原始分数（允许骑 Beta），仅用于跟中性化版本
@@ -148,7 +155,7 @@ def main() -> None:
     print(f"  每期平均 {mask.sum(axis=1).mean():.1f} / {len(panel.symbols)} 个 symbol 通过流通性筛选")
 
     if USE_NEUTRALIZATION:
-        print("正在计算中性化用的风险暴露矩阵（Beta 对 BTCUSDT / Size 用 log(quote_volume)）……")
+        print(f"正在计算中性化用的风险暴露矩阵（Beta 对 {BENCHMARK_SYMBOL} / Size 用 log(quote_volume)）……")
         exposures = default_style_exposures(panel, benchmark_symbol=BENCHMARK_SYMBOL)
     else:
         print("USE_NEUTRALIZATION=False：跳过中性化，直接用原始分数（允许骑 Beta）算 ic_series，仅供对照……")

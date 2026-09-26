@@ -10,7 +10,8 @@
 
 `screen_alphas` 现在会先对每个因子的原始分数做中性化残差化（`QUANT_RESEARCH_TO_LIVE_LIFECYCLE.md`
 §3.2，剔除 Beta/Size 被动暴露），再拿残差分数算 IC——`exposures` 用
-`sherpa.backtest.style_exposure.default_style_exposures(panel)` 构造。
+`sherpa.backtest.style_exposure.default_style_exposures(panel, benchmark_symbol=...)` 构造，
+锚点来自 `research_config.json` 的 `market.benchmark_symbol`。
 
 运行前先设好连接环境变量（同 `scripts/smoke_test_data_layer.py`）：
     CH_HOST=... CH_PASSWORD=... python research/alpha_research/worldquant_101/run_screening.py
@@ -29,7 +30,16 @@ from sherpa.alpha.engine import AlphaEngine
 from sherpa.backtest.screening import screen_alphas
 from sherpa.backtest.style_exposure import default_style_exposures
 
-from data import END_TIME, EXECUTION_DELAY_BARS, HORIZON_BARS, INTERVAL, START_TIME, label_forward_returns, load_universe_panel
+from data import (
+    BENCHMARK_SYMBOL,
+    END_TIME,
+    EXECUTION_DELAY_BARS,
+    HORIZON_BARS,
+    INTERVAL,
+    START_TIME,
+    label_forward_returns,
+    load_universe_panel,
+)
 
 IC_IR_THRESHOLD = 0.15
 N_QUANTILES = 5
@@ -47,8 +57,8 @@ def main() -> None:
     worldquant_alphas = [cls() for cls in registry.all(family="worldquant").values()]
     engine = AlphaEngine(worldquant_alphas)
 
-    print("正在计算中性化用的风险暴露矩阵（Beta 对 BTCUSDT / Size 用 log(quote_volume)）……")
-    exposures = default_style_exposures(panel)
+    print(f"正在计算中性化用的风险暴露矩阵（Beta 对 {BENCHMARK_SYMBOL} / Size 用 log(quote_volume)）……")
+    exposures = default_style_exposures(panel, benchmark_symbol=BENCHMARK_SYMBOL)
 
     print(f"\n开始跑 {len(worldquant_alphas)} 个因子的第一层检验（残差分数）……")
     report = screen_alphas(

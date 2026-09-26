@@ -12,7 +12,7 @@
 
 0. **先中性化残差化，再做后面几步**（`QUANT_RESEARCH_TO_LIVE_LIFECYCLE.md` §3.2）：每个候选
    因子的原始分数先套可流通性掩码，再用 `sherpa.risk.neutralize.neutralize()` 逐期截面 OLS
-   剔除对 Beta（滚动对 `REGIME_BENCHMARK_SYMBOL`）、Size（`log(quote_volume)`）的被动暴露，
+   剔除对 Beta（滚动对 `research_config.json` 的 `market.benchmark_symbol`）、Size（`log(quote_volume)`）的被动暴露，
    只留残差。原因见下方"为什么先中性化，再做相关性聚类"。
 1. 按 `config.REGIME_ALPHA_SETS` 手动指定的"12 个 regime 状态各自的候选因子集"，**在每个
    state 自己的历史切片内**逐对计算候选因子（残差分数）之间的**截面 Spearman 相关**（不是

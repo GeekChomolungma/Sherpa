@@ -8,8 +8,11 @@ BarPanel/Alpha 类的存在——这是"指标函数只依赖内存结构"这条
 
 from __future__ import annotations
 
+from typing import Callable
+
 import numpy as np
 import pandas as pd
+from numpy.lib.stride_tricks import sliding_window_view
 
 # ---- 横截面算子：按行操作，跨 symbol ----
 
@@ -63,23 +66,77 @@ def stddev(x: pd.DataFrame, window: int) -> pd.DataFrame:
     return x.rolling(window).std()
 
 
+# 分块时每块最多展开这么多个元素（行 × 列 × 窗口）。float64 下约 160MB，中间的布尔数组更小；
+# 窗口很长（比如 200+）或 symbol 很多时，不分块一次展开整段历史会占用十几 GB 内存。
+_WINDOW_CHUNK_ELEMENTS = 20_000_000
+
+
+def _rolling_window_reduce(
+    x: pd.DataFrame, window: int, reducer: Callable[[np.ndarray], np.ndarray]
+) -> pd.DataFrame:
+    """向量化的滚动窗口归约，语义与 `x.rolling(window).apply(f)` 完全一致。
+
+    为什么不用 `rolling().apply(lambda)`：那会对每个 (bar, symbol) 调用一次 Python 函数
+    （全市场 4h 数据约 680 万次），时间几乎全部花在调用开销上。这里用 `sliding_window_view`
+    把 (T, N) 表"看成" (T - window + 1, N, window) 的三维数组（只是换一种视角看同一块内存，
+    不复制），`reducer` 沿最后一个轴一次性算完一整块。
+
+    跟 `rolling(window).apply` 对齐的两条语义：
+    - `min_periods` 默认等于 `window`：窗口里只要有一个缺失值，结果就是 NaN。注意 pandas 的
+      `rolling` 会先把 `±inf` 换成 NaN 再计算，所以 `±inf` 也算缺失——这里用 `isfinite` 判断，行为一致；
+    - 前 `window - 1` 行（窗口还没攒满）是 NaN。
+
+    `reducer` 输入一块 `(rows, N, window)` 的窗口，返回 `(rows, N)`。按时间分块处理，每块最多
+    `_WINDOW_CHUNK_ELEMENTS` 个元素，控制内存峰值。
+    """
+    if window < 1:
+        raise ValueError(f"window 至少为 1，收到 {window}")
+    values = x.to_numpy(dtype="float64")
+    n_rows, n_cols = values.shape
+    out = np.full((n_rows, n_cols), np.nan)
+    if n_rows >= window and n_cols > 0:
+        windows = sliding_window_view(values, window, axis=0)
+        step = max(1, _WINDOW_CHUNK_ELEMENTS // (n_cols * window))
+        for start in range(0, windows.shape[0], step):
+            chunk = windows[start:start + step]
+            with np.errstate(invalid="ignore", over="ignore"):
+                result = np.asarray(reducer(chunk), dtype="float64")
+            result[~np.isfinite(chunk).all(axis=-1)] = np.nan
+            out[window - 1 + start: window - 1 + start + chunk.shape[0]] = result
+    return pd.DataFrame(out, index=x.index, columns=x.columns)
+
+
 def ts_product(x: pd.DataFrame, window: int) -> pd.DataFrame:
     """窗口内累乘（世坤101公式里的 `product(x, d)`）。"""
-    return x.rolling(window).apply(lambda s: float(np.prod(s.values)), raw=False)
+    # 先拷成连续内存再沿最后一轴累乘：乘法顺序与旧实现 `np.prod(一维窗口)` 一致，结果逐位相同。
+    return _rolling_window_reduce(x, window, lambda w: np.prod(np.ascontiguousarray(w), axis=-1))
 
 
 def ts_rank(x: pd.DataFrame, window: int) -> pd.DataFrame:
-    """滚动窗口内的时序百分位排名（逐 symbol 独立，不跨 symbol，别跟 rank() 搞混）。"""
-    return x.rolling(window).apply(lambda s: pd.Series(s).rank(pct=True).iloc[-1], raw=False)
+    """滚动窗口内的时序百分位排名（逐 symbol 独立，不跨 symbol，别跟 rank() 搞混）。
+
+    等价于 `pd.Series(窗口).rank(pct=True).iloc[-1]`：当前值在窗口里的平均秩除以窗口长度。
+    平均秩 = 比它小的个数 + (和它相等的个数，含自己 + 1) / 2——并列时取中间名次，
+    不需要真的排序，只要两次比较就能对整块数据算完。
+    """
+
+    def reducer(w: np.ndarray) -> np.ndarray:
+        last = w[..., -1:]
+        less = (w < last).sum(axis=-1)
+        equal = (w == last).sum(axis=-1)
+        return (less + (equal + 1) / 2) / window
+
+    return _rolling_window_reduce(x, window, reducer)
 
 
 def ts_argmax(x: pd.DataFrame, window: int) -> pd.DataFrame:
-    """窗口内最大值出现的位置：0 = 窗口最早一根，window-1 = 当前这一根。"""
-    return x.rolling(window).apply(lambda s: float(np.argmax(s.values)), raw=False)
+    """窗口内最大值出现的位置：0 = 窗口最早一根，window-1 = 当前这一根。有并列时取最早的那个。"""
+    return _rolling_window_reduce(x, window, lambda w: np.argmax(w, axis=-1))
 
 
 def ts_argmin(x: pd.DataFrame, window: int) -> pd.DataFrame:
-    return x.rolling(window).apply(lambda s: float(np.argmin(s.values)), raw=False)
+    """窗口内最小值出现的位置，约定同 `ts_argmax`。"""
+    return _rolling_window_reduce(x, window, lambda w: np.argmin(w, axis=-1))
 
 
 def ts_corr(x: pd.DataFrame, y: pd.DataFrame, window: int) -> pd.DataFrame:
@@ -104,7 +161,10 @@ def decay_linear(x: pd.DataFrame, window: int) -> pd.DataFrame:
     """线性衰减加权移动平均：离当前越近的数据权重越大，权重线性递增后归一化。"""
     weights = np.arange(1, window + 1, dtype="float64")
     weights /= weights.sum()
-    return x.rolling(window).apply(lambda s: float(np.dot(s.values, weights)), raw=False)
+    # 必须是"连续内存 + np.dot"：它和旧实现 `np.dot(一维窗口, weights)` 走同一个 BLAS 点积，求和顺序
+    # 相同、结果逐位一致。`w @ weights` / einsum 的求和顺序不同，会在第 16 位小数上产生差异——看似
+    # 无害，但下游常接截面 rank()，本该精确并列的值被拆开，名次就会变一档（实测改变了 4 个世坤因子）。
+    return _rolling_window_reduce(x, window, lambda w: np.dot(np.ascontiguousarray(w), weights))
 
 
 # ---- 逐元素算子 ----

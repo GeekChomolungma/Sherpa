@@ -9,5 +9,8 @@
   "label": {
     "horizon_bars": 1,
     "execution_delay_bars": 1
+  },
+  "market": {
+    "benchmark_symbol": "BTCUSDT"
   }
 }

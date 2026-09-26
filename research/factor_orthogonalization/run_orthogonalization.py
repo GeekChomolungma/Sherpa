@@ -68,10 +68,9 @@ from config import (
     LOW_SAMPLE_MIN_FRACTION,
     LOW_SAMPLE_MIN_SAMPLES,
     REGIME_ALPHA_SETS,
-    REGIME_BENCHMARK_SYMBOL,
     UNCONDITIONAL_ALPHAS,
 )
-from data import EXECUTION_DELAY_BARS, HORIZON_BARS, label_forward_returns, load_universe_panel
+from data import BENCHMARK_SYMBOL, EXECUTION_DELAY_BARS, HORIZON_BARS, label_forward_returns, load_universe_panel
 
 # 相对脚本自身所在目录解析，不依赖进程当前工作目录（cwd）——`python
 # research/factor_orthogonalization/run_orthogonalization.py` 从仓库根目录运行时，
@@ -230,10 +229,10 @@ def main() -> None:
     forward_returns = forward_returns.where(mask)
 
     print("正在计算 regime 打标（跟 regime_factor_report 体检同一套 regime_screening.regime_report）……")
-    regime = regime_report(panel, benchmark_symbol=REGIME_BENCHMARK_SYMBOL)
+    regime = regime_report(panel, benchmark_symbol=BENCHMARK_SYMBOL)
 
-    print("正在计算中性化用的风险暴露矩阵（Beta 对 REGIME_BENCHMARK_SYMBOL / Size 用 log(quote_volume)）……")
-    exposures = default_style_exposures(panel, benchmark_symbol=REGIME_BENCHMARK_SYMBOL)
+    print(f"正在计算中性化用的风险暴露矩阵（Beta 对 {BENCHMARK_SYMBOL} / Size 用 log(quote_volume)）……")
+    exposures = default_style_exposures(panel, benchmark_symbol=BENCHMARK_SYMBOL)
 
     print("正在计算候选因子历史分数（残差化后）……")
     histories, errors = _resolve_histories(all_names, panel, mask, exposures)

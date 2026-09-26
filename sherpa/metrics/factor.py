@@ -10,24 +10,42 @@ import math
 import warnings
 from dataclasses import dataclass
 
+import numpy as np
 import pandas as pd
 
 
 def rank_ic(alpha: pd.DataFrame, forward_returns: pd.DataFrame) -> pd.Series:
     """逐期 Spearman 秩相关系数（原理文档 §1.2(1)）。
 
-    index 对齐取交集；某一期非缺失的 symbol 数不足 2 个、或某一整行恒定（比如占位因子/
-    某个截面全部打平）时相关系数无意义，返回 NaN（`DataFrame.corrwith` 对这些情况的默认
-    行为已经是 NaN，不需要额外处理）。scipy 在恒定输入时会顺带打一条 `ConstantInputWarning`
-    到 stderr——这条警告描述的正是我们已经处理好、预期之内的 NaN 情况，不是需要调用方
-    关注的异常，批量跑几十上百个因子时会刷屏，这里显式吞掉。
+    index 对齐取交集；每一期只用两边都不缺失的 symbol。某一期这样的 symbol 不足 2 个、或某一边
+    整行恒定（比如占位因子 / 某个截面全部打平）时相关系数无意义，返回 NaN。
+
+    **实现：所有期一次算完（向量化），不再逐行调用 `corrwith(method="spearman")`。** Spearman =
+    对两边分别取秩（并列取平均秩）后的 Pearson 相关，这里用 pandas 按行排名（C 实现）+ numpy 逐行
+    协方差一次算完，跟 `corrwith` 的逐行结果在浮点舍入级别内一致
+    （`tests/metrics/test_factor_vectorized_equivalence.py` 保留了旧实现做对比）。
+    `±inf` 跟旧实现一样当作有效值参与排名（最大 / 最小），只有 NaN 算缺失。
     """
     alpha, forward_returns = alpha.align(forward_returns, join="inner", axis=0)
     common_cols = alpha.columns.intersection(forward_returns.columns)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        ic = alpha[common_cols].corrwith(forward_returns[common_cols], axis=1, method="spearman")
-    return ic.rename("rank_ic")
+    a = alpha[common_cols]
+    b = forward_returns[common_cols]
+
+    both = a.notna() & b.notna()
+    ranks_a = a.where(both).rank(axis=1).to_numpy(dtype="float64")
+    ranks_b = b.where(both).rank(axis=1).to_numpy(dtype="float64")
+    n = both.sum(axis=1).to_numpy(dtype="float64")
+
+    with np.errstate(invalid="ignore", divide="ignore"), warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)  # 全缺失行的 nanmean
+        centered_a = ranks_a - np.nanmean(ranks_a, axis=1, keepdims=True)
+        centered_b = ranks_b - np.nanmean(ranks_b, axis=1, keepdims=True)
+        cov = np.nansum(centered_a * centered_b, axis=1)
+        var_a = np.nansum(centered_a * centered_a, axis=1)
+        var_b = np.nansum(centered_b * centered_b, axis=1)
+        ic = cov / np.sqrt(var_a * var_b)
+    ic[(n < 2) | (var_a == 0) | (var_b == 0)] = np.nan
+    return pd.Series(ic, index=a.index, name="rank_ic")
 
 
 def forward_returns(close: pd.DataFrame, *, horizon: int = 1, delay: int = 0) -> pd.DataFrame:
@@ -198,6 +216,12 @@ def quantile_returns(alpha: pd.DataFrame, forward_returns: pd.DataFrame, n_quant
     列标签 1..n_quantiles，**1 = 当期 alpha 最高的一组（多头），n_quantiles = 最低的一组
     （空头）**——跟原理文档"第1组（多头最高分）到第K组（空头最低分）"的表述保持一致。
     某一期非缺失 symbol 数不足 `n_quantiles` 个时该期整行为 NaN（分不出这么多组）。
+
+    **实现：所有期一次算完（向量化），不再逐期 `qcut` + `groupby`。** 分组规则与旧实现逐期
+    `pd.qcut(降序名次, n_quantiles)` 完全一致：每期有效 symbol 按 alpha 降序排名（并列按列顺序，
+    即 `method="first"`），名次 1..n 按等分位切成 q 组——名次 r 落在第 `ceil(q·(r−1)/(n−1))` 组
+    （r=1 归第 1 组）。这就是 `qcut` 在 1..n 上用线性插值算分位点、右闭区间分箱的结果，只是写成了
+    一个公式，所有期同时算。
     """
     alpha, forward_returns = alpha.align(forward_returns, join="inner", axis=0)
     common_cols = alpha.columns.intersection(forward_returns.columns)
@@ -205,21 +229,25 @@ def quantile_returns(alpha: pd.DataFrame, forward_returns: pd.DataFrame, n_quant
     r = forward_returns[common_cols]
     labels = list(range(1, n_quantiles + 1))
 
-    rows: dict = {}
-    for t in a.index:
-        a_row = a.loc[t]
-        r_row = r.loc[t]
-        mask = a_row.notna() & r_row.notna()
-        if int(mask.sum()) < n_quantiles:
-            rows[t] = pd.Series(float("nan"), index=labels)
-            continue
-        # rank 降序：alpha 最高的 symbol 拿到 rank 1，qcut 按升序 rank 分箱，
-        # 所以 rank 1 一定落进第一个箱 -> label 1，跟"组1=多头最高分"的约定对齐。
-        desc_rank = a_row[mask].rank(method="first", ascending=False)
-        bucket = pd.qcut(desc_rank, n_quantiles, labels=False) + 1
-        rows[t] = r_row[mask].groupby(bucket).mean().reindex(labels)
+    valid = a.notna() & r.notna()
+    n = valid.sum(axis=1).to_numpy(dtype="float64")[:, None]  # (T, 1)
+    # rank 降序：alpha 最高的 symbol 拿到名次 1，一定落进第 1 组，跟"组1=多头最高分"的约定对齐。
+    desc_rank = a.where(valid).rank(axis=1, method="first", ascending=False).to_numpy(dtype="float64")
+    with np.errstate(invalid="ignore", divide="ignore"):
+        bucket = np.ceil(n_quantiles * (desc_rank - 1) / (n - 1))
+    bucket = np.where(n > 1, np.maximum(bucket, 1), 1)  # 名次 1（以及只有 1 个 symbol 时）归第 1 组
+    returns = r.to_numpy(dtype="float64")
+    is_valid = valid.to_numpy()
 
-    return pd.DataFrame.from_dict(rows, orient="index").reindex(columns=labels).sort_index()
+    means = np.full((len(a.index), n_quantiles), np.nan)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        for k in labels:
+            in_group = is_valid & (bucket == k)
+            members = in_group.sum(axis=1)
+            total = np.where(in_group, returns, 0.0).sum(axis=1)
+            means[:, k - 1] = np.where(members > 0, total / np.maximum(members, 1), np.nan)
+    means[n[:, 0] < n_quantiles] = np.nan
+    return pd.DataFrame(means, index=a.index, columns=labels).sort_index()
 
 
 def is_monotonic_decreasing(mean_quantile_returns: pd.Series) -> bool:

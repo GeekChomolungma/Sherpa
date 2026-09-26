@@ -62,6 +62,7 @@ from sherpa.risk.neutralize import neutralize
 
 import config
 from data import (
+    BENCHMARK_SYMBOL,
     END_TIME,
     EXECUTION_DELAY_BARS,
     HORIZON_BARS,
@@ -170,8 +171,8 @@ def main() -> None:
 
     mask = tradable_mask(panel.quote_volume, panel.trades_count)
     forward_returns = label_forward_returns(panel).where(mask)
-    regime = regime_report(panel, benchmark_symbol=config.REGIME_BENCHMARK_SYMBOL)
-    exposures = default_style_exposures(panel, benchmark_symbol=config.REGIME_BENCHMARK_SYMBOL)
+    regime = regime_report(panel, benchmark_symbol=BENCHMARK_SYMBOL)
+    exposures = default_style_exposures(panel, benchmark_symbol=BENCHMARK_SYMBOL)
 
     print("\n正在计算候选因子的残差分数……")
     residuals = _residual_scores(all_names, panel, mask, exposures)

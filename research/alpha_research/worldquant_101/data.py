@@ -38,6 +38,11 @@ INTERVAL: str = _CONFIG["window"]["interval"]
 START_TIME: str = _CONFIG["window"]["research_start"]
 END_TIME: str = _CONFIG["window"]["validation_start"]  # 选择段截止，不是 research_end
 
+# `market` 一节：大盘锚点。regime 打标（趋势判定看它）和 Beta 暴露（中性化剥离对它的 Beta）都用它，
+# 所有关卡必须一致，否则各关的 state 含义、残差口径对不上。以前在几个脚本和 config 里各写一份
+# "BTCUSDT"，现在只在这里定义。
+BENCHMARK_SYMBOL: str = _CONFIG["market"]["benchmark_symbol"]
+
 # `label` 一节：IC 检验用的"未来收益"标签口径（持有几根 bar、信号出来后延迟几根 bar 才成交）。
 # 所有算 IC 的脚本（阶段一体检、关卡1 挑代表因子……）必须用同一个口径，否则阶段一按"延迟 1 根"
 # 选出的因子，关卡1 却按"不延迟"比强弱，前后对不上。一律通过下面的 `label_forward_returns()` 取标签。

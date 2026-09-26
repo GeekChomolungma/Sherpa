@@ -156,8 +156,8 @@ GLOBAL_FACTORS: list[str] = [
 # "按哪个维度选名单"（README §3 方案 A）；这里 4 个维度各跑一版，在验证段上直接比较，不凭感觉预先指定。
 ROUTING_DIMENSIONS: tuple[str, ...] = ("trend", "volatility", "dispersion", "liquidity")
 
-# regime 打标的大盘锚点，必须跟阶段一、关卡1 一致，state 的含义才对得上。
-REGIME_BENCHMARK_SYMBOL: str = "BTCUSDT"
+# 大盘锚点（regime 打标 + Beta 暴露）不在这里配置：统一来自 `research/research_config.json` 的
+# `market.benchmark_symbol`，由 `data.py` 读成 `BENCHMARK_SYMBOL`，跟阶段一、关卡1 用的是同一个锚点。
 
 # 估计因子方向（IC 符号）的最少样本数：全局方向 / 按 state 的方向。state 样本不足时退回全局方向。
 SIGN_MIN_SAMPLES_GLOBAL: int = 30

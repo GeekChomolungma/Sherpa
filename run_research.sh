@@ -9,7 +9,7 @@
 # 默认流程（每一步的产出都落在各自脚本所在目录，不再散落在仓库根目录）：
 #   1  run_regime_report.py          -> alpha_research/worldquant_101/regime_report.csv
 #   2  run_screening.py              -> alpha_research/worldquant_101/screening_report.csv
-#      （步骤 1、2 是独立的参考报告，后续步骤不读它们的产出；只改了下游时可以 --from-step 3）
+#      （步骤 1、2 是独立的参考报告，后续步骤不读它们的产出；步骤 2 默认不跑，见 --with-screening）
 #   3  run_alpha_regime_profile.py   -> alpha_research/worldquant_101/regime_alpha_profile.csv
 #                                       （是否中性化由该脚本顶部的 USE_NEUTRALIZATION 开关决定）
 #   4  regime_factor_report.py       -> regime_factor_report/results/（含 04_regime_matrix.csv；
@@ -22,6 +22,8 @@
 #
 # 可选步骤（默认不跑）：
 #   --with-calibration     步骤0  tradability_calibration 三个脚本（流动性掩码门槛校准，纯参考）
+#   --with-screening       步骤2  全局筛选报告 screening_report.csv（单进程逐个算全部因子，最慢；
+#                                 后续步骤不读它的产出，纯参考）
 #   --with-vectorized      步骤5  四个分类的单因子迷你回测（慢，辅助参考，不是必经步骤）
 #   --refresh-candidates   步骤6  用刚生成的 04_regime_matrix.csv Top5 重写正交化的候选池
 #                                 （config.py 里 REGIME_ALPHA_SETS 是手动维护的，因子公式/窗口
@@ -54,6 +56,7 @@ MIN_ABS_T="${MIN_ABS_T:-3.0}"
 
 WITH_CAL=0
 WITH_VEC=0
+WITH_SCREENING=0
 REFRESH=0
 REFRESH_SYNTH=0
 DRY=0
@@ -66,6 +69,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --with-calibration) WITH_CAL=1 ;;
     --with-vectorized) WITH_VEC=1 ;;
+    --with-screening) WITH_SCREENING=1 ;;
     --refresh-candidates) REFRESH=1 ;;
     --refresh-synthesis-candidates) REFRESH_SYNTH=1 ;;
     --dry-run) DRY=1 ;;
@@ -94,6 +98,7 @@ will_run() {  # will_run <步骤号>：这一步在当前参数下会不会执�
   [ "$n" -ge "$FROM" ] || return 1
   case "$n" in
     0) [ "$WITH_CAL" -eq 1 ] ;;
+    2) [ "$WITH_SCREENING" -eq 1 ] ;;
     5) [ "$WITH_VEC" -eq 1 ] ;;
     6) [ "$REFRESH" -eq 1 ] ;;
     8) [ "$REFRESH_SYNTH" -eq 1 ] ;;

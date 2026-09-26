@@ -27,19 +27,20 @@ bash run_research.sh --refresh-candidates --refresh-synthesis-candidates
 
 **跑完怎么读结果、怎么下结论**：见 [`RESULT_READING_GUIDE.md`](RESULT_READING_GUIDE.md)。
 
-## 统一研究配置：时间窗、holdout、IC 标签
+## 统一研究配置：时间窗、holdout、IC 标签、大盘锚点
 
 所有子项目共用一份 [`research_config.json`](research_config.json)，按用途分节，以后有新的跨子项目
-研究配置就再加一节：
+研究配置就再加一节。**具体取值以 JSON 为准**（这里只解释含义，不抄数值，免得文档过期）；
+`run_research.sh` 启动时会把整份配置打印出来。
 
 **`window`：取数区间与样本外 holdout**
 
-| 字段 | 当前值 | 含义 |
-|---|---|---|
-| `interval` | `4h` | K 线周期 |
-| `research_start` ~ `validation_start` | `2020-01-01` ~ `2024-09-15` | **选择段**：阶段一体检、关卡1 去冗余只在这一段上做（这几个子目录的 `data.py` 取数截止到 `validation_start`）；关卡2 在这一段上估计因子方向 |
-| `validation_start` ~ `research_end` | `2024-09-15` ~ `2026-03-15` | **验证段**：关卡2 比较各合成方案。对"选因子"来说是没见过的数据，比较才公平 |
-| `research_end` ~ `holdout_end` | `2026-03-15` ~ `2026-09-15` | **样本外 holdout**：任何筛选、调参都不碰，只在关卡2 定稿后做一次性验收 |
+| 字段 | 含义 |
+|---|---|
+| `interval` | K 线周期 |
+| `research_start` ~ `validation_start` | **选择段**：阶段一体检、关卡1 去冗余只在这一段上做（这几个子目录的 `data.py` 取数截止到 `validation_start`）；关卡2 在这一段上估计因子方向和权重 |
+| `validation_start` ~ `research_end` | **验证段**：关卡2 比较各合成方案。对"选因子"来说是没见过的数据，比较才公平 |
+| `research_end` ~ `holdout_end` | **样本外 holdout**：任何筛选、调参都不碰，只在关卡2 定稿后做一次性验收 |
 
 选择段 + 验证段合称**研究段**（`research_start ~ research_end`）。为什么要把研究段再切一刀：候选因子是在
 选择段上挑出来的，如果关卡2 还在同一段上比较合成方案，就是"在考自己出的题"，而且自由度越大的方案
@@ -47,19 +48,27 @@ bash run_research.sh --refresh-candidates --refresh-synthesis-candidates
 
 **`label`：IC 检验用的"未来收益"标签口径**
 
-| 字段 | 当前值 | 含义 |
-|---|---|---|
-| `horizon_bars` | `1` | 持有期：收益累计几根 bar |
-| `execution_delay_bars` | `0` | 执行延迟：信号在 bar t 收盘算出后，晚几根 bar 才按收盘价成交 |
+| 字段 | 含义 |
+|---|---|
+| `horizon_bars` | 持有期：收益累计几根 bar |
+| `execution_delay_bars` | 执行延迟：信号在 bar t 收盘算出后，晚几根 bar 才按收盘价成交 |
 
 t 行的标签 = 从 `close[t + delay]` 持有到 `close[t + delay + horizon]` 的收益
 （`sherpa.metrics.factor.forward_returns`）。默认值等价于历史写法 `close.pct_change().shift(-1)`；
 `execution_delay_bars = 1` 等价于 `shift(-2)`，用来检验信号是不是只在"收盘后立刻成交"那一瞬间有效
 （短周期反转因子的 IC 里常混有买卖价差来回跳的成分，实盘吃不到，延迟一根 bar 后会大幅消失）。
 
-各子目录的 `data.py` 把配置读成常量（`INTERVAL`/`START_TIME`/`END_TIME`，以及 `HORIZON_BARS`/
-`EXECUTION_DELAY_BARS`），并提供 `label_forward_returns(panel)` 统一构造标签。阶段一体检、
-`run_screening`、关卡1 挑代表因子都用它，所以**改一处配置，整条链的 IC 口径一起变**。
+**`market`：大盘锚点**
+
+| 字段 | 含义 |
+|---|---|
+| `benchmark_symbol` | regime 打标的趋势锚点，同时也是 Beta 暴露（中性化剥离的对象）的基准。各关必须一致，否则 state 的含义、残差的口径都对不上 |
+
+各子目录的 `data.py` 把配置读成常量（`INTERVAL`/`START_TIME`/`END_TIME`、`HORIZON_BARS`/
+`EXECUTION_DELAY_BARS`、`BENCHMARK_SYMBOL`），并提供 `label_forward_returns(panel)` 统一构造标签。
+阶段一体检、`run_screening`、关卡1 挑代表因子、关卡2 评估合成分数都用它们，所以**改一处配置，
+整条链的口径一起变**。研究脚本里不要再直接写 `"BTCUSDT"` 这类常量，也不要依赖 `sherpa` 函数的
+默认锚点参数——一律显式传 `BENCHMARK_SYMBOL`。
 
 为什么要统一：阶段一在哪段历史、用哪种标签选出因子，关卡1 就必须在同一段历史、同一种标签上检验
 冗余和挑代表，否则两边结论对不上（统一之前，阶段一从 2024 开始、关卡1 从 2020 开始）。这是
@@ -72,6 +81,64 @@ t 行的标签 = 从 `close[t + delay]` 持有到 `close[t + delay + horizon]` �
 - holdout 的用法规矩和预热（warm-up）注意事项见
   [`factor_synthesis/README.md`](factor_synthesis/README.md) §6.4。**不要把 `research_end` 往后挪来"多用点数据"**，
   那等于把 holdout 废掉。
+
+## 模块接口表：各关之间靠什么连在一起
+
+每一关都**自己从数据库取数、自己计算**，研究子目录之间不互相 import 代码、不直接读对方的中间过程。
+它们之间的联系只有下面四类，改动任何一类都要按"影响范围"一栏检查。
+
+### 1. 显性纽带：上游结果 CSV → 下游 config（传递候选因子名单）
+
+| 上游（产出） | 传递物 | 下游（消费） | 下游依赖的列 / 字段 |
+|---|---|---|---|
+| 阶段一 `alpha_research/worldquant_101/run_alpha_regime_profile.py`（读库） | `regime_alpha_profile.csv` | `regime_factor_report/regime_factor_report.py`（不读库） | `alpha, dimension, state, samples, ic_mean, ic_std, ic_ir, win_rate, t_stat, p_value`；每个因子一行 `dimension=unconditional, state=ALL` 作为全历史基线 |
+| `regime_factor_report.py` | `results/04_regime_matrix.csv`、`results/05_global_matrix.csv` | `factor_orthogonalization/refresh_candidates.py`（步骤 6）→ 关卡1 `config.py` 的 `REGIME_ALPHA_SETS` / `UNCONDITIONAL_ALPHAS` | `dimension, state, top{i}_alpha, low_sample, significant_count, candidate_count, min_abs_t` |
+| 关卡1 `run_orthogonalization.py`（读库） | `results/02_regime_cluster_assignments.csv` | `factor_synthesis/refresh_candidates.py`（步骤 8）→ 关卡2 `config.py` 的 `REGIME_FACTOR_SETS` / `GLOBAL_FACTORS` | `dimension, state, qualified_name, recommendation, own_ic_ir, cluster_members, own_low_sample` |
+| 关卡2 `run_synthesis.py`（读库） | `results/01~04_*.csv` | 人工阅读、决策（见 [`RESULT_READING_GUIDE.md`](RESULT_READING_GUIDE.md)）；以后接关卡3 | — |
+
+下游只读 `config.py`（由 refresh 脚本重写 BEGIN/END 标记之间的区块），运行时不直接读上游 CSV。
+**上游改了输出 CSV 的列名 / 含义，必须同步改下游的 refresh 脚本。**
+
+### 2. 隐性纽带：共享配置 `research_config.json`
+
+`window` / `label` / `market` 三节被所有读库的 `data.py` 读取（见上一节）。**改了它，整条链的结论
+都会变，必须从第 3 步整体重跑**：
+
+```bash
+bash run_research.sh --from-step 3 --refresh-candidates --refresh-synthesis-candidates
+```
+
+### 3. 隐性纽带：共用 `sherpa` 核心函数
+
+各关分别调用同一批核心函数，**口径必须一致**，研究结论才前后对得上：
+
+| 函数 | 作用 | 用到的关 |
+|---|---|---|
+| `sherpa.metrics.tradability.tradable_mask` | 可交易掩码 | 阶段一、关卡1、关卡2 |
+| `sherpa.backtest.style_exposure.default_style_exposures` + `sherpa.risk.neutralize.neutralize` | Beta / Size 暴露与中性化 | 阶段一、关卡1、关卡2 |
+| `sherpa.backtest.regime_screening.regime_report` | regime 打标 | 阶段一、关卡1、关卡2 |
+| `sherpa.metrics.factor.rank_ic` / `ic_summary` / `ic_significance` / `conditional_ic_summary` | IC 与显著性 | 阶段一、关卡1、关卡2 |
+| `sherpa.metrics.factor.forward_returns`（经 `data.label_forward_returns`） | IC 标签 | 阶段一、关卡1、关卡2 |
+
+所谓"解耦"是指研究子目录之间不共享代码和中间文件，**不是**各算各的逻辑。改这些核心函数等于同时改了
+所有关卡，改完必须跑全部测试（`python -m pytest`），并从第 3 步整体重跑。
+
+### 4. 隐性纽带：跨文件保持一致的约定
+
+没有集中定义、需要人工保持一致的少数约定（改其中一处要全局搜索一起改）：
+
+| 约定 | 出现位置 |
+|---|---|
+| regime 的维度名、state 名及顺序（`trend: bull/bear/neutral` …） | `sherpa.metrics.regime`（定义处）、两个 `refresh_candidates.py` 的 `ORDER`、`regime_factor_report.py` 的 `DEFAULT_STATE_ORDER`、`factor_synthesis/config.py` 的 `ROUTING_DIMENSIONS` |
+| 全历史基线的标记 `dimension=unconditional, state=ALL` | `sherpa.backtest.regime_screening.UNCONDITIONAL_DIMENSION`、`regime_factor_report.py`、关卡1 `run_orthogonalization.py`、两个 `refresh_candidates.py` |
+| `recommendation` 的取值（`keep` / `drop_redundant`，预留 `keep_complementary`） | 关卡1 `run_orthogonalization.py`（产出）、关卡2 `refresh_candidates.py` 的 `KEEP_RECOMMENDATIONS`（消费） |
+
+### 改动时的自查顺序
+
+1. 只改某一关的内部逻辑 → 不影响别的关，重跑这一关及下游即可；
+2. 改了某一关输出 CSV 的列 → 检查下游 refresh 脚本（第 1 类）；
+3. 改了 `research_config.json` 或 `sherpa` 核心函数 → 跑全部测试，从第 3 步整体重跑（第 2、3 类）；
+4. 改了第 4 类约定 → 全局搜索，所有出现位置一起改。
 
 ## 子目录 -> 生命周期阶段 对照表
 

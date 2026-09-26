@@ -22,10 +22,9 @@ if sys.platform == "win32":
 
 from sherpa.backtest.regime_screening import regime_report
 
-from data import END_TIME, INTERVAL, START_TIME, load_universe_panel
+from data import BENCHMARK_SYMBOL, END_TIME, INTERVAL, START_TIME, load_universe_panel
 
 REPORT_PATH = "regime_report.csv"
-BENCHMARK_SYMBOL = "BTCUSDT"
 
 
 def main() -> None:

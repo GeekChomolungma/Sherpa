@@ -40,7 +40,7 @@ from __future__ import annotations
 REGIME_ALPHA_SETS: dict[str, dict[str, list[str]]] = {
     "trend": {
         # trend.bull low_sample=True：样本偏少，排行榜可信度打折扣
-        # trend.bull：只有 3/77 个因子通过显著性门槛 |t| >= 3
+        # trend.bull：只有 3/76 个因子通过显著性门槛 |t| >= 3
         "bull": [
             "worldquant.alpha036",
             "worldquant.alpha003",
@@ -163,10 +163,8 @@ EXTRA_IMPORTS: list[str] = [
 # 结合 `results/01_regime_factor_correlation_pairs.csv` 里实际的相关性分布去调整。
 CORRELATION_THRESHOLD: float = 0.7
 
-# 透传给 `sherpa.backtest.regime_screening.regime_report()` 的大盘锚点——要跟
-# `regime_factor_report`/`alpha_research/worldquant_101` 那批体检用的基准一致，才能让这里聚类出的 state
-# 跟 `04_regime_matrix.csv` 里说的是同一件事。
-REGIME_BENCHMARK_SYMBOL: str = "BTCUSDT"
+# 大盘锚点（regime 打标 + Beta 暴露）不在这里配置：统一来自 `research/research_config.json` 的
+# `market.benchmark_symbol`，由 `data.py` 读成 `BENCHMARK_SYMBOL`，保证跟阶段一体检用的是同一个锚点。
 
 # 跟 `regime_factor_report.py` 同一套 low-sample 保护红线：某个 (dimension, state) 切片
 # 的样本数太少时，聚类结果/代表因子选择可能只是噪音，输出里会把对应行标记为 low_sample，
