@@ -35,69 +35,90 @@ REGIME_FACTOR_SETS: dict[str, dict[str, list[str]]] = {
     "trend": {
         # trend.bull low_sample=True：样本偏少，关卡2 会把它的权重往全局权重收缩
         "bull": [
-            "worldquant.alpha040",  # IC_IR=+0.584
-            "worldquant.alpha016",  # IC_IR=+0.447
-            "worldquant.alpha094",  # IC_IR=+0.436
-            "worldquant.alpha073",  # IC_IR=+0.419
-            "worldquant.alpha026",  # IC_IR=+0.405
+            "worldquant.alpha040",  # IC_IR=+0.227
         ],
         "bear": [
-            "worldquant.alpha033",  # IC_IR=+0.254  代表冗余簇，吸收了 alpha038, alpha009, alpha101
-            "worldquant.alpha083",  # IC_IR=+0.209
+            "worldquant.alpha040",  # IC_IR=+0.148
+            "worldquant.alpha094",  # IC_IR=+0.114
+            "worldquant.alpha044",  # IC_IR=+0.105
+            "worldquant.alpha026",  # IC_IR=+0.097
+            "worldquant.alpha029",  # IC_IR=+0.096
         ],
         "neutral": [
-            "worldquant.alpha033",  # IC_IR=+0.238  代表冗余簇，吸收了 alpha038, alpha009
-            "worldquant.alpha083",  # IC_IR=+0.204
-            "worldquant.alpha037",  # IC_IR=+0.202
+            "worldquant.alpha040",  # IC_IR=+0.148
+            "worldquant.alpha094",  # IC_IR=+0.130
+            "worldquant.alpha016",  # IC_IR=+0.119
+            "worldquant.alpha039",  # IC_IR=+0.095
+            "worldquant.alpha073",  # IC_IR=+0.095
         ],
     },
     "volatility": {
         "high": [
-            "worldquant.alpha033",  # IC_IR=+0.267  代表冗余簇，吸收了 alpha038, alpha009
-            "worldquant.alpha083",  # IC_IR=+0.224
-            "worldquant.alpha037",  # IC_IR=+0.212
+            "worldquant.alpha040",  # IC_IR=+0.133
+            "worldquant.alpha094",  # IC_IR=+0.125
+            "worldquant.alpha036",  # IC_IR=+0.102
+            "worldquant.alpha044",  # IC_IR=+0.101
+            "worldquant.alpha055",  # IC_IR=+0.098
         ],
         "normal": [
-            "worldquant.alpha033",  # IC_IR=+0.242  代表冗余簇，吸收了 alpha038, alpha101
-            "worldquant.alpha034",  # IC_IR=+0.200
-            "worldquant.alpha083",  # IC_IR=+0.197
+            "worldquant.alpha040",  # IC_IR=+0.151
+            "worldquant.alpha094",  # IC_IR=+0.110
+            "worldquant.alpha016",  # IC_IR=+0.110
+            "worldquant.alpha073",  # IC_IR=+0.104
+            "worldquant.alpha035",  # IC_IR=+0.103
         ],
         "low": [
-            "worldquant.alpha033",  # IC_IR=+0.229  代表冗余簇，吸收了 alpha009, alpha038
-            "worldquant.alpha083",  # IC_IR=+0.203
-            "worldquant.alpha057",  # IC_IR=+0.192
+            "worldquant.alpha040",  # IC_IR=+0.164
+            "worldquant.alpha094",  # IC_IR=+0.135
+            "worldquant.alpha073",  # IC_IR=+0.119
+            "worldquant.alpha016",  # IC_IR=+0.118
+            "worldquant.alpha044",  # IC_IR=+0.106
         ],
     },
     "dispersion": {
         "high": [
-            "worldquant.alpha033",  # IC_IR=+0.229  代表冗余簇，吸收了 alpha038
-            "worldquant.alpha034",  # IC_IR=+0.192
-            "worldquant.alpha057",  # IC_IR=+0.189
-            "worldquant.alpha083",  # IC_IR=+0.184
+            "worldquant.alpha040",  # IC_IR=+0.124
+            "worldquant.alpha094",  # IC_IR=+0.110
+            "worldquant.alpha016",  # IC_IR=+0.097
+            "worldquant.alpha029",  # IC_IR=+0.093
+            "worldquant.alpha039",  # IC_IR=+0.091
         ],
         "normal": [
-            "worldquant.alpha033",  # IC_IR=+0.249  代表冗余簇，吸收了 alpha038, alpha009, alpha101
-            "worldquant.alpha083",  # IC_IR=+0.203
+            "worldquant.alpha040",  # IC_IR=+0.147
+            "worldquant.alpha094",  # IC_IR=+0.134
+            "worldquant.alpha016",  # IC_IR=+0.105
+            "worldquant.alpha037",  # IC_IR=+0.104
+            "worldquant.alpha044",  # IC_IR=+0.100
         ],
         "low": [
-            "worldquant.alpha033",  # IC_IR=+0.256  代表冗余簇，吸收了 alpha038, alpha101, alpha009
-            "worldquant.alpha083",  # IC_IR=+0.238
+            "worldquant.alpha040",  # IC_IR=+0.176
+            "worldquant.alpha094",  # IC_IR=+0.127
+            "worldquant.alpha044",  # IC_IR=+0.115
+            "worldquant.alpha016",  # IC_IR=+0.114
+            "worldquant.alpha015",  # IC_IR=+0.110
         ],
     },
     "liquidity": {
         "high": [
-            "worldquant.alpha033",  # IC_IR=+0.196  代表冗余簇，吸收了 alpha009, alpha038
-            "worldquant.alpha083",  # IC_IR=+0.184
-            "worldquant.alpha057",  # IC_IR=+0.173
+            "worldquant.alpha040",  # IC_IR=+0.081
+            "worldquant.alpha037",  # IC_IR=+0.080
+            "worldquant.alpha036",  # IC_IR=+0.076
+            "worldquant.alpha033",  # IC_IR=+0.068
+            "worldquant.alpha025",  # IC_IR=+0.066
         ],
         "normal": [
-            "worldquant.alpha033",  # IC_IR=+0.263  代表冗余簇，吸收了 alpha038, alpha009, alpha101
-            "worldquant.alpha083",  # IC_IR=+0.217
+            "worldquant.alpha040",  # IC_IR=+0.164
+            "worldquant.alpha094",  # IC_IR=+0.136
+            "worldquant.alpha016",  # IC_IR=+0.121
+            "worldquant.alpha044",  # IC_IR=+0.115
+            "worldquant.alpha035",  # IC_IR=+0.100
         ],
         "starved": [
-            "worldquant.alpha033",  # IC_IR=+0.267  代表冗余簇，吸收了 alpha038, alpha101
-            "worldquant.alpha094",  # IC_IR=+0.260
-            "worldquant.alpha029",  # IC_IR=+0.230
+            "worldquant.alpha040",  # IC_IR=+0.200
+            "worldquant.alpha094",  # IC_IR=+0.170
+            "worldquant.alpha073",  # IC_IR=+0.162
+            "worldquant.alpha029",  # IC_IR=+0.153
+            "worldquant.alpha044",  # IC_IR=+0.131
         ],
     },
 }
