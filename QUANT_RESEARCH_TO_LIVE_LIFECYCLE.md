@@ -103,7 +103,23 @@ flowchart TD
 * **准出标准**：
   * 淘汰全局无条件 $\text{IC\_IR} < 0.10$ 的纯噪音因子；
   * 淘汰"中性化后信息量大幅衰减/消失"的因子——如果一个因子的原始 $\text{IC\_IR}$ 表现优异，但剥离 Beta/Size 暴露后的残差 $\text{IC\_IR}$ 显著下降甚至转为噪音，说明其原始表现本质上是被动承担系统性风险（俗称"骑 Beta"），而不是真正的选币能力，必须淘汰，不得带着未剥离的原始分数进入关卡1；
-  * 输出每个因子（残差化后）在各微观 Regime 掩码下的条件体检矩阵（识别出哪些是全天候因子、哪些是需条件激活动态门控因子）。
+  * 输出每个因子（残差化后）在各微观 Regime 掩码下的条件体检矩阵（识别出哪些是全天候因子、哪些是需条件激活动态门控因子）；
+  * **显著性判别（统计门槛）**：见下方「显著性检验与选因子规则」。
+
+#### 显著性检验与选因子规则
+
+* **为什么需要**：IC_IR 只衡量"信号强度"，不考虑样本量。同样 IC_IR = 0.3，在 1 万根 bar 上是铁证，在某个只有 50 根 bar 的 regime 切片里可能只是运气。显著性检验把"强度"和"样本量"合成一个判断：这个 IC 均值有多大把握不是 0。
+* **检验方法**：对残差 IC 序列（全局，以及每个 regime 切片）的均值做 **Newey–West t 检验**（[`sherpa.metrics.factor.ic_significance`](file:///d:/code-repo/Chomo/Sherpa/sherpa/metrics/factor.py)），输出 `t_stat` 与双侧 `p_value`：
+  * 朴素做法 `t = IC_IR × √n` 假设各期 IC 相互独立；但因子值逐 bar 变化慢，相邻 IC 往往正相关，朴素 t 会**系统性高估**显著性；
+  * Newey–West 把前 L 阶自协方差加进方差估计（L = ⌊4·(n/100)^(2/9)⌋，全样本约 11 阶），自相关越强、t 越小。
+* **门槛：|t| ≥ 3.0**（双侧 p ≈ 0.0027）。理由是多重检验：约 100 个因子 × 12 个 regime state ≈ 1200 次检验，|t| ≥ 3 时纯靠运气"显著"的期望个数约 3 个，而传统的 |t| ≥ 2 会有约 55 个。Harvey, Liu & Zhu (2016) 也主张新因子的 t 值门槛提高到 3.0。
+* **选因子规则（`04_regime_matrix.csv` → 关卡1 候选池）**：
+  1. **门槛**：每个 regime state 内，只有条件 IC 均值 |t| ≥ 3 的因子才有资格入选；
+  2. **排序**：通过门槛的因子按 |IC_IR| 从高到低取 Top K（默认 5）；
+  3. **不凑数**：通过门槛的不足 K 个，就只取通过的，不拿不显著的因子补位；`04_regime_matrix.csv` 的 `significant_count` 列记录每个 state 实际通过了几个。
+* **为什么是"显著性做门槛、|IC_IR| 做排序"，而不是按 t 值或 p 值排序**：同一个 state 里各因子的样本数几乎相同，t ≈ IC_IR × √n_eff，按 t 排序和按 IC_IR 排序基本等价，剩下的差别只来自 IC 自相关的差异，并不代表因子更强；而 p 值衡量的是"有多确定不是 0"，不是"效应有多大"，样本一大，微弱的效应也能拿到极小的 p 值。显著性回答"能不能用"，|IC_IR| 回答"有多强"，各管一件事。
+* **落地位置**：`t_stat`/`p_value` 由 `conditional_ic_summary` 随条件 IC 一起算出，写进 `regime_alpha_profile.csv`；门槛在 [`research/regime_factor_report/regime_factor_report.py`](file:///d:/code-repo/Chomo/Sherpa/research/regime_factor_report/regime_factor_report.py) 的 `build_regime_matrix` 执行（参数 `--min-abs-t`，`run_research.sh` 里的环境变量 `MIN_ABS_T`，默认 3.0）；`run_screening.py` 的全局排行榜也附带这两列，仅作参考，不改变其 `passed` 口径。
+* **局限**：|t| ≥ 3 只是对多重检验的粗粒度防护，不是严格校正；将来自动挖掘因子、检验次数上到成千上万时，需要配合候选记账与 Deflated Sharpe 等更严格的方法（见 [`research/factor_orthogonalization/INCREMENTAL_TODO.md`](research/factor_orthogonalization/INCREMENTAL_TODO.md) G7）。
 
 ### 3.2 中性化：截面风险与风格暴露残差化 (Neutralization)
 
@@ -130,7 +146,7 @@ flowchart TD
 * **算子与因子表达**：[`sherpa.alpha`](file:///d:/code-repo/Chomo/Sherpa/sherpa/alpha/base.py)（`Alpha`、`ops.py`、`worldquant/`、`tradingview/`、`custom/`）。
 * **特征组织容器**：[`sherpa.alpha.engine.AlphaEngine`](file:///d:/code-repo/Chomo/Sherpa/sherpa/alpha/engine.py#L14-L41)（管理因子集合，输出特征矩阵）。
 * **风险暴露与中性化残差化**：[`sherpa.risk`](file:///d:/code-repo/Chomo/Sherpa/sherpa/risk)（`exposure.rolling_beta`、`neutralize.neutralize`，见 §3.2）。
-* **统计评测库**：[`sherpa.metrics.factor`](file:///d:/code-repo/Chomo/Sherpa/sherpa/metrics/factor.py)（`rank_ic`、`ic_summary`、`quantile_returns`、`is_monotonic_decreasing`）。
+* **统计评测库**：[`sherpa.metrics.factor`](file:///d:/code-repo/Chomo/Sherpa/sherpa/metrics/factor.py)（`rank_ic`、`ic_summary`、`ic_significance`（Newey–West t 检验）、`conditional_ic_summary`、`quantile_returns`、`is_monotonic_decreasing`）。
 
 ---
 

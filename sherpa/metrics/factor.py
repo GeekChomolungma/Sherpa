@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import math
 import warnings
 from dataclasses import dataclass
 
@@ -60,6 +61,75 @@ def ic_summary(ic_series: pd.Series) -> ICSummary:
     return ICSummary(mean=mean, std=std, ic_ir=ic_ir)
 
 
+@dataclass(frozen=True)
+class ICSignificance:
+    """RankIC 均值是否显著异于 0 的检验结果（Newey–West t 检验）。"""
+
+    t_stat: float
+    p_value: float
+    samples: int
+    lags: int
+
+
+def newey_west_lags(samples: int) -> int:
+    """Newey–West 自动滞后阶数的经验公式 `floor(4 * (n/100)^(2/9))`（Newey & West, 1994）。
+
+    4h bar 全样本 n≈13000 时约 11 阶；某个 regime state 切片 n≈100 时约 4 阶。
+    """
+    if samples <= 1:
+        return 0
+    return int(math.floor(4.0 * (samples / 100.0) ** (2.0 / 9.0)))
+
+
+def ic_significance(ic_series: pd.Series, *, lags: int | None = None) -> ICSignificance:
+    """RankIC 均值的 Newey–West（HAC）t 检验：`t = mean / se_NW`，p 为双侧正态近似。
+
+    为什么不用朴素的 `t = IC_IR × sqrt(n)`：因子值逐 bar 变化慢，相邻两期的 IC 往往正相关，
+    这时 n 期 IC 并不是 n 个独立样本，朴素 t 会系统性高估显著性。Newey–West 用 Bartlett
+    权重把前 `lags` 阶自协方差加进方差估计，自相关越强、标准误越大、t 越小。IC 序列没有
+    自相关时，结果退化成朴素 t（只差一个 n 与 n-1 的分母口径）。
+
+    `ic_series` 是按时间排好序的序列（`rank_ic` 的输出、或者它按 regime 取出的子序列）；
+    NaN 会被先剔除。对 regime 子序列来说，被剔除掉的其它 state 的 bar 会让"相邻"变成
+    "子序列里相邻"，这是一个近似——同一个 state 往往连续出现好多根 bar，近似误差不大。
+
+    p 值用正态分布近似（`erfc(|t| / sqrt(2))`），不引入 scipy：样本数上百时 t 分布和
+    正态分布几乎没有差别；样本很少的切片本来就会被 `low_sample` 标记，p 值只作参考。
+
+    边界情况跟 `ic_summary` 同一套口径：样本 < 3 返回 NaN；标准误≈0 且均值明显非零返回
+    `±inf` / p=0（每一期 IC 都一样且不为 0，是完美稳定的信号）；均值也≈0 返回 NaN。
+    """
+    clean = ic_series.dropna()
+    n = int(clean.shape[0])
+    if n < 3:
+        return ICSignificance(t_stat=float("nan"), p_value=float("nan"), samples=n, lags=0)
+
+    if lags is None:
+        lags = newey_west_lags(n)
+    lags = max(0, min(int(lags), n - 1))
+
+    values = clean.to_numpy(dtype=float)
+    mean = float(values.mean())
+    x = values - mean
+    long_run_var = float(x @ x) / n
+    for k in range(1, lags + 1):
+        weight = 1.0 - k / (lags + 1.0)
+        long_run_var += 2.0 * weight * float(x[k:] @ x[:-k]) / n
+    # Bartlett 权重保证理论上 long_run_var >= 0，这里只防浮点舍入出现极小负数。
+    long_run_var = max(long_run_var, 0.0)
+    se = math.sqrt(long_run_var / n)
+
+    if se > 1e-12:
+        t_stat = mean / se
+    elif abs(mean) > 1e-9:
+        t_stat = float("inf") if mean > 0 else float("-inf")
+    else:
+        return ICSignificance(t_stat=float("nan"), p_value=float("nan"), samples=n, lags=lags)
+
+    p_value = 0.0 if math.isinf(t_stat) else math.erfc(abs(t_stat) / math.sqrt(2.0))
+    return ICSignificance(t_stat=float(t_stat), p_value=float(p_value), samples=n, lags=lags)
+
+
 def conditional_ic_summary(ic_series: pd.Series, regime: pd.Series) -> pd.DataFrame:
     """按 `regime` 的取值对 `ic_series` 做条件切片统计（原理参考 `research/
     REGIME_ALPHA_EVALUATION_WORKFLOW.md` §5 步骤4），返回一行一个类别的画像表，行索引里
@@ -82,6 +152,7 @@ def conditional_ic_summary(ic_series: pd.Series, regime: pd.Series) -> pd.DataFr
 
     def _row(values: pd.Series) -> dict[str, float]:
         summary = ic_summary(values)
+        significance = ic_significance(values)
         clean = values.dropna()
         return {
             "samples": int(clean.shape[0]),
@@ -89,6 +160,8 @@ def conditional_ic_summary(ic_series: pd.Series, regime: pd.Series) -> pd.DataFr
             "ic_std": summary.std,
             "ic_ir": summary.ic_ir,
             "win_rate": float((clean > 0).mean()) if not clean.empty else float("nan"),
+            "t_stat": significance.t_stat,
+            "p_value": significance.p_value,
         }
 
     rows: dict[str, dict[str, float]] = {"ALL": _row(ic_series)}

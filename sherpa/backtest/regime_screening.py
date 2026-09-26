@@ -54,7 +54,7 @@ def profile_alphas_by_regime(
     dimensions: Sequence[str] = DEFAULT_REGIME_DIMENSIONS,
 ) -> pd.DataFrame:
     """对 `ic_series_by_alpha` 里每个 alpha，分别在 `regime` 的每个维度上做条件 IC 切片统计，
-    汇总成一张长表：列为 `alpha, dimension, state, samples, ic_mean, ic_std, ic_ir, win_rate`
+    汇总成一张长表：列为 `alpha, dimension, state, samples, ic_mean, ic_std, ic_ir, win_rate, t_stat, p_value`
     （`state` 里含每个维度自己的 `"ALL"` 基线行）。
 
     长表而不是宽表（`REGIME_ALPHA_EVALUATION_WORKFLOW.md` §6 那种"一行一个 alpha、一列一个

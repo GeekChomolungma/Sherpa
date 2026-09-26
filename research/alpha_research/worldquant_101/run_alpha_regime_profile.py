@@ -49,14 +49,20 @@ Windows 上不原生支持（需要 WSL2），投入产出比不划算。
 会跟着开关自动换文件名（`regime_alpha_profile.csv` / `regime_alpha_profile_without_neutralization.csv`），
 两版结果不会互相覆盖。
 
+输出长表里的 `t_stat`/`p_value` 是每个切片 IC 均值的 Newey–West 显著性检验
+（`sherpa.metrics.factor.ic_significance`，由 `conditional_ic_summary` 顺带算出），下游
+`regime_factor_report.py` 用它做 `04_regime_matrix.csv` 的显著性门槛。
+
 运行前先跑过 `run_regime_report.py`（产出 `regime_report.csv`），再跑：
     CH_HOST=... CH_PASSWORD=... python research/alpha_research/worldquant_101/run_alpha_regime_profile.py
 """
 
 from __future__ import annotations
 
+import os
 import sys
-from concurrent.futures import ProcessPoolExecutor
+import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8")
@@ -81,6 +87,12 @@ BENCHMARK_SYMBOL = "BTCUSDT"
 USE_NEUTRALIZATION = True
 
 OUTPUT_PATH = "regime_alpha_profile.csv" if USE_NEUTRALIZATION else "regime_alpha_profile_without_neutralization.csv"
+
+# 多进程 worker 数上限：每个 worker 启动时都会收到一整份 panel/forward_returns/mask/exposures
+# 的拷贝。2020 年至今的 4h 全市场数据（~500 symbol × ~13600 bar）每份约 0.8 GB，再加上因子
+# 计算时的中间矩阵，默认按 CPU 核数（20 核就是 20 个 worker）开会把内存推到 30~40 GB。
+# 默认封顶 12；内存紧张时用环境变量 `SHERPA_MAX_WORKERS` 调小。
+MAX_WORKERS = int(os.environ.get("SHERPA_MAX_WORKERS", min(12, os.cpu_count() or 1)))
 
 # worker 进程内的全局状态：`_init_worker` 在每个 worker 进程启动时赋值一次，之后同一个
 # worker 处理的每个任务（每个 alpha）都直接复用，不用每个任务都重新反序列化一遍 panel。
@@ -147,17 +159,24 @@ def main() -> None:
     ic_series_by_alpha: dict[str, pd.Series] = {}
     errors: dict[str, str] = {}
     processed = 0
+    started = time.monotonic()
+    print(f"  worker 数：{MAX_WORKERS}（环境变量 SHERPA_MAX_WORKERS 可调）；每个 worker 先接收一份数据拷贝，前几分钟没有输出属正常")
     with ProcessPoolExecutor(
-        initializer=_init_worker, initargs=(panel, forward_returns, mask, exposures)
+        max_workers=MAX_WORKERS, initializer=_init_worker, initargs=(panel, forward_returns, mask, exposures)
     ) as executor:
-        for qualified_name, ic_series, error in executor.map(_compute_ic_series, qualified_names):
+        # 用 submit + as_completed 而不是 executor.map：map 按提交顺序返回，排在前面的一个慢因子
+        # 会把后面所有已经算完的结果都挡住，进度看起来像卡死；as_completed 谁先算完先报谁。
+        futures = [executor.submit(_compute_ic_series, name) for name in qualified_names]
+        for future in as_completed(futures):
+            qualified_name, ic_series, error = future.result()
             processed += 1
             if error is not None:
                 errors[qualified_name] = error
             else:
                 ic_series_by_alpha[qualified_name] = ic_series
-            if processed % 20 == 0 or processed == len(qualified_names):
-                print(f"  已完成 {processed}/{len(qualified_names)}")
+            elapsed = time.monotonic() - started
+            status = "跳过（占位）" if error is not None else "完成"
+            print(f"  [{processed}/{len(qualified_names)}] {qualified_name} {status}，已用时 {elapsed / 60:.1f} 分钟", flush=True)
 
     print(f"算不出来的因子：{len(errors)} 个（缺行业分类/市值，占位不实现）")
     print(f"参与 regime 体检的因子：{len(ic_series_by_alpha)} 个")

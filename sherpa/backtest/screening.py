@@ -16,6 +16,7 @@ import pandas as pd
 
 from sherpa.alpha.engine import AlphaEngine
 from sherpa.data.schema import BarPanel
+from sherpa.metrics.factor import ic_significance
 from sherpa.risk.neutralize import neutralize
 
 from .alpha_check import run_alpha_check
@@ -25,7 +26,7 @@ from .alpha_check import run_alpha_check
 class ScreeningReport:
     """`screen_alphas()` 的结果：能算的因子进 `table`，算不出来的因子进 `errors`。"""
 
-    table: pd.DataFrame  # index=qualified_name，columns=[ic_mean, ic_std, ic_ir, passed]
+    table: pd.DataFrame  # index=qualified_name，columns=[ic_mean, ic_std, ic_ir, t_stat, p_value, passed]
     errors: dict[str, str] = field(default_factory=dict)  # qualified_name -> 报错信息
 
 
@@ -50,6 +51,10 @@ def screen_alphas(
 
     只吞掉 `NotImplementedError`（世坤101里那批因缺字段占位不实现的因子会抛这个）——除此
     之外的异常照常往外抛，不能把真正的 bug 也悄悄吞掉、伪装成"这个因子算不出来"。
+
+    `t_stat`/`p_value` 是 IC 均值的 Newey–West t 检验（`sherpa.metrics.factor.ic_significance`），
+    只作为附加列输出，不参与 `passed` 判定——`passed` 仍是第一层原有口径（IC_IR 达标且分位数
+    单调）。显著性门槛在 regime 条件体检的选因子环节使用（`QUANT_RESEARCH_TO_LIVE_LIFECYCLE.md` §3.1）。
     """
     rows: dict[str, dict[str, float | bool]] = {}
     errors: dict[str, str] = {}
@@ -67,14 +72,18 @@ def screen_alphas(
         result = run_alpha_check(
             history, forward_returns, n_quantiles=n_quantiles, ic_ir_threshold=ic_ir_threshold
         )
+        significance = ic_significance(result.ic_series)
         rows[alpha.qualified_name] = {
             "ic_mean": result.ic_mean,
             "ic_std": result.ic_std,
             "ic_ir": result.ic_ir,
+            "t_stat": significance.t_stat,
+            "p_value": significance.p_value,
             "passed": result.passed,
         }
 
-    table = pd.DataFrame.from_dict(rows, orient="index", columns=["ic_mean", "ic_std", "ic_ir", "passed"])
+    columns = ["ic_mean", "ic_std", "ic_ir", "t_stat", "p_value", "passed"]
+    table = pd.DataFrame.from_dict(rows, orient="index", columns=columns)
     if not table.empty:
         table = table.sort_values("ic_ir", ascending=False, na_position="last")
     return ScreeningReport(table=table, errors=errors)

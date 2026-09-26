@@ -1,7 +1,18 @@
+import math
+
+import numpy as np
 import pandas as pd
 import pytest
 
-from sherpa.metrics.factor import conditional_ic_summary, ic_summary, is_monotonic_decreasing, quantile_returns, rank_ic
+from sherpa.metrics.factor import (
+    conditional_ic_summary,
+    ic_significance,
+    ic_summary,
+    is_monotonic_decreasing,
+    newey_west_lags,
+    quantile_returns,
+    rank_ic,
+)
 
 
 def _panel(rows):
@@ -124,3 +135,72 @@ def test_conditional_ic_summary_win_rate():
     report = conditional_ic_summary(ic_series, regime)
 
     assert report.loc["chop", "win_rate"] == pytest.approx(0.5)
+
+
+# ---- ic_significance（Newey–West t 检验）----
+
+def _ar1_series(n: int, phi: float, mean: float, seed: int = 0) -> pd.Series:
+    rng = np.random.default_rng(seed)
+    noise = rng.normal(0.0, 0.05, size=n)
+    values = np.empty(n)
+    values[0] = noise[0]
+    for i in range(1, n):
+        values[i] = phi * values[i - 1] + noise[i]
+    index = pd.date_range("2026-01-01", periods=n, freq="4h", tz="UTC")
+    return pd.Series(values + mean, index=index)
+
+
+def test_ic_significance_zero_lags_matches_naive_t():
+    ic = _ar1_series(500, phi=0.0, mean=0.01)
+    result = ic_significance(ic, lags=0)
+    clean = ic.dropna()
+    # lags=0 时方差用 1/n 口径，朴素 t 用 1/(n-1)，两者只差 sqrt(n/(n-1))。
+    naive = clean.mean() / (clean.std() / np.sqrt(len(clean)))
+    assert result.t_stat == pytest.approx(naive * np.sqrt(len(clean) / (len(clean) - 1)), rel=1e-9)
+    assert result.lags == 0
+    assert result.samples == 500
+
+
+def test_ic_significance_autocorrelation_shrinks_t():
+    # 同样的均值，IC 序列正自相关越强，有效样本越少，Newey–West t 应该明显小于朴素 t。
+    ic = _ar1_series(2000, phi=0.8, mean=0.01, seed=1)
+    naive = ic_significance(ic, lags=0).t_stat
+    hac = ic_significance(ic).t_stat
+    assert abs(hac) < abs(naive) * 0.7
+
+
+def test_ic_significance_p_value_is_two_sided_normal():
+    ic = _ar1_series(1000, phi=0.0, mean=0.0, seed=2)
+    result = ic_significance(ic)
+    assert 0.0 <= result.p_value <= 1.0
+    assert result.p_value == pytest.approx(math.erfc(abs(result.t_stat) / math.sqrt(2.0)))
+
+
+def test_ic_significance_edge_cases():
+    index = pd.date_range("2026-01-01", periods=5, freq="4h", tz="UTC")
+    too_short = ic_significance(pd.Series([0.1, 0.2], index=index[:2]))
+    assert np.isnan(too_short.t_stat) and np.isnan(too_short.p_value)
+
+    constant = ic_significance(pd.Series([0.05] * 5, index=index))
+    assert constant.t_stat == float("inf") and constant.p_value == 0.0
+
+    all_zero = ic_significance(pd.Series([0.0] * 5, index=index))
+    assert np.isnan(all_zero.t_stat)
+
+
+def test_newey_west_lags_rule_of_thumb():
+    assert newey_west_lags(100) == 4
+    assert newey_west_lags(13000) == 11
+    assert newey_west_lags(1) == 0
+
+
+def test_conditional_ic_summary_includes_significance_columns():
+    ic_series = _series([0.5, 0.4, -0.5, -0.4, 0.3, 0.45])
+    regime = _series(["bull", "bull", "bear", "bear", "bull", "bull"])
+
+    report = conditional_ic_summary(ic_series, regime)
+
+    assert {"t_stat", "p_value"} <= set(report.columns)
+    assert report.loc["bull", "t_stat"] > 0
+    # bear 只有 2 个样本，不足 3 个，t 检验无意义，应该诚实地给 NaN。
+    assert np.isnan(report.loc["bear", "t_stat"])

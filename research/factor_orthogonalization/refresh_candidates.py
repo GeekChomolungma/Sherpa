@@ -6,6 +6,10 @@
 只重写 config.py 里 `# >>> REGIME_ALPHA_SETS BEGIN` 和 `# <<< REGIME_ALPHA_SETS END` 两个
 标记之间的内容，文件其它部分一个字不动。
 
+04 矩阵本身已经做过显著性筛选（`regime_factor_report.py --min-abs-t`，默认 |t| >= 3），
+这里照单全收、不再二次过滤；某个 state 显著因子不足 Top-K 时，名单就只有那几个，并在
+config.py 里写一行注释说明原因。
+
 用法：
     python research/factor_orthogonalization/refresh_candidates.py [--top-k 5] [--matrix PATH]
 """
@@ -49,12 +53,27 @@ def _render(matrix: dict[tuple[str, str], dict], top_k: int) -> str:
             names = [row[f"top{i}_alpha"] for i in range(1, top_k + 1) if row.get(f"top{i}_alpha")]
             if str(row.get("low_sample", "")).strip().lower() == "true":
                 lines.append(f"        # {dimension}.{state} low_sample=True：样本偏少，排行榜可信度打折扣")
+            # 04 矩阵只收通过显著性门槛（|t| >= min_abs_t）的因子，不够 top_k 个时不拿不显著的凑数。
+            # 少于 2 个时 run_orthogonalization.py 会跳过这个 state（没有"对"可以算相关）。
+            if len(names) < top_k and row.get("significant_count", "") != "":
+                lines.append(
+                    f"        # {dimension}.{state}：只有 {row['significant_count']}/{row.get('candidate_count', '?')} "
+                    f"个因子通过显著性门槛 |t| >= {_fmt_number(row.get('min_abs_t', '?'))}"
+                )
             lines.append(f'        "{state}": [')
             lines.extend(f'            "{name}",' for name in names)
             lines.append("        ],")
         lines.append("    },")
     lines.append("}")
     return "\n".join(lines)
+
+
+def _fmt_number(value: str) -> str:
+    """CSV 里的浮点数是 `3.00000000` 这种定长格式，写进注释时收成 `3`。"""
+    try:
+        return f"{float(value):g}"
+    except (TypeError, ValueError):
+        return str(value)
 
 
 def path_hint() -> str:

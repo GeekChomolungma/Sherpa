@@ -109,7 +109,7 @@ def test_screen_alphas_table_has_expected_columns():
     engine = AlphaEngine([_StrongAlpha(base, index, columns)])
     report = screen_alphas(engine, panel, forward_returns)
 
-    assert list(report.table.columns) == ["ic_mean", "ic_std", "ic_ir", "passed"]
+    assert list(report.table.columns) == ["ic_mean", "ic_std", "ic_ir", "t_stat", "p_value", "passed"]
 
 
 def test_screen_alphas_exposures_none_keeps_raw_score_behavior():

@@ -2,7 +2,12 @@
 """Generate human-readable regime factor diagnostics from a long-format CSV.
 
 Designed for files with columns:
-alpha, dimension, state, samples, ic_mean, ic_std, ic_ir, win_rate
+alpha, dimension, state, samples, ic_mean, ic_std, ic_ir, win_rate[, t_stat, p_value]
+
+`t_stat` / `p_value` are the Newey-West significance of the IC mean
+(`sherpa.metrics.factor.ic_significance`). They drive the significance gate of
+`04_regime_matrix.csv`: only alphas with |t_stat| >= --min-abs-t are eligible, and
+eligible alphas are ranked by |IC_IR| (see QUANT_RESEARCH_TO_LIVE_LIFECYCLE.md §3.1).
 
 No third-party dependencies are required.
 """
@@ -30,6 +35,15 @@ DEFAULT_STATE_ORDER = {
 }
 
 NUMERIC_FIELDS = ["samples", "ic_mean", "ic_std", "ic_ir", "win_rate"]
+
+# Optional significance columns produced by `conditional_ic_summary`. Older profile CSVs
+# lack them; the significance gate then refuses to run unless --min-abs-t 0 is passed.
+SIGNIFICANCE_COLUMNS = ["t_stat", "p_value"]
+
+# Default significance gate for 04_regime_matrix.csv: |t| >= 3 (two-sided p ~ 0.0027).
+# ~100 alphas x 12 states is ~1200 tests; at this cutoff pure luck yields ~3 false
+# positives, versus ~55 at the classic |t| >= 2 (Harvey, Liu & Zhu 2016 argue for 3.0).
+DEFAULT_MIN_ABS_T = 3.0
 
 
 def parse_float(value: str) -> Optional[float]:
@@ -116,6 +130,8 @@ def load_rows(path: Path) -> Tuple[List[Dict[str, Any]], List[str]]:
             row["samples"] = parse_int(raw.get("samples", ""))
             for key in ["ic_mean", "ic_std", "ic_ir", "win_rate"]:
                 row[key] = parse_float(raw.get(key, ""))
+            for key in SIGNIFICANCE_COLUMNS:
+                row[key] = parse_float(raw.get(key, "")) if key in columns else None
             row["_line"] = lineno
             rows.append(row)
     return rows, columns
@@ -433,10 +449,23 @@ def build_leaderboard(rows: List[Dict[str, Any]], thresholds: Dict[str, float]) 
             "ic_ir": r["ic_ir"],
             "abs_ic_ir": abs(r["ic_ir"]),
             "win_rate": r["win_rate"],
+            "t_stat": r.get("t_stat"),
+            "abs_t_stat": abs(r["t_stat"]) if r.get("t_stat") is not None else None,
+            "p_value": r.get("p_value"),
+            "significant": is_significant(r.get("t_stat"), thresholds),
             "direction": "original" if r["ic_mean"] is not None and r["ic_mean"] >= 0 else "invert",
         })
-    out.sort(key=lambda r: (r["dimension"], r["state"], r["low_sample"], -r["abs_ic_ir"], r["alpha"]))
+    # Significant alphas first, then by |IC_IR|: significance is the gate, |IC_IR| the ranking key.
+    out.sort(key=lambda r: (r["dimension"], r["state"], not r["significant"], -r["abs_ic_ir"], r["alpha"]))
     return out
+
+
+def is_significant(t_stat: Optional[float], thresholds: Dict[str, float]) -> bool:
+    """Significance gate: |t_stat| >= thresholds["min_abs_t"]; a gate of 0 disables it."""
+    min_abs_t = thresholds.get("min_abs_t", 0.0)
+    if min_abs_t <= 0:
+        return True
+    return t_stat is not None and abs(t_stat) >= min_abs_t
 
 
 def build_regime_matrix(
@@ -448,8 +477,11 @@ def build_regime_matrix(
 ) -> List[Dict[str, Any]]:
     """Build a consolidated Dimension x State regime matrix picking the top K alphas per state.
 
-    Reads the pre-sorted leaderboard entries, extracts top K alphas for each state,
-    and formats them with explicit trading directions (+/-), metrics, and sample warnings.
+    Selection rule (QUANT_RESEARCH_TO_LIVE_LIFECYCLE.md §3.1):
+    1. gate: only alphas whose conditional IC mean is significant (|t_stat| >= min_abs_t);
+    2. rank: eligible alphas by |IC_IR| descending, take the first K.
+    A state with fewer than K significant alphas gets fewer entries -- insignificant
+    alphas are never used to pad the list. `significant_count` records how many passed.
     """
     matrix: List[Dict[str, Any]] = []
 
@@ -462,12 +494,16 @@ def build_regime_matrix(
         ordered_states = state_order_for(dim, dim_states)
 
         for state in ordered_states:
-            candidates = by_dim_state.get((dim, state), [])
+            all_candidates = by_dim_state.get((dim, state), [])
+            candidates = [c for c in all_candidates if c["significant"]]
             top_alphas = candidates[:top_k]
 
-            state_samples = top_alphas[0]["samples"] if top_alphas else 0
-            state_fraction = top_alphas[0]["sample_fraction_of_all"] if top_alphas else None
-            state_low_sample = top_alphas[0]["low_sample"] if top_alphas else True
+            # State-level sample stats come from any alpha in the state (they share the same
+            # bars), not from the top picks -- a state with no significant alpha still has samples.
+            reference = all_candidates[0] if all_candidates else None
+            state_samples = reference["samples"] if reference else 0
+            state_fraction = reference["sample_fraction_of_all"] if reference else None
+            state_low_sample = reference["low_sample"] if reference else True
 
             signed_alpha_list = []
             summary_list = []
@@ -476,8 +512,9 @@ def build_regime_matrix(
                 signed_name = f"{prefix}{item['alpha']}"
                 signed_alpha_list.append(signed_name)
                 ir_str = f"{item['ic_ir']:.4f}" if item.get("ic_ir") is not None else "N/A"
+                t_str = f"{item['t_stat']:.2f}" if item.get("t_stat") is not None else "N/A"
                 wr_str = f"{item['win_rate']*100:.1f}%" if item.get("win_rate") is not None else "N/A"
-                summary_list.append(f"{signed_name} (IR={ir_str}, WR={wr_str})")
+                summary_list.append(f"{signed_name} (IR={ir_str}, t={t_str}, WR={wr_str})")
 
             row: Dict[str, Any] = {
                 "dimension": dim,
@@ -485,6 +522,9 @@ def build_regime_matrix(
                 "samples": state_samples,
                 "sample_fraction_of_all": state_fraction,
                 "low_sample": state_low_sample,
+                "min_abs_t": thresholds.get("min_abs_t", 0.0),
+                "candidate_count": len(all_candidates),
+                "significant_count": len(candidates),
                 "top_signed_alphas": " | ".join(signed_alpha_list),
                 "top_alphas_summary": " | ".join(summary_list),
             }
@@ -501,6 +541,8 @@ def build_regime_matrix(
                     row[f"top{i}_win_rate"] = item["win_rate"]
                     row[f"top{i}_ic_mean"] = item["ic_mean"]
                     row[f"top{i}_ic_std"] = item["ic_std"]
+                    row[f"top{i}_t_stat"] = item["t_stat"]
+                    row[f"top{i}_p_value"] = item["p_value"]
                     row[f"top{i}_low_sample"] = item["low_sample"]
                 else:
                     row[f"top{i}_alpha"] = ""
@@ -511,6 +553,8 @@ def build_regime_matrix(
                     row[f"top{i}_win_rate"] = None
                     row[f"top{i}_ic_mean"] = None
                     row[f"top{i}_ic_std"] = None
+                    row[f"top{i}_t_stat"] = None
+                    row[f"top{i}_p_value"] = None
                     row[f"top{i}_low_sample"] = None
 
             matrix.append(row)
@@ -648,13 +692,25 @@ def write_findings(
 
     if regime_matrix:
         lines.append("\n## Regime strategy matrix (Top alphas per state)\n")
-        lines.append("| Dimension | State | Samples | Low sample? | Top 1 Alpha | Top 2 Alpha | Top 3 Alpha |")
-        lines.append("|---|---|---:|:---:|---|---|---|")
+        lines.append(
+            f"Only alphas with |t_stat| >= {thresholds.get('min_abs_t', 0.0):g} are eligible; eligible alphas "
+            "are ranked by |IC_IR|. `Significant` = eligible / all alphas in the state.\n"
+        )
+        lines.append("| Dimension | State | Samples | Low sample? | Significant | Top 1 Alpha | Top 2 Alpha | Top 3 Alpha |")
+        lines.append("|---|---|---:|:---:|---:|---|---|---|")
+
+        def _cell(m: Dict[str, Any], i: int) -> str:
+            if not m.get(f"top{i}_signed_alpha"):
+                return "-"
+            t = m.get(f"top{i}_t_stat")
+            t_str = f", t={t:.2f}" if t is not None else ""
+            return f"`{m[f'top{i}_signed_alpha']}` (IR={m[f'top{i}_ic_ir']:.4f}{t_str})"
+
         for m in regime_matrix:
-            t1 = f"`{m.get('top1_signed_alpha')}` (IR={m.get('top1_ic_ir'):.4f})" if m.get("top1_signed_alpha") else "-"
-            t2 = f"`{m.get('top2_signed_alpha')}` (IR={m.get('top2_ic_ir'):.4f})" if m.get("top2_signed_alpha") else "-"
-            t3 = f"`{m.get('top3_signed_alpha')}` (IR={m.get('top3_ic_ir'):.4f})" if m.get("top3_signed_alpha") else "-"
-            lines.append(f"| {m['dimension']} | {m['state']} | {m['samples']} | {m['low_sample']} | {t1} | {t2} | {t3} |")
+            lines.append(
+                f"| {m['dimension']} | {m['state']} | {m['samples']} | {m['low_sample']} | "
+                f"{m['significant_count']}/{m['candidate_count']} | {_cell(m, 1)} | {_cell(m, 2)} | {_cell(m, 3)} |"
+            )
 
     lines.append("\n## Most regime-sensitive factor/dimension pairs\n")
     lines.append("| Rank | Factor | Dimension | Class | IR spread | Best state | Best IC_IR | Best samples | Low sample? |")
@@ -703,9 +759,20 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, default=Path("results"), help="Directory for generated results")
     parser.add_argument("--top-n", type=int, default=25, help="Rows per per-state leaderboard file")
     parser.add_argument("--matrix-top-k", type=int, default=3, help="Number of top alphas per regime state in 04_regime_matrix.csv")
+    parser.add_argument(
+        "--min-abs-t", type=float, default=DEFAULT_MIN_ABS_T,
+        help="Significance gate for 04_regime_matrix.csv: only alphas with |t_stat| >= this are eligible (0 disables)",
+    )
     args = parser.parse_args()
 
-    rows, _ = load_rows(args.input_csv)
+    rows, columns = load_rows(args.input_csv)
+    missing_sig = [c for c in SIGNIFICANCE_COLUMNS if c not in columns]
+    if args.min_abs_t > 0 and missing_sig:
+        raise SystemExit(
+            f"{args.input_csv} lacks significance columns {missing_sig}; it was produced before "
+            "the significance test existed. Re-run run_alpha_regime_profile.py, or pass --min-abs-t 0 "
+            "to build the report without the significance gate."
+        )
     validation = validate(rows)
     if validation["errors"]:
         raise ValueError("Input validation failed: " + "; ".join(validation["errors"]))
@@ -716,6 +783,7 @@ def main() -> None:
     (output / "leaderboards").mkdir(exist_ok=True)
 
     thresholds = derive_thresholds(rows)
+    thresholds["min_abs_t"] = args.min_abs_t
     diagnostics = build_dimension_diagnostics(rows, thresholds)
     overview = build_factor_overview(rows, diagnostics, thresholds)
     leaderboard = build_leaderboard(rows, thresholds)
@@ -738,7 +806,7 @@ def main() -> None:
         states = sorted(set(r["state"] for r in rows if r["dimension"] == dim and r["state"] != "ALL"))
         for state in states:
             subset = [r for r in leaderboard if r["dimension"] == dim and r["state"] == state]
-            subset.sort(key=lambda r: (r["low_sample"], -r["abs_ic_ir"], r["alpha"]))
+            subset.sort(key=lambda r: (not r["significant"], r["low_sample"], -r["abs_ic_ir"], r["alpha"]))
             if subset:
                 write_csv(output / "leaderboards" / f"{dim}_{state}_top.csv", subset[: args.top_n])
 

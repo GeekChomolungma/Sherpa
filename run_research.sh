@@ -11,7 +11,8 @@
 #   2  run_screening.py              -> alpha_research/worldquant_101/screening_report.csv
 #   3  run_alpha_regime_profile.py   -> alpha_research/worldquant_101/regime_alpha_profile.csv
 #                                       （是否中性化由该脚本顶部的 USE_NEUTRALIZATION 开关决定）
-#   4  regime_factor_report.py       -> regime_factor_report/results/（含 04_regime_matrix.csv）
+#   4  regime_factor_report.py       -> regime_factor_report/results/（含 04_regime_matrix.csv；
+#                                       每个 state 只收 |t| >= MIN_ABS_T 的显著因子，再按 |IC_IR| 取 Top5）
 #   7  run_orthogonalization.py      -> factor_orthogonalization/results/
 #
 # 可选步骤（默认不跑）：
@@ -39,6 +40,9 @@ fi
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PYTHON="${PYTHON:-python}"
+# 04_regime_matrix.csv 的显著性门槛（IC 均值 Newey–West t 值的绝对值）。标准和理由见
+# QUANT_RESEARCH_TO_LIVE_LIFECYCLE.md §3.1；设成 0 等于关掉门槛（只按 |IC_IR| 排名，旧行为）。
+MIN_ABS_T="${MIN_ABS_T:-3.0}"
 
 WITH_CAL=0
 WITH_VEC=0
@@ -46,7 +50,7 @@ REFRESH=0
 DRY=0
 FROM=0
 
-usage() { sed -n '2,27p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,28p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -135,6 +139,7 @@ else
 fi
 # 各步骤的取数区间统一来自 research/research_window.json（研究段，不含 holdout），打印出来方便核对。
 echo "[时间窗] $(tr -d ' \r\n' < "$ROOT/research/research_window.json")"
+echo "[显著性门槛] 04_regime_matrix 只收 |t| >= $MIN_ABS_T 的因子（环境变量 MIN_ABS_T 可调）"
 
 step 0 "流动性掩码校准 · 分布研究"   "$CAL_DIR" "$PYTHON" run_distribution_study.py
 step 0 "流动性掩码校准 · 分位数敏感性" "$CAL_DIR" "$PYTHON" run_percentile_sensitivity.py
@@ -144,7 +149,8 @@ step 1 "Regime 打标"                 "$ALPHA_DIR" "$PYTHON" run_regime_report.
 step 2 "全局筛选（第一层 IC 体检）"   "$ALPHA_DIR" "$PYTHON" run_screening.py
 step 3 "Regime 条件 IC 体检"          "$ALPHA_DIR" "$PYTHON" run_alpha_regime_profile.py
 step 4 "汇总报告 / 04_regime_matrix"  "$REPORT_DIR" "$PYTHON" regime_factor_report.py \
-  "$ROOT_NATIVE/research/alpha_research/worldquant_101/$PROFILE_CSV" --output-dir "$REPORT_OUT" --matrix-top-k 5
+  "$ROOT_NATIVE/research/alpha_research/worldquant_101/$PROFILE_CSV" --output-dir "$REPORT_OUT" --matrix-top-k 5 \
+  --min-abs-t "$MIN_ABS_T"
 
 if will_run 5; then
   for fam in price_volume momentum_reversal microstructure composite; do

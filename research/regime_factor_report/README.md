@@ -592,11 +592,28 @@ volatility_high_top.csv
 
 用途：**统一跨维度状态策略装配总表（Dimension × State 作战矩阵）。**
 
-该表直接聚合了所有 12 个细分状态下的 Top 3 最强 Alpha，并自动标注了：
+该表聚合了所有 12 个细分状态下的 Top K 最强 Alpha（`--matrix-top-k`，`run_research.sh` 用 5）。
+
+**选因子规则：显著性做门槛，|IC_IR| 做排序**（标准和理由见
+`QUANT_RESEARCH_TO_LIVE_LIFECYCLE.md` §3.1「显著性检验与选因子规则」）：
+
+1. 每个 state 内，只有条件 IC 均值的 Newey–West `|t_stat| >= --min-abs-t`（默认 3.0）的因子有资格入选；
+2. 通过门槛的因子按 `|IC_IR|` 从高到低取前 K 个；
+3. 通过的不足 K 个就只取通过的，不拿不显著的因子凑数。
+
+输入 CSV 必须带 `t_stat`/`p_value` 两列（`run_alpha_regime_profile.py` 会自动产出）；旧版 CSV
+没有这两列时脚本会直接报错，除非显式传 `--min-abs-t 0` 关掉门槛（退回"只按 |IC_IR| 排名"的旧行为）。
+
+表里自动标注了：
+
 - **交易方向与带符号因子名**（例如 `+worldquant.alpha026`, `-worldquant.alpha007`）；
 - **样本数与小样本警示**（`samples`, `low_sample`）；
-- **Top 1 ~ Top 3 的各自信噪比与胜率**（`ic_ir`, `abs_ic_ir`, `win_rate`）；
+- **显著性筛选结果**（`min_abs_t` 门槛、`candidate_count` 该 state 的因子总数、`significant_count` 通过门槛的个数）；
+- **Top 1 ~ Top K 的各自信噪比、显著性与胜率**（`ic_ir`, `abs_ic_ir`, `t_stat`, `p_value`, `win_rate`）；
 - **简明摘要字段**（`top_signed_alphas` 与 `top_alphas_summary`）。
+
+`03_regime_leaderboard.csv` 和 `leaderboards/` 下的分 state 排行榜也多了 `t_stat`/`abs_t_stat`/`p_value`/`significant`
+四列，排序改为"显著的排前面，再按 |IC_IR|"。
 
 量化策略层（如 `BaseStrategy.on_bar`）可直接读取此表实现状态自适应动态多因子路由。
 
