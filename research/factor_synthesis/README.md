@@ -3,8 +3,8 @@
 对应 [`QUANT_RESEARCH_TO_LIVE_LIFECYCLE.md`](../../QUANT_RESEARCH_TO_LIVE_LIFECYCLE.md) §4
 「关卡 2：基于微观 Regime 的动态多因子合成 (Synthesis)」。
 
-> **状态：设计阶段，尚无代码。** 本文先把架构、输入输出契约、验证方法和执行步骤定下来，
-> 代码按 §9 的里程碑逐步落地。
+> **状态：设计阶段。** 已有入口脚本 `refresh_candidates.py`（把关卡1 的 keep 名单写进 `config.py`），
+> 合成本身尚无代码。本文先把架构、输入输出契约、验证方法和执行步骤定下来，代码按 §9 的里程碑逐步落地。
 
 ---
 
@@ -31,10 +31,10 @@
 
 | 项 | 来源 | 说明 |
 |---|---|---|
-| 候选因子（per state） | 关卡1 的 `02_regime_cluster_assignments.csv` 里 `recommendation=keep` 的因子 | 沿用 research 子目录之间的解耦约定：**手动抄进本目录的 `config.py`**，运行时不读关卡1 的 CSV |
+| 候选因子（per state） | 关卡1 的 `02_regime_cluster_assignments.csv` 里 `recommendation=keep` 的因子 | 沿用 research 子目录之间"上游结果 CSV → 下游 config.py"的通信方式：由 `refresh_candidates.py` 写进本目录 `config.py` 的 `REGIME_FACTOR_SETS`（`run_research.sh --refresh-synthesis-candidates`，步骤 8）；合成代码运行时只读 `config.py`，不直接读关卡1 的 CSV。读取规则和理由见该脚本的 docstring |
 | 因子历史分数 | `sherpa.alpha.registry` 按 qualified_name 计算 → 掩码 → `neutralize()` 残差化 | 和关卡1 `_resolve_histories()` 完全相同的处理顺序 |
 | Regime 标签 | `sherpa.backtest.regime_screening.regime_report` | 和阶段一、关卡1 同一套定义；逐 bar、Point-in-time（滚动分位数，无前视） |
-| 时间窗 | [`research/research_window.json`](../research_window.json) | 所有研究只用研究段；holdout 段的用法见 §6.4 |
+| 时间窗 / 标签 | [`research/research_config.json`](../research_config.json) | 所有研究只用研究段；holdout 段的用法见 §6.4。IC 标签口径（持有期、执行延迟）也从这里读，跟阶段一、关卡1 一致 |
 | **输出** | `results/` 下的 CSV（见 §7） | 各方案的合成 IC 对比、权重表、walk-forward 明细 |
 
 ---
@@ -172,7 +172,7 @@ score(t, ·) = Σ_i  w_i(t) · 标准化并方向对齐后的 f_i(t, ·)
 
 ### 6.4 Holdout 的使用规矩
 
-`research_window.json` 里 `research_end ~ holdout_end`（2026-03-15 ~ 2026-09-15）这一段：
+`research_config.json` 的 `window` 里 `research_end ~ holdout_end`（2026-03-15 ~ 2026-09-15）这一段：
 
 - 阶段一、关卡1、关卡2 的所有选择和调参都**不碰**它；
 - 关卡2 选定最终方案（包括超参数）之后，才在 holdout 上**跑一次**，记录结果，不再回头调参；
@@ -190,9 +190,10 @@ score(t, ·) = Σ_i  w_i(t) · 标准化并方向对齐后的 f_i(t, ·)
 ```text
 factor_synthesis/
 ├── README.md                 本文件
-├── config.py                 候选因子（per state，从关卡1 结果手抄）、主维度、收缩强度 n_0、
-│                             平滑参数 m / β、walk-forward 参数（重估频率、gap）
-├── data.py                   取数入口（按 research 约定自成一份；时间窗读 research_window.json）
+├── config.py                 【已有】候选因子 REGIME_FACTOR_SETS（由 refresh_candidates.py 自动刷新）；
+│                             以后再加：主维度、收缩强度 n_0、平滑参数 m / β、walk-forward 参数
+├── refresh_candidates.py     【已有】读关卡1 的 02_regime_cluster_assignments.csv，重写 config.py 的候选池
+├── data.py                   取数入口（按 research 约定自成一份；时间窗与标签读 research_config.json）
 ├── signals.py                纯函数：截面标准化、按 state 方向对齐
 ├── weighting.py              纯函数：L0 / L1 / L2 / L3 的权重计算，收缩，迟滞与平滑
 ├── walk_forward.py           纯函数：切分训练 / 测试窗（含 purge + embargo），拼接样本外合成分数
@@ -229,7 +230,8 @@ factor_synthesis/
 前置：先用新时间窗（2020-01-01 ~ 2026-03-15）重跑阶段一和关卡1（`run_research.sh --refresh-candidates`），
 确认新的保留名单。
 
-- [ ] **M0 准备**：建 `config.py` / `data.py`，把关卡1 新结果里的 keep 名单抄进 `config.py`；
+- [x] **M0 入口**：`config.py` + `refresh_candidates.py`，关卡1 的 keep 名单自动写进候选池（`run_research.sh` 步骤 8）
+- [ ] **M0 准备**：建 `data.py`；
       用阶段一的条件 IC 表选出主维度（§3），把选择依据写进 `config.py` 注释
 - [ ] **M1 基线**：`signals.py` + L0、L1 + `walk_forward.py`（含 purge/embargo）+ `01_scheme_comparison.csv`。
       L0/L1 的样本外 IC_IR 是之后所有方案的及格线

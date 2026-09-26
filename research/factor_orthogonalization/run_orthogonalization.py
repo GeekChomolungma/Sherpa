@@ -71,7 +71,7 @@ from config import (
     REGIME_BENCHMARK_SYMBOL,
     UNCONDITIONAL_ALPHAS,
 )
-from data import load_universe_panel
+from data import EXECUTION_DELAY_BARS, HORIZON_BARS, label_forward_returns, load_universe_panel
 
 # 相对脚本自身所在目录解析，不依赖进程当前工作目录（cwd）——`python
 # research/factor_orthogonalization/run_orthogonalization.py` 从仓库根目录运行时，
@@ -222,7 +222,8 @@ def main() -> None:
     panel = load_universe_panel()
     print(f"universe={len(panel.symbols)} 个 symbol，共 {len(panel.index)} 根 {panel.interval} bar")
 
-    forward_returns = panel.close.pct_change().shift(-1)
+    forward_returns = label_forward_returns(panel)
+    print(f"IC 标签：持有 {HORIZON_BARS} 根 bar、执行延迟 {EXECUTION_DELAY_BARS} 根 bar（research_config.json 的 label 一节）")
 
     print("正在计算可流通性掩码（剔除上线了但没有真实流动性的 symbol）……")
     mask = tradable_mask(panel.quote_volume, panel.trades_count)
@@ -250,9 +251,14 @@ def main() -> None:
     pair_rows = []
     cluster_rows = []
     for dimension, state, alphas in groups:
-        if len(alphas) < 2:
-            print(f"  [跳过] {dimension}.{state} 只有 {len(alphas)} 个可用因子，无法做相关性分析")
+        if not alphas:
+            print(f"  [跳过] {dimension}.{state} 没有可用因子")
             continue
+        if len(alphas) == 1:
+            # 只有 1 个候选时没有"对"可以算相关，但它也不可能跟谁冗余——照常走下面的流程（自成
+            # 一簇、keep），让它出现在 02_regime_cluster_assignments.csv 里。下游关卡2 只读这份
+            # CSV 取 keep 名单，如果这里直接跳过，这个 state 在下游就会凭空消失。
+            print(f"  [提示] {dimension}.{state} 只有 1 个可用因子，无需去冗余，直接保留")
 
         regime_column = None if dimension == UNCONDITIONAL_DIMENSION else regime[dimension]
 

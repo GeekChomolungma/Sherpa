@@ -222,7 +222,7 @@ Var(e) = Var(A) − 2ρ·Cov(A, B) + ρ²·Var(B)
 | Regime 打标 | `sherpa.backtest.regime_screening.regime_report` | 原样使用，保证 state 定义和阶段一、关卡1 一致 |
 | 可流通性掩码 | `sherpa.metrics.tradability.tradable_mask` | 原样使用 |
 | 按名取因子 | `sherpa.alpha.registry` + `config.EXTRA_IMPORTS` | 新因子（自定义 / 挖掘产物）注册后按 qualified_name 引用 |
-| 统一时间窗 | [`research/research_window.json`](../research_window.json) | 所有检验都只在研究段上做，不碰 holdout |
+| 统一研究配置 | [`research/research_config.json`](../research_config.json) | 所有检验都只在研究段上做，不碰 holdout |
 
 一个有用的性质（Frisch–Waugh 定理）：同一个截面上，"新因子对 `{beta, size, 入库因子原始分数}` 回归"
 和"新因子对 `{beta, size, 入库因子残差分数}` 回归"得到的残差**完全一样**。
@@ -406,7 +406,8 @@ def incremental_residual(
 
 ## 6. 执行清单
 
-- [x] 统一时间窗 + holdout（G1）：`research/research_window.json`，三个 `data.py` 已接入
+- [x] 统一时间窗 + holdout（G1）：`research/research_config.json` 的 `window` 一节，三个 `data.py` 已接入
+- [x] IC 标签口径可配（持有期 / 执行延迟）：`research_config.json` 的 `label` 一节 + `label_forward_returns()`
 - [ ] 用新时间窗（2020-01-01 ~ 2026-03-15）重跑 `run_research.sh --refresh-candidates`，
       对比新旧 `04_regime_matrix.csv` 和聚类结果的变化
 - [ ] G2R：`drop_review_residual()` + `03_regime_drop_review.csv`（接在 `run_orthogonalization.py` 的 1a 之后）

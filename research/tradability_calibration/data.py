@@ -7,7 +7,7 @@
 连接信息一律从环境变量读，约定跟 `scripts/smoke_test_data_layer.py` 一致：
     CH_HOST(必填) / CH_PORT(默认8123) / CH_USER(默认default) / CH_PASSWORD / CH_DATABASE(默认market)
 
-默认区间/周期统一读 `research/research_window.json` 的研究段：这里校准出来的掩码门槛要给
+默认区间/周期统一读 `research/research_config.json` 的研究段：这里校准出来的掩码门槛要给
 阶段一、关卡1 所有体检复用，用同一段历史校准最一致，也顺带不碰 holdout 段。想临时换区间，
 调用 `load_universe_panel()` 时显式传参覆盖。
 """
@@ -26,14 +26,14 @@ from sherpa.data.normalizer import ch_long_to_panel
 from sherpa.data.schema import BarPanel
 from sherpa.data.universe import Universe
 
-# 时间窗统一从 `research/research_window.json` 读——阶段一、关卡1、关卡2 必须看同一段历史，
-# 否则"阶段一在 A 区间选出的因子，关卡1 在 B 区间检验冗余"，两边结论对不上。说明见
-# `research/README.md`「统一时间窗与样本外 holdout」。`END_TIME` 是研究段截止（= holdout
-# 起点），默认取数永远不碰 holdout 段；临时换区间就调用 `load_universe_panel()` 时显式传参。
-_WINDOW = json.loads((Path(__file__).resolve().parents[1] / "research_window.json").read_text(encoding="utf-8"))
-INTERVAL: str = _WINDOW["interval"]
-START_TIME: str = _WINDOW["research_start"]
-END_TIME: str = _WINDOW["research_end"]
+# 研究配置统一从 `research/research_config.json` 读（说明见 `research/README.md`「统一研究配置」）。
+# 这里只用 `window` 一节：阶段一、关卡1、关卡2 必须看同一段历史，否则"阶段一在 A 区间选出的
+# 因子，关卡1 在 B 区间检验冗余"，两边结论对不上。`END_TIME` 是研究段截止（= holdout 起点），
+# 默认取数永远不碰 holdout 段；临时换区间就调用 `load_universe_panel()` 时显式传参。
+_CONFIG = json.loads((Path(__file__).resolve().parents[1] / "research_config.json").read_text(encoding="utf-8"))
+INTERVAL: str = _CONFIG["window"]["interval"]
+START_TIME: str = _CONFIG["window"]["research_start"]
+END_TIME: str = _CONFIG["window"]["research_end"]
 
 
 def _env(name: str, default: str | None = None, *, required: bool = False) -> str | None:

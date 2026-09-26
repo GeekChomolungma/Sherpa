@@ -30,6 +30,27 @@ def rank_ic(alpha: pd.DataFrame, forward_returns: pd.DataFrame) -> pd.Series:
     return ic.rename("rank_ic")
 
 
+def forward_returns(close: pd.DataFrame, *, horizon: int = 1, delay: int = 0) -> pd.DataFrame:
+    """IC 检验用的"未来收益"标签：t 行 = 从 `close[t + delay]` 持有到 `close[t + delay + horizon]` 的收益。
+
+    - `delay`（执行延迟，单位 bar）：信号在 bar t 收盘时算出，但实际要晚 `delay` 根 bar 才能
+      按收盘价成交。`delay=0` 是"刚好在信号那根 bar 的收盘价成交"的理想情况；`delay=1` 跳过
+      紧接着的那一根 bar，用来检验信号是不是只在"收盘后立刻成交"那一瞬间有效——短周期反转因子
+      的 IC 里常混有买卖价差来回跳（bid-ask bounce）的成分，这部分实盘吃不到，延迟一根 bar
+      后会大幅消失。
+    - `horizon`（持有期，单位 bar）：收益累计几根 bar。`horizon > 1` 时相邻两期的标签有重叠，
+      IC 序列会自相关，显著性要看 Newey–West t（`ic_significance` 已处理）。
+
+    `horizon=1, delay=0` 等价于历史写法 `close.pct_change().shift(-1)`；`delay=1` 等价于
+    `close.pct_change().shift(-2)`。末尾 `horizon + delay` 行没有未来数据，为 NaN。
+    """
+    if horizon < 1:
+        raise ValueError(f"horizon 至少是 1 根 bar，收到 {horizon}")
+    if delay < 0:
+        raise ValueError(f"delay 不能为负（那等于用未来信息），收到 {delay}")
+    return close.pct_change(periods=horizon, fill_method=None).shift(-(horizon + delay))
+
+
 @dataclass(frozen=True)
 class ICSummary:
     """RankIC 序列的统计分布特征（原理文档 §1.2(2)）。"""

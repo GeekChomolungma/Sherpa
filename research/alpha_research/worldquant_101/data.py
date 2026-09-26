@@ -6,7 +6,7 @@
 
     CH_HOST(必填) / CH_PORT(默认8123) / CH_USER(默认default) / CH_PASSWORD / CH_DATABASE(默认market)
 
-默认区间/周期（`INTERVAL`/`START_TIME`/`END_TIME`）统一读 `research/research_window.json`
+默认区间/周期（`INTERVAL`/`START_TIME`/`END_TIME`）统一读 `research/research_config.json`
 的研究段，不在这里单独维护；想整体换区间就改那份 JSON，只想临时换一次就调用
 `load_universe_panel()` 时显式传参覆盖。
 """
@@ -24,15 +24,22 @@ from sherpa.data.ch_reader import CHReader
 from sherpa.data.normalizer import ch_long_to_panel
 from sherpa.data.schema import BarPanel
 from sherpa.data.universe import Universe
+from sherpa.metrics.factor import forward_returns
 
-# 时间窗统一从 `research/research_window.json` 读——阶段一、关卡1、关卡2 必须看同一段历史，
-# 否则"阶段一在 A 区间选出的因子，关卡1 在 B 区间检验冗余"，两边结论对不上。说明见
-# `research/README.md`「统一时间窗与样本外 holdout」。`END_TIME` 是研究段截止（= holdout
-# 起点），默认取数永远不碰 holdout 段；临时换区间就调用 `load_universe_panel()` 时显式传参。
-_WINDOW = json.loads((Path(__file__).resolve().parents[2] / "research_window.json").read_text(encoding="utf-8"))
-INTERVAL: str = _WINDOW["interval"]
-START_TIME: str = _WINDOW["research_start"]
-END_TIME: str = _WINDOW["research_end"]
+# 研究配置统一从 `research/research_config.json` 读（说明见 `research/README.md`「统一研究配置」）。
+# `window` 一节：阶段一、关卡1、关卡2 必须看同一段历史，否则"阶段一在 A 区间选出的
+# 因子，关卡1 在 B 区间检验冗余"，两边结论对不上。`END_TIME` 是研究段截止（= holdout 起点），
+# 默认取数永远不碰 holdout 段；临时换区间就调用 `load_universe_panel()` 时显式传参。
+_CONFIG = json.loads((Path(__file__).resolve().parents[2] / "research_config.json").read_text(encoding="utf-8"))
+INTERVAL: str = _CONFIG["window"]["interval"]
+START_TIME: str = _CONFIG["window"]["research_start"]
+END_TIME: str = _CONFIG["window"]["research_end"]
+
+# `label` 一节：IC 检验用的"未来收益"标签口径（持有几根 bar、信号出来后延迟几根 bar 才成交）。
+# 所有算 IC 的脚本（阶段一体检、关卡1 挑代表因子……）必须用同一个口径，否则阶段一按"延迟 1 根"
+# 选出的因子，关卡1 却按"不延迟"比强弱，前后对不上。一律通过下面的 `label_forward_returns()` 取标签。
+HORIZON_BARS: int = int(_CONFIG["label"]["horizon_bars"])
+EXECUTION_DELAY_BARS: int = int(_CONFIG["label"]["execution_delay_bars"])
 
 
 def _env(name: str, default: str | None = None, *, required: bool = False) -> str | None:
@@ -85,3 +92,13 @@ def load_universe_panel(
     if include_open_interest and interval != "1m":
         oi_df = ch_reader.fetch_oi_history(symbols, interval, start_time=start_time, end_time=end_time)
     return ch_long_to_panel(long_df, interval=interval, symbols=symbols, oi_df=oi_df)
+
+
+def label_forward_returns(panel: BarPanel) -> pd.DataFrame:
+    """按 `research_config.json` 的 `label` 配置构造 IC 标签：t 行 = 从 `close[t + delay]` 持有到
+    `close[t + delay + horizon]` 的收益（`sherpa.metrics.factor.forward_returns`）。
+
+    默认 `horizon_bars=1, execution_delay_bars=0` 等价于历史写法 `panel.close.pct_change().shift(-1)`；
+    `execution_delay_bars=1` 等价于 `shift(-2)`，模拟"信号出来后晚一根 bar 才成交"。
+    """
+    return forward_returns(panel.close, horizon=HORIZON_BARS, delay=EXECUTION_DELAY_BARS)

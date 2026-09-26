@@ -6,6 +6,7 @@ import pytest
 
 from sherpa.metrics.factor import (
     conditional_ic_summary,
+    forward_returns,
     ic_significance,
     ic_summary,
     is_monotonic_decreasing,
@@ -204,3 +205,39 @@ def test_conditional_ic_summary_includes_significance_columns():
     assert report.loc["bull", "t_stat"] > 0
     # bear 只有 2 个样本，不足 3 个，t 检验无意义，应该诚实地给 NaN。
     assert np.isnan(report.loc["bear", "t_stat"])
+
+
+# ---- forward_returns（IC 标签：持有期 + 执行延迟）----
+
+def _close_frame() -> pd.DataFrame:
+    index = pd.date_range("2026-01-01", periods=6, freq="4h", tz="UTC")
+    return pd.DataFrame({"A": [100.0, 110.0, 99.0, 99.0, 108.9, 100.0], "B": [10.0, 10.0, 11.0, 12.1, 12.1, 13.31]}, index=index)
+
+
+def test_forward_returns_default_matches_legacy_shift():
+    close = _close_frame()
+    pd.testing.assert_frame_equal(forward_returns(close), close.pct_change().shift(-1))
+
+
+def test_forward_returns_delay_skips_one_bar():
+    close = _close_frame()
+    labels = forward_returns(close, delay=1)
+    # t=0 的标签 = close[1] -> close[2] 的收益，而不是 close[0] -> close[1]。
+    assert labels.loc[close.index[0], "A"] == pytest.approx(99.0 / 110.0 - 1)
+    pd.testing.assert_frame_equal(labels, close.pct_change().shift(-2))
+    assert labels.iloc[-2:].isna().all().all()
+
+
+def test_forward_returns_horizon_accumulates_bars():
+    close = _close_frame()
+    labels = forward_returns(close, horizon=2)
+    assert labels.loc[close.index[0], "B"] == pytest.approx(11.0 / 10.0 - 1)
+    assert labels.iloc[-2:].isna().all().all()
+
+
+def test_forward_returns_rejects_invalid_arguments():
+    close = _close_frame()
+    with pytest.raises(ValueError):
+        forward_returns(close, horizon=0)
+    with pytest.raises(ValueError):
+        forward_returns(close, delay=-1)

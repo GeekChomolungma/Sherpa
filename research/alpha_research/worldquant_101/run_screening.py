@@ -1,6 +1,6 @@
 """世坤101研究项目 · 第一步：批量跑 `run_alpha_check`（`sherpa.backtest.screening.screen_alphas`）。
 
-拉真实 ClickHouse `data.START_TIME` ~ `data.END_TIME`（取自 `research/research_window.json` 的研究段）的
+拉真实 ClickHouse `data.START_TIME` ~ `data.END_TIME`（取自 `research/research_config.json` 的研究段）的
 `data.INTERVAL`（当前是 4h）K 线，跑一遍全部 101 个已注册的世坤101因子，产出按 IC_IR 排序
 的报告，写成 CSV 落盘。跟 `examples/alpha_screening_101.py` 是同一套调用方式，区别只是这里
 接的是真实数据，不是合成数据。
@@ -29,7 +29,7 @@ from sherpa.alpha.engine import AlphaEngine
 from sherpa.backtest.screening import screen_alphas
 from sherpa.backtest.style_exposure import default_style_exposures
 
-from data import END_TIME, INTERVAL, START_TIME, load_universe_panel
+from data import END_TIME, EXECUTION_DELAY_BARS, HORIZON_BARS, INTERVAL, START_TIME, label_forward_returns, load_universe_panel
 
 IC_IR_THRESHOLD = 0.15
 N_QUANTILES = 5
@@ -42,7 +42,8 @@ def main() -> None:
     panel = load_universe_panel()
     print(f"universe={len(panel.symbols)} 个 symbol，共 {len(panel.index)} 根 {INTERVAL} bar")
 
-    forward_returns = panel.close.pct_change().shift(-1)
+    forward_returns = label_forward_returns(panel)
+    print(f"IC 标签：持有 {HORIZON_BARS} 根 bar、执行延迟 {EXECUTION_DELAY_BARS} 根 bar（research_config.json 的 label 一节）")
     worldquant_alphas = [cls() for cls in registry.all(family="worldquant").values()]
     engine = AlphaEngine(worldquant_alphas)
 

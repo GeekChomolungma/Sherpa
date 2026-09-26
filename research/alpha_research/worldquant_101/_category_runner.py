@@ -26,7 +26,7 @@ from sherpa.data.schema import BarPanel
 from sherpa.portfolio.weighting import demean_l1
 from sherpa.risk.neutralize import neutralize
 
-from data import load_universe_panel
+from data import label_forward_returns, load_universe_panel
 
 DEFAULT_IC_IR_THRESHOLD = 0.15
 DEFAULT_N_QUANTILES = 5
@@ -52,7 +52,7 @@ def run_category(
     """
     cost_model = cost_model or FixedFeeCostModel(fee_bps=5)
     panel = panel if panel is not None else load_universe_panel()
-    forward_returns = panel.close.pct_change().shift(-1)
+    forward_returns = label_forward_returns(panel)
     exposures = default_style_exposures(panel)
 
     print(f"== {label}：{len(alpha_classes)} 个因子 ==")

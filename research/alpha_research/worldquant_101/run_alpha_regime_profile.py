@@ -77,7 +77,7 @@ from sherpa.metrics.factor import rank_ic
 from sherpa.metrics.tradability import tradable_mask
 from sherpa.risk.neutralize import neutralize
 
-from data import END_TIME, INTERVAL, START_TIME, load_universe_panel
+from data import END_TIME, EXECUTION_DELAY_BARS, HORIZON_BARS, INTERVAL, START_TIME, label_forward_returns, load_universe_panel
 
 BENCHMARK_SYMBOL = "BTCUSDT"
 
@@ -139,7 +139,8 @@ def main() -> None:
     panel = load_universe_panel()
     print(f"universe={len(panel.symbols)} 个 symbol，共 {len(panel.index)} 根 {INTERVAL} bar")
 
-    forward_returns = panel.close.pct_change().shift(-1)
+    forward_returns = label_forward_returns(panel)
+    print(f"IC 标签：持有 {HORIZON_BARS} 根 bar、执行延迟 {EXECUTION_DELAY_BARS} 根 bar（research_config.json 的 label 一节）")
 
     print("正在计算可流通性掩码（剔除上线了但没有真实流动性的 symbol）……")
     mask = tradable_mask(panel.quote_volume, panel.trades_count)

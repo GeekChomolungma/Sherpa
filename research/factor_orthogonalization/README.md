@@ -45,8 +45,14 @@
   示例抄了一份数字，运行时不读那份 CSV），不读取 `regime_factor_report/results/*.csv`、也
   不读取 `alpha_research/worldquant_101/regime_alpha_profile.csv`。想测哪些因子，自己往清单里加/删。
 - **数据接入自成一份**（`data.py`），跟 `alpha_research/worldquant_101/data.py` 内容相似但独立维护。
-  唯一共享的是时间窗：两边都读 `research/research_window.json` 的研究段，保证关卡1 检验冗余用的
-  历史和阶段一选出候选因子用的历史是同一段（见 `research/README.md`「统一时间窗与样本外 holdout」）。
+  唯一共享的是研究配置：两边都读 `research/research_config.json`（研究段时间窗 + IC 标签口径），
+  保证关卡1 检验冗余、挑代表因子用的历史和标签，跟阶段一选出候选因子时是同一套
+  （见 `research/README.md`「统一研究配置」）。
+- **下游关卡2 读本目录的结果**：`factor_synthesis/refresh_candidates.py` 读
+  `results/02_regime_cluster_assignments.csv` 里 keep 的因子，写进关卡2 的候选池。所以这份 CSV 的列名
+  （`dimension`/`state`/`qualified_name`/`recommendation`/`own_ic_ir`/`cluster_members`/`own_low_sample`）
+  是跟下游的接口，改名要同步改下游脚本。只有 1 个候选的 state 也会输出一行（自成一簇、keep），
+  不会被跳过，否则下游会丢掉这个 state。
 - **regime 打标复用核心模块，不是解耦对象**。这里说的"解耦"针对的是其它 research 子项目
   的 CSV 中间产出（文件格式/目录结构可能随时变），不针对 `sherpa` 包本身——regime 归类直接
   调用 `sherpa.backtest.regime_screening.regime_report()`，这正是

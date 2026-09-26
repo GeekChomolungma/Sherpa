@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 一键跑 research/ 全流程（阶段一 -> 关卡1），按依赖顺序依次执行，任何一步失败立刻停下。
+# 一键跑 research/ 全流程（阶段一 -> 关卡1 -> 关卡2 候选池），按依赖顺序依次执行，任何一步失败立刻停下。
 #
 # 需要先设好 ClickHouse 连接环境变量（只有 CH_HOST 是必填）：
 #   bash / Git Bash :  export CH_HOST=... CH_PASSWORD=...
@@ -21,6 +21,9 @@
 #   --refresh-candidates   步骤6  用刚生成的 04_regime_matrix.csv Top5 重写正交化的候选池
 #                                 （config.py 里 REGIME_ALPHA_SETS 是手动维护的，因子公式/窗口
 #                                  改过之后旧名单会过期；不加这个开关就沿用 config.py 现有名单）
+#   --refresh-synthesis-candidates
+#                          步骤8  用关卡1 刚生成的 02_regime_cluster_assignments.csv 里 keep 的因子
+#                                 重写关卡2（factor_synthesis/config.py）的候选池，作为关卡2 的入口
 #
 # 其它：
 #   --from-step N          从第 N 步开始（某一步失败后修好了，不用从头再跑）
@@ -47,16 +50,19 @@ MIN_ABS_T="${MIN_ABS_T:-3.0}"
 WITH_CAL=0
 WITH_VEC=0
 REFRESH=0
+REFRESH_SYNTH=0
 DRY=0
 FROM=0
 
-usage() { sed -n '2,28p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+# 打印开头那段注释（从第 2 行到第一个非注释行为止），以后增删说明行不用再改这里的行号。
+usage() { awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "${BASH_SOURCE[0]}"; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --with-calibration) WITH_CAL=1 ;;
     --with-vectorized) WITH_VEC=1 ;;
     --refresh-candidates) REFRESH=1 ;;
+    --refresh-synthesis-candidates) REFRESH_SYNTH=1 ;;
     --dry-run) DRY=1 ;;
     --from-step) shift; FROM="${1:?--from-step 需要一个步骤编号}" ;;
     -h|--help) usage; exit 0 ;;
@@ -69,6 +75,7 @@ ALPHA_DIR="$ROOT/research/alpha_research/worldquant_101"
 REPORT_DIR="$ROOT/research/regime_factor_report"
 ORTHO_DIR="$ROOT/research/factor_orthogonalization"
 CAL_DIR="$ROOT/research/tradability_calibration"
+SYNTH_DIR="$ROOT/research/factor_synthesis"
 
 # 脚本内部用 `from data import ...` 和 sherpa 包；设好 PYTHONPATH 保证 sherpa 一定能 import
 # （Git Bash 下要用 Windows 风格路径和分号分隔，纯 Linux/mac 用冒号）。
@@ -84,6 +91,7 @@ will_run() {  # will_run <步骤号>：这一步在当前参数下会不会执�
     0) [ "$WITH_CAL" -eq 1 ] ;;
     5) [ "$WITH_VEC" -eq 1 ] ;;
     6) [ "$REFRESH" -eq 1 ] ;;
+    8) [ "$REFRESH_SYNTH" -eq 1 ] ;;
     *) return 0 ;;
   esac
 }
@@ -137,8 +145,8 @@ if grep -Eq '^USE_NEUTRALIZATION[[:space:]]*=[[:space:]]*False' "$ALPHA_DIR/run_
 else
   echo "[模式] 中性化（剥离 Beta/Size）：USE_NEUTRALIZATION=True"
 fi
-# 各步骤的取数区间统一来自 research/research_window.json（研究段，不含 holdout），打印出来方便核对。
-echo "[时间窗] $(tr -d ' \r\n' < "$ROOT/research/research_window.json")"
+# 各步骤的取数区间（window）和 IC 标签口径（label）统一来自 research/research_config.json，打印出来方便核对。
+echo "[研究配置] $(tr -d ' \r\n' < "$ROOT/research/research_config.json")"
 echo "[显著性门槛] 04_regime_matrix 只收 |t| >= $MIN_ABS_T 的因子（环境变量 MIN_ABS_T 可调）"
 
 step 0 "流动性掩码校准 · 分布研究"   "$CAL_DIR" "$PYTHON" run_distribution_study.py
@@ -167,6 +175,9 @@ if will_run 7 && [ "$REFRESH" -eq 0 ]; then
 fi
 step 7 "关卡1 · 因子正交化聚类"        "$ORTHO_DIR" "$PYTHON" run_orthogonalization.py
 
+step 8 "关卡2 入口 · 刷新合成候选池（02 keep 名单 -> factor_synthesis/config.py）" \
+  "$SYNTH_DIR" "$PYTHON" refresh_candidates.py
+
 CURRENT="(完成)"
 echo
 echo "=================================================================="
@@ -174,4 +185,7 @@ echo "  全部完成，用时 $(( (SECONDS - START) / 60 )) 分 $(( (SECONDS - S
 echo "  重点产出："
 echo "    research/regime_factor_report/$REPORT_OUT/04_regime_matrix.csv   每个 state 的 Top 因子"
 echo "    research/factor_orthogonalization/results/02_regime_cluster_assignments.csv   关卡1 保留/剔除建议"
+if [ "$REFRESH_SYNTH" -eq 1 ]; then
+  echo "    research/factor_synthesis/config.py   关卡2 候选池（已按关卡1 keep 名单刷新）"
+fi
 echo "=================================================================="

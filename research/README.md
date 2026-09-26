@@ -19,13 +19,18 @@ export CH_HOST=... CH_PASSWORD=...
 bash run_research.sh --dry-run                # 先看一遍要跑哪些命令
 bash run_research.sh --refresh-candidates     # 正式跑，并用新的 04 矩阵 Top5 刷新正交化候选池
 bash run_research.sh --from-step 4            # 某一步失败修好后，从第 4 步继续
+bash run_research.sh --refresh-candidates --refresh-synthesis-candidates
+                                              # 一路跑到关卡2 入口：关卡1 的 keep 名单写进 factor_synthesis/config.py
 ```
 
 可选步骤（`--with-calibration` 流动性掩码校准、`--with-vectorized` 单因子迷你回测）和全部参数见脚本开头的说明。
 
-## 统一时间窗与样本外 holdout
+## 统一研究配置：时间窗、holdout、IC 标签
 
-所有子项目的取数区间/频率统一读 [`research_window.json`](research_window.json)：
+所有子项目共用一份 [`research_config.json`](research_config.json)，按用途分节，以后有新的跨子项目
+研究配置就再加一节：
+
+**`window`：取数区间与样本外 holdout**
 
 | 字段 | 当前值 | 含义 |
 |---|---|---|
@@ -33,12 +38,28 @@ bash run_research.sh --from-step 4            # 某一步失败修好后，从�
 | `research_start` ~ `research_end` | `2020-01-01` ~ `2026-03-15` | **研究段**：阶段一体检、关卡1 去冗余、关卡2 调权重都只在这一段上做 |
 | `research_end` ~ `holdout_end` | `2026-03-15` ~ `2026-09-15` | **样本外 holdout**：任何筛选、调参都不碰，只在关卡2 定稿后做一次性验收 |
 
-各子目录的 `data.py` 把研究段读成 `INTERVAL`/`START_TIME`/`END_TIME` 三个常量，所以默认取数
-永远不会碰 holdout。为什么要统一：阶段一在哪段历史上选出因子，关卡1 就必须在同一段历史上检验冗余，
-否则两边结论对不上（统一之前，阶段一从 2024 开始，关卡1 从 2020 开始）。这是"子目录之间不共享
-代码、不共享中间结果"原则的唯一例外：共享的是一份配置，不是代码或产出。
+**`label`：IC 检验用的"未来收益"标签口径**
 
-- 想整体换区间：只改 `research_window.json`，改完要从阶段一开始整条链重跑；
+| 字段 | 当前值 | 含义 |
+|---|---|---|
+| `horizon_bars` | `1` | 持有期：收益累计几根 bar |
+| `execution_delay_bars` | `0` | 执行延迟：信号在 bar t 收盘算出后，晚几根 bar 才按收盘价成交 |
+
+t 行的标签 = 从 `close[t + delay]` 持有到 `close[t + delay + horizon]` 的收益
+（`sherpa.metrics.factor.forward_returns`）。默认值等价于历史写法 `close.pct_change().shift(-1)`；
+`execution_delay_bars = 1` 等价于 `shift(-2)`，用来检验信号是不是只在"收盘后立刻成交"那一瞬间有效
+（短周期反转因子的 IC 里常混有买卖价差来回跳的成分，实盘吃不到，延迟一根 bar 后会大幅消失）。
+
+各子目录的 `data.py` 把配置读成常量（`INTERVAL`/`START_TIME`/`END_TIME`，以及 `HORIZON_BARS`/
+`EXECUTION_DELAY_BARS`），并提供 `label_forward_returns(panel)` 统一构造标签。阶段一体检、
+`run_screening`、关卡1 挑代表因子都用它，所以**改一处配置，整条链的 IC 口径一起变**。
+
+为什么要统一：阶段一在哪段历史、用哪种标签选出因子，关卡1 就必须在同一段历史、同一种标签上检验
+冗余和挑代表，否则两边结论对不上（统一之前，阶段一从 2024 开始、关卡1 从 2020 开始）。这是
+"子目录之间不共享代码、不共享中间结果"原则的唯一例外：共享的是一份配置，不是代码或产出。
+
+- 想整体换区间或标签口径：只改 `research_config.json`，改完要从阶段一开始整条链重跑；
+- **对比两种口径**（比如延迟 0 和延迟 1）：结果文件会被覆盖，跑第二版之前先把 `results/` 等产出复制一份；
 - 想临时换一次区间做实验：调用 `load_universe_panel(start_time=..., end_time=...)` 显式传参，不要改 JSON；
 - holdout 的用法规矩和预热（warm-up）注意事项见
   [`factor_synthesis/README.md`](factor_synthesis/README.md) §6.4。**不要把 `research_end` 往后挪来"多用点数据"**，
@@ -52,7 +73,7 @@ bash run_research.sh --from-step 4            # 某一步失败修好后，从�
 | [`tradability_calibration/`](tradability_calibration/) | 阶段一的支撑基建校准 | 不属于任何具体因子家族，是横切的超参数研究：给 `sherpa.metrics.tradability.tradable_mask` 的 `min_percentile`/`min_quote_volume`/`min_trades_count` 做数据驱动校准，供 `alpha_research/` 下所有家族的体检复用。 |
 | [`regime_factor_report/`](regime_factor_report/) | 阶段一产出的解读/汇总层 | 通用 CLI 工具，把任意家族产出的 regime 条件 IC 长表（比如 `alpha_research/worldquant_101/regime_alpha_profile.csv`）转成人类可读的分类报告、维度宽表、状态排行榜、`04_regime_matrix.csv` 这张 12-state 作战矩阵。 |
 | [`factor_orthogonalization/`](factor_orthogonalization/) | 桥梁关卡 · 关卡1：因子相关性分析与正交化 | 对手动圈定的候选因子池（同样先中性化残差化），在每个 regime state 自己的历史切片内做截面相关聚类，标记冗余因子、推荐每簇保留信噪比最高的代表因子。以后新因子的增量检验规划见 [`INCREMENTAL_TODO.md`](factor_orthogonalization/INCREMENTAL_TODO.md)。 |
-| [`factor_synthesis/`](factor_synthesis/) | 桥梁关卡 · 关卡2：基于 Regime 的动态多因子合成 | **设计阶段，暂无代码**。把关卡1 保留的因子合成为一个分数：等权 / ICIR 基线 → Regime 路由 → 平滑，walk-forward 样本外比较，holdout 一次性验收。见 [`README.md`](factor_synthesis/README.md)。 |
+| [`factor_synthesis/`](factor_synthesis/) | 桥梁关卡 · 关卡2：基于 Regime 的动态多因子合成 | **设计阶段**，已有入口：`refresh_candidates.py` 把关卡1 `02_regime_cluster_assignments.csv` 里 keep 的因子写进 `config.py` 的 `REGIME_FACTOR_SETS`（`run_research.sh --refresh-synthesis-candidates`，步骤 8）。合成方案：等权 / ICIR 基线 → Regime 路由 → 平滑，walk-forward 样本外比较，holdout 一次性验收，见 [`README.md`](factor_synthesis/README.md)。 |
 | [`REGIME_FRAMEWORK_GUIDE.md`](REGIME_FRAMEWORK_GUIDE.md) | 阶段一理论指导 | 市场状态分类的方法论文档，不是代码目录：TradFi 四大维度到 Crypto 的映射、加密永续特有维度、Python 落地方式。 |
 | [`REGIME_ALPHA_EVALUATION_WORKFLOW.md`](REGIME_ALPHA_EVALUATION_WORKFLOW.md) | 阶段一理论指导 | 因子体检工作流 SOP：为什么不能物理切片数据、Point-in-time 条件掩码打标规范、决策分类矩阵。 |
 
