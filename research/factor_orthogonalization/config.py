@@ -40,92 +40,94 @@ from __future__ import annotations
 REGIME_ALPHA_SETS: dict[str, dict[str, list[str]]] = {
     "trend": {
         # trend.bull low_sample=True：样本偏少，排行榜可信度打折扣
-        # trend.bull：只有 1/77 个因子通过显著性门槛 |t| >= 3
+        # trend.bull：只有 3/77 个因子通过显著性门槛 |t| >= 3
         "bull": [
+            "worldquant.alpha036",
+            "worldquant.alpha003",
             "worldquant.alpha040",
         ],
         "bear": [
-            "worldquant.alpha040",
-            "worldquant.alpha094",
             "worldquant.alpha044",
-            "worldquant.alpha026",
-            "worldquant.alpha029",
+            "worldquant.alpha094",
+            "worldquant.alpha016",
+            "worldquant.alpha040",
+            "worldquant.alpha065",
         ],
         "neutral": [
             "worldquant.alpha040",
             "worldquant.alpha094",
             "worldquant.alpha016",
-            "worldquant.alpha039",
-            "worldquant.alpha073",
+            "worldquant.alpha044",
+            "worldquant.alpha036",
         ],
     },
     "volatility": {
         "high": [
-            "worldquant.alpha040",
             "worldquant.alpha094",
-            "worldquant.alpha036",
+            "worldquant.alpha040",
             "worldquant.alpha044",
-            "worldquant.alpha055",
+            "worldquant.alpha016",
+            "worldquant.alpha036",
         ],
         "normal": [
             "worldquant.alpha040",
             "worldquant.alpha094",
+            "worldquant.alpha044",
             "worldquant.alpha016",
-            "worldquant.alpha073",
-            "worldquant.alpha035",
+            "worldquant.alpha050",
         ],
         "low": [
             "worldquant.alpha040",
-            "worldquant.alpha094",
-            "worldquant.alpha073",
             "worldquant.alpha016",
+            "worldquant.alpha094",
             "worldquant.alpha044",
+            "worldquant.alpha055",
         ],
     },
     "dispersion": {
         "high": [
+            "worldquant.alpha016",
             "worldquant.alpha040",
             "worldquant.alpha094",
-            "worldquant.alpha016",
-            "worldquant.alpha029",
-            "worldquant.alpha039",
+            "worldquant.alpha044",
+            "worldquant.alpha050",
         ],
         "normal": [
-            "worldquant.alpha040",
             "worldquant.alpha094",
             "worldquant.alpha016",
-            "worldquant.alpha037",
             "worldquant.alpha044",
+            "worldquant.alpha040",
+            "worldquant.alpha029",
         ],
         "low": [
             "worldquant.alpha040",
-            "worldquant.alpha094",
             "worldquant.alpha044",
             "worldquant.alpha016",
-            "worldquant.alpha015",
+            "worldquant.alpha094",
+            "worldquant.alpha026",
         ],
     },
     "liquidity": {
         "high": [
             "worldquant.alpha040",
-            "worldquant.alpha037",
             "worldquant.alpha036",
-            "worldquant.alpha033",
-            "worldquant.alpha025",
+            "worldquant.alpha044",
+            "worldquant.alpha094",
+            "worldquant.alpha037",
         ],
         "normal": [
             "worldquant.alpha040",
-            "worldquant.alpha094",
             "worldquant.alpha016",
+            "worldquant.alpha094",
             "worldquant.alpha044",
-            "worldquant.alpha035",
+            "worldquant.alpha036",
         ],
         "starved": [
-            "worldquant.alpha040",
             "worldquant.alpha094",
-            "worldquant.alpha073",
-            "worldquant.alpha029",
+            "worldquant.alpha040",
+            "worldquant.alpha016",
             "worldquant.alpha044",
+            "worldquant.alpha029",
         ],
     },
 }
@@ -139,7 +141,13 @@ REGIME_ALPHA_SETS: dict[str, dict[str, list[str]]] = {
 # 2. 对比"某对因子是只在特定 regime 下冗余，还是从头到尾都冗余"（后者说明重复关系更根本）。
 # 设成空列表即跳过。
 # >>> UNCONDITIONAL_ALPHAS BEGIN
-UNCONDITIONAL_ALPHAS: list[str] = []
+UNCONDITIONAL_ALPHAS: list[str] = [
+    "worldquant.alpha040",
+    "worldquant.alpha094",
+    "worldquant.alpha016",
+    "worldquant.alpha044",
+    "worldquant.alpha036",
+]
 # <<< UNCONDITIONAL_ALPHAS END
 
 # 新家族/自定义模块接入：worldquant / tradingview / custom 三个内置家族已经在

@@ -1,5 +1,5 @@
 """世坤101研究项目·Regime 全历史体检：对全部已注册的世坤101 alpha（不预先过 `run_screening.py`
-的全局 IC_IR 筛选）逐个算 `ic_series`，在 `regime_report.csv` 的四个维度上做条件 IC 切片，
+的全局 IC_IR 筛选）逐个算 `ic_series`，在 regime 打标（`regime_report()`）的四个维度上做条件 IC 切片，
 产出"alpha × 维度 × 状态"的长表体检结果。
 
 故意不依赖 `screening_report.csv` 的 `passed` 列表——regime 体检本身就是一种因子体检，不是
@@ -53,7 +53,8 @@ Windows 上不原生支持（需要 WSL2），投入产出比不划算。
 （`sherpa.metrics.factor.ic_significance`，由 `conditional_ic_summary` 顺带算出），下游
 `regime_factor_report.py` 用它做 `04_regime_matrix.csv` 的显著性门槛。
 
-运行前先跑过 `run_regime_report.py`（产出 `regime_report.csv`），再跑：
+不依赖 `run_regime_report.py` 的产出：regime 打标在本脚本里用同一个 `regime_report()` 现算，
+`regime_report.csv` 只是给人看的单独报告。直接运行：
     CH_HOST=... CH_PASSWORD=... python research/alpha_research/worldquant_101/run_alpha_regime_profile.py
 """
 
@@ -186,20 +187,18 @@ def main() -> None:
     regime = regime_report(panel, benchmark_symbol=BENCHMARK_SYMBOL)
 
     print("正在做条件 IC 切片体检……")
-    # include_unconditional=True：每个因子额外输出一行 dimension=unconditional（完整 IC 序列、不看 regime），
-    # 供 regime_factor_report 产出 05_global_matrix.csv —— 关卡2 全局对照组 G0 的选因子来源。
-    profile = profile_alphas_by_regime(ic_series_by_alpha, regime, include_unconditional=True)
+    # 长表里每个因子 = 各维度的具体 state 行 + 一行 dimension=unconditional（完整 IC 序列、不看 regime）。
+    # 后者是该因子唯一的全历史基线，也是 regime_factor_report 产出 05_global_matrix.csv（关卡2 全局对照组 G0）的来源。
+    profile = profile_alphas_by_regime(ic_series_by_alpha, regime)
     profile.to_csv(OUTPUT_PATH, index=False)
     print(f"\n完整 alpha × regime 体检长表已写入 research/alpha_research/worldquant_101/{OUTPUT_PATH}")
 
-    print("\n== 每个 alpha 在各维度上 ic_ir 波动最大的一档（跟 ALL 基线差距最大） ==")
-    # 用 merge 而不是把 (alpha, dimension) 设成索引再相减——非 ALL 的那部分一个 (alpha,
-    # dimension) 对应好几个 state（bull/bear/neutral...），设成索引后是非唯一 MultiIndex，
-    # 没法直接跟按 (alpha, dimension) 唯一索引的 baseline 做逐元素对齐相减。
-    baseline = profile.loc[profile["state"] == "ALL", ["alpha", "dimension", "ic_ir"]]
-    baseline = baseline.rename(columns={"ic_ir": "baseline_ic_ir"})
-    non_baseline = profile[profile["state"] != "ALL"].dropna(subset=["ic_ir"])
-    non_baseline = non_baseline.merge(baseline, on=["alpha", "dimension"], how="left")
+    print("\n== 各 alpha 在 regime state 里 ic_ir 偏离全历史基线最大的 20 行 ==")
+    # 基线 = 每个 alpha 唯一的 unconditional 行（完整 IC 序列）；按 alpha 合并到它的各 state 行上再相减。
+    is_baseline = profile["dimension"] == "unconditional"
+    baseline = profile.loc[is_baseline, ["alpha", "ic_ir"]].rename(columns={"ic_ir": "baseline_ic_ir"})
+    non_baseline = profile[~is_baseline].dropna(subset=["ic_ir"])
+    non_baseline = non_baseline.merge(baseline, on="alpha", how="left")
     non_baseline["ic_ir_gap"] = (non_baseline["ic_ir"] - non_baseline["baseline_ic_ir"]).abs()
     top_gap = non_baseline.sort_values("ic_ir_gap", ascending=False).head(20)
     print(top_gap.to_string(index=False))

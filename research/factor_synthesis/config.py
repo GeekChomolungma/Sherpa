@@ -38,90 +38,92 @@ REGIME_FACTOR_SETS: dict[str, dict[str, list[str]]] = {
     "trend": {
         # trend.bull low_sample=True：样本偏少，关卡2 会把它的权重往全局权重收缩
         "bull": [
-            "worldquant.alpha040",  # IC_IR=+0.227
+            "worldquant.alpha036",  # IC_IR=+0.276
+            "worldquant.alpha003",  # IC_IR=+0.249
+            "worldquant.alpha040",  # IC_IR=+0.224
         ],
         "bear": [
-            "worldquant.alpha040",  # IC_IR=+0.148
-            "worldquant.alpha094",  # IC_IR=+0.114
-            "worldquant.alpha044",  # IC_IR=+0.105
-            "worldquant.alpha026",  # IC_IR=+0.097
-            "worldquant.alpha029",  # IC_IR=+0.096
+            "worldquant.alpha044",  # IC_IR=+0.240
+            "worldquant.alpha094",  # IC_IR=+0.224
+            "worldquant.alpha016",  # IC_IR=+0.219
+            "worldquant.alpha040",  # IC_IR=+0.215
+            "worldquant.alpha065",  # IC_IR=+0.199
         ],
         "neutral": [
-            "worldquant.alpha040",  # IC_IR=+0.148
-            "worldquant.alpha094",  # IC_IR=+0.130
-            "worldquant.alpha016",  # IC_IR=+0.119
-            "worldquant.alpha039",  # IC_IR=+0.095
-            "worldquant.alpha073",  # IC_IR=+0.095
+            "worldquant.alpha040",  # IC_IR=+0.257
+            "worldquant.alpha094",  # IC_IR=+0.251
+            "worldquant.alpha016",  # IC_IR=+0.237
+            "worldquant.alpha044",  # IC_IR=+0.222
+            "worldquant.alpha036",  # IC_IR=+0.174
         ],
     },
     "volatility": {
         "high": [
-            "worldquant.alpha040",  # IC_IR=+0.133
-            "worldquant.alpha094",  # IC_IR=+0.125
-            "worldquant.alpha036",  # IC_IR=+0.102
-            "worldquant.alpha044",  # IC_IR=+0.101
-            "worldquant.alpha055",  # IC_IR=+0.098
+            "worldquant.alpha094",  # IC_IR=+0.239
+            "worldquant.alpha040",  # IC_IR=+0.216
+            "worldquant.alpha044",  # IC_IR=+0.209
+            "worldquant.alpha016",  # IC_IR=+0.207
+            "worldquant.alpha036",  # IC_IR=+0.184
         ],
         "normal": [
-            "worldquant.alpha040",  # IC_IR=+0.151
-            "worldquant.alpha094",  # IC_IR=+0.110
-            "worldquant.alpha016",  # IC_IR=+0.110
-            "worldquant.alpha073",  # IC_IR=+0.104
-            "worldquant.alpha035",  # IC_IR=+0.103
+            "worldquant.alpha040",  # IC_IR=+0.246
+            "worldquant.alpha094",  # IC_IR=+0.232
+            "worldquant.alpha044",  # IC_IR=+0.219
+            "worldquant.alpha016",  # IC_IR=+0.215
+            "worldquant.alpha050",  # IC_IR=+0.174
         ],
         "low": [
-            "worldquant.alpha040",  # IC_IR=+0.164
-            "worldquant.alpha094",  # IC_IR=+0.135
-            "worldquant.alpha073",  # IC_IR=+0.119
-            "worldquant.alpha016",  # IC_IR=+0.118
-            "worldquant.alpha044",  # IC_IR=+0.106
+            "worldquant.alpha040",  # IC_IR=+0.268
+            "worldquant.alpha016",  # IC_IR=+0.261
+            "worldquant.alpha094",  # IC_IR=+0.240
+            "worldquant.alpha044",  # IC_IR=+0.233
+            "worldquant.alpha055",  # IC_IR=+0.174
         ],
     },
     "dispersion": {
         "high": [
-            "worldquant.alpha040",  # IC_IR=+0.124
-            "worldquant.alpha094",  # IC_IR=+0.110
-            "worldquant.alpha016",  # IC_IR=+0.097
-            "worldquant.alpha029",  # IC_IR=+0.093
-            "worldquant.alpha039",  # IC_IR=+0.091
+            "worldquant.alpha016",  # IC_IR=+0.200
+            "worldquant.alpha040",  # IC_IR=+0.191
+            "worldquant.alpha094",  # IC_IR=+0.186
+            "worldquant.alpha044",  # IC_IR=+0.165
+            "worldquant.alpha050",  # IC_IR=+0.163
         ],
         "normal": [
-            "worldquant.alpha040",  # IC_IR=+0.147
-            "worldquant.alpha094",  # IC_IR=+0.134
-            "worldquant.alpha016",  # IC_IR=+0.105
-            "worldquant.alpha037",  # IC_IR=+0.104
-            "worldquant.alpha044",  # IC_IR=+0.100
+            "worldquant.alpha094",  # IC_IR=+0.287
+            "worldquant.alpha016",  # IC_IR=+0.247
+            "worldquant.alpha044",  # IC_IR=+0.244
+            "worldquant.alpha040",  # IC_IR=+0.239
+            "worldquant.alpha029",  # IC_IR=+0.174
         ],
         "low": [
-            "worldquant.alpha040",  # IC_IR=+0.176
-            "worldquant.alpha094",  # IC_IR=+0.127
-            "worldquant.alpha044",  # IC_IR=+0.115
-            "worldquant.alpha016",  # IC_IR=+0.114
-            "worldquant.alpha015",  # IC_IR=+0.110
+            "worldquant.alpha040",  # IC_IR=+0.309
+            "worldquant.alpha044",  # IC_IR=+0.252
+            "worldquant.alpha016",  # IC_IR=+0.243
+            "worldquant.alpha094",  # IC_IR=+0.242
+            "worldquant.alpha026",  # IC_IR=+0.205
         ],
     },
     "liquidity": {
         "high": [
-            "worldquant.alpha040",  # IC_IR=+0.081
-            "worldquant.alpha037",  # IC_IR=+0.080
-            "worldquant.alpha036",  # IC_IR=+0.076
-            "worldquant.alpha033",  # IC_IR=+0.068
-            "worldquant.alpha025",  # IC_IR=+0.066
+            "worldquant.alpha040",  # IC_IR=+0.187
+            "worldquant.alpha036",  # IC_IR=+0.178
+            "worldquant.alpha044",  # IC_IR=+0.178
+            "worldquant.alpha094",  # IC_IR=+0.168
+            "worldquant.alpha037",  # IC_IR=+0.150
         ],
         "normal": [
-            "worldquant.alpha040",  # IC_IR=+0.164
-            "worldquant.alpha094",  # IC_IR=+0.136
-            "worldquant.alpha016",  # IC_IR=+0.121
-            "worldquant.alpha044",  # IC_IR=+0.115
-            "worldquant.alpha035",  # IC_IR=+0.100
+            "worldquant.alpha040",  # IC_IR=+0.246
+            "worldquant.alpha016",  # IC_IR=+0.246
+            "worldquant.alpha094",  # IC_IR=+0.232
+            "worldquant.alpha044",  # IC_IR=+0.227
+            "worldquant.alpha036",  # IC_IR=+0.170
         ],
         "starved": [
-            "worldquant.alpha040",  # IC_IR=+0.200
-            "worldquant.alpha094",  # IC_IR=+0.170
-            "worldquant.alpha073",  # IC_IR=+0.162
-            "worldquant.alpha029",  # IC_IR=+0.153
-            "worldquant.alpha044",  # IC_IR=+0.131
+            "worldquant.alpha094",  # IC_IR=+0.340
+            "worldquant.alpha040",  # IC_IR=+0.302
+            "worldquant.alpha016",  # IC_IR=+0.301
+            "worldquant.alpha044",  # IC_IR=+0.259
+            "worldquant.alpha029",  # IC_IR=+0.250
         ],
     },
 }
@@ -136,7 +138,13 @@ REGIME_FACTOR_SETS: dict[str, dict[str, list[str]]] = {
 # 它和 REGIME_FACTOR_SETS 经过完全相同的显著性门槛和去冗余，唯一区别是"选因子时看不看 regime"，
 # 所以 G0 与 regime 方案的差距，才能归因到 regime 本身（README §4 方案阶梯）。
 # >>> GLOBAL_FACTORS BEGIN
-GLOBAL_FACTORS: list[str] = []
+GLOBAL_FACTORS: list[str] = [
+    "worldquant.alpha040",  # IC_IR=+0.245
+    "worldquant.alpha094",  # IC_IR=+0.241
+    "worldquant.alpha016",  # IC_IR=+0.231
+    "worldquant.alpha044",  # IC_IR=+0.222
+    "worldquant.alpha036",  # IC_IR=+0.168
+]
 # <<< GLOBAL_FACTORS END
 
 

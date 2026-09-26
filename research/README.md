@@ -25,6 +25,8 @@ bash run_research.sh --refresh-candidates --refresh-synthesis-candidates
 
 可选步骤（`--with-calibration` 流动性掩码校准、`--with-vectorized` 单因子迷你回测）和全部参数见脚本开头的说明。
 
+**跑完怎么读结果、怎么下结论**：见 [`RESULT_READING_GUIDE.md`](RESULT_READING_GUIDE.md)。
+
 ## 统一研究配置：时间窗、holdout、IC 标签
 
 所有子项目共用一份 [`research_config.json`](research_config.json)，按用途分节，以后有新的跨子项目

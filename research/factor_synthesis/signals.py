@@ -83,27 +83,70 @@ def estimate_state_signs(
 # 合成
 # ---------------------------------------------------------------------------
 
+def weighted_composite(
+    ranked: Mapping[str, pd.DataFrame],
+    weights: Mapping[str, float],
+    factors: Sequence[str],
+) -> pd.DataFrame:
+    """加权合成：`Σ_i w_i × rank_i / Σ_i |w_i|`，逐 (bar, symbol) 只对当期有值的因子求和、归一。
+
+    `weights` 是**带符号**的权重：符号就是方向（+1 原方向 / -1 反向使用），绝对值是权重大小。
+    等权合成就是 `w_i = sign_i` 的特例（见 `equal_weight_composite`）。
+
+    某个 symbol 在某一期缺了部分因子（比如刚上线、窗口还没攒够），就只用它有值的那几个因子，
+    分母也只累加这几个因子的 |w_i|，而不是整格丢掉；一个因子都没有才是 NaN。权重为 0 的因子不参与。
+    """
+    used = [name for name in factors if weights.get(name, 0.0) != 0.0]
+    if not used:
+        raise ValueError(f"没有可用于合成的因子（候选 {list(factors)} 的权重全部为 0）")
+    total = None
+    norm = None
+    for name in used:
+        weight = weights[name]
+        contribution = ranked[name] * weight
+        total = contribution.fillna(0.0) if total is None else total.add(contribution.fillna(0.0), fill_value=0.0)
+        present = ranked[name].notna().astype(float) * abs(weight)
+        norm = present if norm is None else norm.add(present, fill_value=0.0)
+    return total.where(norm > 0) / norm.where(norm > 0)
+
+
 def equal_weight_composite(
     ranked: Mapping[str, pd.DataFrame],
     signs: Mapping[str, float],
     factors: Sequence[str],
 ) -> pd.DataFrame:
-    """等权合成：`mean_i( sign_i × rank_i )`，逐 (bar, symbol) 只平均当期有值的因子。
+    """等权合成：`mean_i( sign_i × rank_i )`——`weighted_composite` 在 `w_i = sign_i` 时的特例。
 
-    某个 symbol 在某一期缺了部分因子（比如刚上线、窗口还没攒够），就用它有值的那几个因子平均，
-    而不是整格丢掉；一个因子都没有才是 NaN。方向为 0 的因子（样本不足、方向不明）不参与。
+    方向为 0 的因子（样本不足、方向不明）不参与。
     """
-    used = [name for name in factors if signs.get(name, 0.0) != 0.0]
-    if not used:
-        raise ValueError(f"没有可用于合成的因子（候选 {list(factors)} 的方向全部为 0）")
-    total = None
-    count = None
-    for name in used:
-        signed = ranked[name] * signs[name]
-        total = signed.fillna(0.0) if total is None else total.add(signed.fillna(0.0), fill_value=0.0)
-        present = signed.notna().astype(float)
-        count = present if count is None else count.add(present, fill_value=0.0)
-    return total.where(count > 0) / count.where(count > 0)
+    return weighted_composite(ranked, signs, factors)
+
+
+def estimate_icir_weights(
+    ic_by_factor: Mapping[str, pd.Series],
+    selection_mask: pd.Series,
+    factors: Sequence[str],
+    *,
+    min_samples: int = 30,
+) -> dict[str, float]:
+    """L1 的权重：每个因子在**选择段**上的 IC_IR（带符号），作为 `weighted_composite` 的权重。
+
+    IC_IR 的符号就是方向，绝对值就是权重大小：信噪比越高的因子权重越大。`weighted_composite` 会
+    按 Σ|w| 归一，所以这里不用预先归一。只用选择段——用验证段的 IC_IR 定权重、再在验证段上评估，
+    等于偷看答案。样本不足 `min_samples` 的因子权重为 0（不参与）。
+
+    这个函数也是以后滚动重训的基本单元：每个重训周期用截至当时的窗口重新估一次权重即可。
+    """
+    weights: dict[str, float] = {}
+    for name in factors:
+        ic = ic_by_factor[name]
+        in_selection = ic[selection_mask.reindex(ic.index, fill_value=False)].dropna()
+        if len(in_selection) < min_samples:
+            weights[name] = 0.0
+            continue
+        ic_ir = ic_summary(in_selection).ic_ir
+        weights[name] = 0.0 if pd.isna(ic_ir) or abs(ic_ir) == float("inf") else float(ic_ir)
+    return weights
 
 
 def routed_composite(

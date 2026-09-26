@@ -1,8 +1,8 @@
 {
   "errors": [],
   "warnings": [
-    "16 rows have zero samples and/or missing metrics"
+    "13 rows have zero samples and/or missing metrics"
   ],
   "duplicate_key_count": 0,
-  "missing_metric_row_count": 16
+  "missing_metric_row_count": 13
 }

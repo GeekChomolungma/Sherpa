@@ -10,7 +10,9 @@
 
 - `dimension=trend, state=bear`：熊趋势环境下的因子表现。
 - `dimension=volatility, state=high`：高波动环境下的因子表现。
-- `state=ALL`：该 dimension 不切 regime 时的基线表现。
+- `dimension=unconditional, state=ALL`：该因子用完整 IC 序列算出的**全历史基线**，每个因子只有这一行。
+  以前每个 dimension 各有一行 `ALL`，它们和这一行表达的是同一件事、数值几乎一样（只差各维度 regime
+  warm-up 期的几百根 bar），已经去掉；所有"跟全历史比"的地方统一读 unconditional 行。
 
 工具的目标不是简单找“IC 最大的因子”，而是同时回答：
 
@@ -338,7 +340,7 @@ samples < 100
 或者：
 
 ```text
-samples / ALL_samples < 10%
+samples / 全历史基线的 samples < 10%
 ```
 
 原因是极端 regime 往往数量很少，因此可能产生看起来非常夸张的 IC_IR。
@@ -410,13 +412,14 @@ IC_IR  = 0.35
 
 这意味着 overview 更偏向发现“需要注意的 regime 行为”，而不是给因子做最终投资评级。
 
-### `baseline_ic_*_median`
+### `baseline_ic_mean / baseline_ic_ir / baseline_t_stat / baseline_win_rate`
 
-每个 dimension 的 `ALL` 记录可能略有差异，因此脚本不假设某一行天然是唯一 overall baseline，而是取四个 dimension ALL 的中位数作为稳健摘要。
+该因子的全历史基线，直接取它唯一的 `dimension=unconditional` 行（完整 IC 序列）。以前取的是四个 dimension
+各自 `ALL` 行的中位数，还有一列 `baseline_ic_ir_range`（四行之间的差）——那几行本身就是冗余，已经去掉。
 
 ### `best_regime_dimension / best_regime_state`
 
-寻找全体非 ALL state 中：
+寻找全体 regime state 中：
 
 ```text
 |IC_IR|
@@ -631,8 +634,7 @@ volatility_high_top.csv
 下游：`factor_orthogonalization/refresh_candidates.py` 把它写进关卡1 的 `UNCONDITIONAL_ALPHAS`，按全历史去冗余后，
 再由 `factor_synthesis/refresh_candidates.py` 读成关卡2 的 `GLOBAL_FACTORS`。
 
-注意它跟各维度自己的 `ALL` 行不是一回事：那 4 行 `ALL` 会剔除该维度 regime warm-up 期的 bar，样本量彼此略有差异，
-都不是真正的全样本。
+同一行 unconditional 数据身兼两职：既是这里 G0 的选因子来源，也是其它所有报告里每个因子的全历史基线。
 
 ---
 

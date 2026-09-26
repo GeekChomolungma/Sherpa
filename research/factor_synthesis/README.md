@@ -76,8 +76,8 @@ t = 2025-03-10 08:00   trend=bear  volatility=high  dispersion=normal  liquidity
 | 级别 | 名称 | 权重怎么来 | 用不用 regime |
 |---|---|---|---|
 | **G0** | 全局对照组 | 不看 regime 选出的因子（`config.GLOBAL_FACTORS`）方向对齐后等权 | 选因子、合成都不用 |
+| **L1** | 全局 ICIR 加权 | 同 G0 的因子，按选择段 IC_IR（带符号）加权：`w_i = IC_IR_i / Σ\|IC_IR_j\|` | 选因子、合成都不用 |
 | **L0** | 等权基线 | 全部保留因子（各 state 保留名单的并集）方向对齐后等权 | 选因子用，合成不用 |
-| **L1** | 静态 ICIR 加权 | 训练段上每个因子全历史的 IC_IR 作为权重 | 否 |
 | **L2** | Regime 路由（硬切换） | 当前 state 下，用该 state 条件 IC_IR 作为权重，只用该 state 的保留因子 | 是 |
 | **L3** | Regime 路由 + 平滑 | L2 的基础上加迟滞 / 权重平滑（§5.3），避免 state 边界来回翻转 | 是 |
 | L4 | ML 合成（以后） | Ridge / LightGBM，因子 + regime 作为特征 | 是 |
@@ -235,8 +235,9 @@ factor_synthesis/
 ├── walk_forward.py           （以后）选择段内的滚动训练 / 测试切分（含 purge + embargo）
 └── results/
     ├── 01_scheme_comparison.csv       方案（含单因子参照）× 段：IC / IC_IR / t / 胜率 / 分数稳定性
-    ├── 02_validation_ic_by_state.csv  各合成方案在验证段、分 regime state 的条件 IC
-    └── 03_factor_signs.csv            选择段上估出的每个因子的全局方向 / 各 state 方向
+    ├── 02_validation_ic_by_state.csv  各合成方案在验证段、分 regime state 的条件 IC（不含 ALL 行，整体见 01）
+    ├── 03_factor_weights.csv          各方案实际使用的每个因子的方向与权重占比（选择段上估出）
+    └── 04_yearly_ic.csv               G0 / L1 与 G0 各因子按自然年的 IC（稳健性检验 R1：预测力是否随年份衰减）
 ```
 
 `signals.py` 刻意写成**只吃 pandas、不碰 IO 的纯函数**，原因见 §8。
@@ -273,7 +274,10 @@ factor_synthesis/
 - [x] **M1 方案对比**：`signals.py` + `run_synthesis.py`（`run_research.sh` 步骤 9）：G0 / L0 / L2（4 个路由维度
       各一版）等权合成，选择段估方向、验证段比较，产出 `01~03` 三个 CSV。它回答"要不要按 regime 选因子"，
       也给出之后所有方案的及格线
-- [ ] **M1.5 L1 ICIR 加权**：在 M1 结论基础上加 ICIR 权重，看"加权"是否比"等权"有增量
+- [x] **M1.5 L1 ICIR 加权**：G0 因子按选择段 IC_IR 加权（`signals.estimate_icir_weights` + `weighted_composite`），
+      看"加权"是否比"等权"有增量；也是以后滚动重训的基本单元（每期重估一次权重）
+- [x] **R1 分年稳定性**：`04_yearly_ic.csv`，用来判断"老数据是否还有价值"、要不要缩短训练窗口
+- [ ] **滚动重训（walk-forward）**：视 R1 结论决定是否需要；需要时把"选因子 + 估权重"按滚动窗口重复运行
 - [ ] **M2 Regime 路由**：L2（方案 A 主维度路由）+ 小样本收缩 + `02_conditional_ic_by_scheme.csv`；
       同时做方案 B（多维度平均）作为对照
 - [ ] **M3 平滑**：L3（迟滞 / 指数平滑），观察分数稳定性的改善和 IC 的代价

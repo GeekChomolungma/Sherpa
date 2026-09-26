@@ -52,17 +52,19 @@ def profile_alphas_by_regime(
     regime: pd.DataFrame,
     *,
     dimensions: Sequence[str] = DEFAULT_REGIME_DIMENSIONS,
-    include_unconditional: bool = False,
 ) -> pd.DataFrame:
     """对 `ic_series_by_alpha` 里每个 alpha，分别在 `regime` 的每个维度上做条件 IC 切片统计，
-    汇总成一张长表：列为 `alpha, dimension, state, samples, ic_mean, ic_std, ic_ir, win_rate, t_stat, p_value`
-    （`state` 里含每个维度自己的 `"ALL"` 基线行）。
+    汇总成一张长表：列为 `alpha, dimension, state, samples, ic_mean, ic_std, ic_ir, win_rate, t_stat, p_value`。
 
-    `include_unconditional=True` 时，每个 alpha 再追加一行 `dimension="unconditional", state="ALL"`：
-    用**完整的** `ic_series` 算，不做任何 regime 过滤。它跟各维度自己的 `"ALL"` 行不是一回事——
-    `conditional_ic_summary` 会先剔除该维度 regime 为 NA 的 bar（滚动窗口 warm-up 期），所以 4 个
-    维度的 `"ALL"` 行样本量彼此略有差异、也都不是真正的全样本。需要"完全不看 regime"的统计时
-    （比如关卡2 的全局对照组 G0 选因子），用这一行。`UNCONDITIONAL_DIMENSION` 常量就是这个维度名。
+    每个 alpha 的行由两部分组成：
+    - 各维度的**具体 state** 行（`bull`/`bear`/...）：该 state 切片内的条件统计；
+    - **一行 `dimension="unconditional", state="ALL"`**：用完整的 `ic_series` 算，不做任何 regime 过滤，
+      是这个 alpha 唯一的"全历史基线"。下游需要基线（诊断对照、样本占比的分母、关卡2 全局对照组 G0
+      选因子）时都读这一行。`UNCONDITIONAL_DIMENSION` 常量就是这个维度名。
+
+    不再输出每个维度各自的 `"ALL"` 行：它们和 unconditional 行表达的是同一件事（全历史整体 IC），
+    只是各自剔除了该维度 regime warm-up 期的几百根 bar，4 行数值几乎一样，属于冗余。
+    （`conditional_ic_summary` 本身仍然返回 `"ALL"` 行，这里只是在汇总时丢掉。）
 
     长表而不是宽表（`REGIME_ALPHA_EVALUATION_WORKFLOW.md` §6 那种"一行一个 alpha、一列一个
     命名状态"的决策矩阵），是因为现在四个维度各自的状态还没有归并/挑选出"哪几个组合值得单独
@@ -72,13 +74,12 @@ def profile_alphas_by_regime(
     rows = []
     for alpha_name, ic_series in ic_series_by_alpha.items():
         for dim in dimensions:
-            profile = conditional_ic_summary(ic_series, regime[dim])
+            profile = conditional_ic_summary(ic_series, regime[dim]).drop(index="ALL")
             profile = profile.rename_axis("state").reset_index()
             profile.insert(0, "dimension", dim)
             profile.insert(0, "alpha", alpha_name)
             rows.append(profile)
-        if include_unconditional:
-            rows.append(_unconditional_row(alpha_name, ic_series))
+        rows.append(_unconditional_row(alpha_name, ic_series))
     return pd.concat(rows, ignore_index=True)
 
 

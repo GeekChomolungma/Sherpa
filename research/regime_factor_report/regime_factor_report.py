@@ -4,6 +4,11 @@
 Designed for files with columns:
 alpha, dimension, state, samples, ic_mean, ic_std, ic_ir, win_rate[, t_stat, p_value]
 
+Each alpha has regime-state rows (one per state of every dimension) plus exactly one
+`dimension=unconditional, state=ALL` row computed on its full IC series. That unconditional
+row is the alpha's only baseline: every "compare with the whole history" figure below
+(baseline IC, sample share of a state) reads it. Per-dimension ALL rows are no longer produced.
+
 `t_stat` / `p_value` are the Newey-West significance of the IC mean
 (`sherpa.metrics.factor.ic_significance`). They drive the significance gate of
 `04_regime_matrix.csv`: only alphas with |t_stat| >= --min-abs-t are eligible, and
@@ -28,10 +33,10 @@ REQUIRED_COLUMNS = [
 ]
 
 DEFAULT_STATE_ORDER = {
-    "trend": ["ALL", "bear", "neutral", "bull"],
-    "volatility": ["ALL", "low", "normal", "high"],
-    "dispersion": ["ALL", "low", "normal", "high"],
-    "liquidity": ["ALL", "starved", "normal", "high"],
+    "trend": ["bear", "neutral", "bull"],
+    "volatility": ["low", "normal", "high"],
+    "dispersion": ["low", "normal", "high"],
+    "liquidity": ["starved", "normal", "high"],
 }
 
 NUMERIC_FIELDS = ["samples", "ic_mean", "ic_std", "ic_ir", "win_rate"]
@@ -46,10 +51,14 @@ SIGNIFICANCE_COLUMNS = ["t_stat", "p_value"]
 DEFAULT_MIN_ABS_T = 3.0
 
 # Rows with this dimension carry unconditional statistics (the full IC series, no regime
-# filtering; see `sherpa.backtest.regime_screening.profile_alphas_by_regime`). They bypass the
-# regime diagnostics / 04 matrix and only feed 05_global_matrix.csv, the candidate source of
-# the no-regime control group G0 in factor_synthesis (gate 2).
+# filtering; see `sherpa.backtest.regime_screening.profile_alphas_by_regime`). Two roles:
+# 1. the per-alpha baseline used by the regime-level outputs (passed around as `baselines`);
+# 2. the input of 05_global_matrix.csv, the candidate source of the no-regime control group G0
+#    in factor_synthesis (gate 2).
+# They never enter the regime diagnostics / leaderboards / 04 matrix as rows themselves.
 UNCONDITIONAL_DIMENSION = "unconditional"
+
+Baselines = Dict[str, Dict[str, Any]]  # alpha -> its unconditional row
 
 
 def parse_float(value: str) -> Optional[float]:
@@ -94,11 +103,6 @@ def quantile(values: Sequence[float], p: float) -> float:
     if lo == hi:
         return vals[lo]
     return vals[lo] * (hi - x) + vals[hi] * (x - lo)
-
-
-def median(values: Iterable[Optional[float]]) -> Optional[float]:
-    vals = [v for v in values if v is not None and math.isfinite(v)]
-    return statistics.median(vals) if vals else None
 
 
 def mean(values: Iterable[Optional[float]]) -> Optional[float]:
@@ -176,11 +180,11 @@ def validate(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
 def derive_thresholds(rows: List[Dict[str, Any]]) -> Dict[str, float]:
     non_all_abs_ir = [
         abs(r["ic_ir"]) for r in rows
-        if r["state"] != "ALL" and r["ic_ir"] is not None
+        if r["ic_ir"] is not None
     ]
     by_pair: Dict[Tuple[str, str], List[float]] = defaultdict(list)
     for r in rows:
-        if r["state"] != "ALL" and r["ic_ir"] is not None:
+        if r["ic_ir"] is not None:
             by_pair[(r["alpha"], r["dimension"])].append(r["ic_ir"])
     spreads = [max(vs) - min(vs) for vs in by_pair.values() if len(vs) >= 2]
 
@@ -269,7 +273,7 @@ def classify_dimension(
 
 
 def build_dimension_diagnostics(
-    rows: List[Dict[str, Any]], thresholds: Dict[str, float]
+    rows: List[Dict[str, Any]], thresholds: Dict[str, float], baselines: Baselines
 ) -> List[Dict[str, Any]]:
     groups: Dict[Tuple[str, str], List[Dict[str, Any]]] = defaultdict(list)
     for r in rows:
@@ -277,8 +281,8 @@ def build_dimension_diagnostics(
 
     out: List[Dict[str, Any]] = []
     for (alpha, dim), group in groups.items():
-        all_row = next((r for r in group if r["state"] == "ALL"), None)
-        states = [r for r in group if r["state"] != "ALL"]
+        all_row = baselines.get(alpha)  # unconditional row: the alpha's full-history baseline
+        states = group
         label, stats = classify_dimension(states, thresholds)
         valid = [r for r in states if r["ic_ir"] is not None and r["samples"] > 0]
 
@@ -335,7 +339,8 @@ def build_dimension_diagnostics(
 
 
 def build_factor_overview(
-    rows: List[Dict[str, Any]], diagnostics: List[Dict[str, Any]], thresholds: Dict[str, float]
+    rows: List[Dict[str, Any]], diagnostics: List[Dict[str, Any]], thresholds: Dict[str, float],
+    baselines: Baselines,
 ) -> List[Dict[str, Any]]:
     by_alpha_rows: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
     by_alpha_diag: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
@@ -347,8 +352,8 @@ def build_factor_overview(
     out: List[Dict[str, Any]] = []
     for alpha, alpha_rows in by_alpha_rows.items():
         ds = by_alpha_diag[alpha]
-        all_rows = [r for r in alpha_rows if r["state"] == "ALL" and r["ic_ir"] is not None]
-        nonall = [r for r in alpha_rows if r["state"] != "ALL" and r["ic_ir"] is not None and r["samples"] > 0]
+        baseline = baselines.get(alpha)
+        nonall = [r for r in alpha_rows if r["ic_ir"] is not None and r["samples"] > 0]
         best = max(nonall, key=lambda r: abs(r["ic_ir"])) if nonall else None
 
         labels = Counter(d["classification"] for d in ds)
@@ -371,24 +376,15 @@ def build_factor_overview(
             key=lambda d: d["ir_spread"],
             default=None,
         )
-        best_all_samples = 0
-        if best:
-            matching_all = next((
-                r for r in alpha_rows
-                if r["dimension"] == best["dimension"] and r["state"] == "ALL"
-            ), None)
-            best_all_samples = matching_all["samples"] if matching_all else 0
+        best_all_samples = baseline["samples"] if baseline else 0
 
         out.append({
             "alpha": alpha,
             "factor_classification": factor_class,
-            "baseline_ic_mean_median": median(r["ic_mean"] for r in all_rows),
-            "baseline_ic_ir_median": median(r["ic_ir"] for r in all_rows),
-            "baseline_win_rate_median": median(r["win_rate"] for r in all_rows),
-            "baseline_ic_ir_range": (
-                max(r["ic_ir"] for r in all_rows) - min(r["ic_ir"] for r in all_rows)
-                if len(all_rows) >= 2 else 0.0 if len(all_rows) == 1 else None
-            ),
+            "baseline_ic_mean": baseline["ic_mean"] if baseline else None,
+            "baseline_ic_ir": baseline["ic_ir"] if baseline else None,
+            "baseline_t_stat": baseline.get("t_stat") if baseline else None,
+            "baseline_win_rate": baseline["win_rate"] if baseline else None,
             "best_regime_dimension": best["dimension"] if best else "",
             "best_regime_state": best["state"] if best else "",
             "best_regime_ic_mean": best["ic_mean"] if best else None,
@@ -433,16 +429,16 @@ def build_factor_overview(
     return out
 
 
-def build_leaderboard(rows: List[Dict[str, Any]], thresholds: Dict[str, float]) -> List[Dict[str, Any]]:
-    all_samples_lookup = {
-        (r["alpha"], r["dimension"]): r["samples"]
-        for r in rows if r["state"] == "ALL"
-    }
+def build_leaderboard(
+    rows: List[Dict[str, Any]], thresholds: Dict[str, float], baselines: Baselines
+) -> List[Dict[str, Any]]:
     out = []
     for r in rows:
-        if r["state"] == "ALL" or r["ic_ir"] is None or r["samples"] <= 0:
+        if r["ic_ir"] is None or r["samples"] <= 0:
             continue
-        all_samples = all_samples_lookup.get((r["alpha"], r["dimension"]), 0)
+        # Sample share of a state is measured against the alpha's full-history sample count.
+        baseline = baselines.get(r["alpha"])
+        all_samples = baseline["samples"] if baseline else 0
         out.append({
             "dimension": r["dimension"],
             "state": r["state"],
@@ -496,7 +492,7 @@ def build_regime_matrix(
         by_dim_state[(r["dimension"], r["state"])].append(r)
 
     for dim in dimensions:
-        dim_states = sorted(set(r["state"] for r in rows if r["dimension"] == dim and r["state"] != "ALL"))
+        dim_states = sorted(set(r["state"] for r in rows if r["dimension"] == dim))
         ordered_states = state_order_for(dim, dim_states)
 
         for state in ordered_states:
@@ -571,39 +567,38 @@ def build_regime_matrix(
 def build_global_matrix(
     global_rows: List[Dict[str, Any]],
     thresholds: Dict[str, float],
+    baselines: Baselines,
     top_k: int,
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-    """Unconditional counterpart of the 04 matrix: one row, same selection rule
-    (|t_stat| >= min_abs_t gate, then |IC_IR| ranking, no padding), same columns.
-
-    `build_leaderboard` deliberately skips state == "ALL" (per-dimension baselines), so the
-    unconditional rows are relabelled to a placeholder state for the build and back to "ALL"
-    afterwards -- output keys stay `dimension=unconditional, state=ALL`, matching gate 1.
+    """Unconditional counterpart of the 04 matrix: one row (`dimension=unconditional, state=ALL`),
+    same selection rule (|t_stat| >= min_abs_t gate, then |IC_IR| ranking, no padding), same
+    columns -- it simply runs the same leaderboard / matrix builders on the unconditional rows.
     """
-    placeholder = "__all__"
-    pseudo = [dict(r, state=placeholder) for r in global_rows]
-    leaderboard = build_leaderboard(pseudo, thresholds)
-    matrix = build_regime_matrix(leaderboard, [UNCONDITIONAL_DIMENSION], pseudo, thresholds, top_k=top_k)
-    for r in leaderboard + matrix:
-        r["state"] = "ALL"
+    leaderboard = build_leaderboard(global_rows, thresholds, baselines)
+    matrix = build_regime_matrix(leaderboard, [UNCONDITIONAL_DIMENSION], global_rows, thresholds, top_k=top_k)
     return matrix, leaderboard
 
 
 def build_dimension_wide(
-    rows: List[Dict[str, Any]], dimension: str, diagnostics: List[Dict[str, Any]], thresholds: Dict[str, float]
+    rows: List[Dict[str, Any]], dimension: str, diagnostics: List[Dict[str, Any]], thresholds: Dict[str, float],
+    baselines: Baselines,
 ) -> List[Dict[str, Any]]:
     dim_rows = [r for r in rows if r["dimension"] == dimension]
     by_alpha: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
     for r in dim_rows:
         by_alpha[r["alpha"]].append(r)
     diag_map = {(d["alpha"], d["dimension"]): d for d in diagnostics}
-    states = state_order_for(dimension, (r["state"] for r in dim_rows))
+    # The leading ALL_* columns are the alpha's full-history baseline (its unconditional row).
+    states = ["ALL"] + state_order_for(dimension, (r["state"] for r in dim_rows))
 
     out = []
     for alpha, group in by_alpha.items():
         row: Dict[str, Any] = {"alpha": alpha}
         by_state = {r["state"]: r for r in group}
-        all_samples = by_state.get("ALL", {}).get("samples", 0) if by_state.get("ALL") else 0
+        baseline = baselines.get(alpha)
+        if baseline:
+            by_state["ALL"] = baseline
+        all_samples = baseline["samples"] if baseline else 0
         for state in states:
             r = by_state.get(state)
             prefix = state
@@ -809,16 +804,23 @@ def main() -> None:
     (output / "dimensions").mkdir(exist_ok=True)
     (output / "leaderboards").mkdir(exist_ok=True)
 
-    # Unconditional rows take a separate path (05_global_matrix.csv) and are kept out of every
-    # regime-level output below, including the data-derived thresholds.
+    # Unconditional rows are split off: they serve as per-alpha baselines for the regime-level
+    # outputs and feed 05_global_matrix.csv, but never enter those outputs as rows themselves
+    # (including the data-derived thresholds).
     global_rows = [r for r in rows if r["dimension"] == UNCONDITIONAL_DIMENSION]
     rows = [r for r in rows if r["dimension"] != UNCONDITIONAL_DIMENSION]
+    if not global_rows:
+        raise SystemExit(
+            f"{args.input_csv} has no dimension=unconditional rows (the per-alpha full-history baseline). "
+            "Re-run run_alpha_regime_profile.py."
+        )
+    baselines: Baselines = {r["alpha"]: r for r in global_rows}
 
     thresholds = derive_thresholds(rows)
     thresholds["min_abs_t"] = args.min_abs_t
-    diagnostics = build_dimension_diagnostics(rows, thresholds)
-    overview = build_factor_overview(rows, diagnostics, thresholds)
-    leaderboard = build_leaderboard(rows, thresholds)
+    diagnostics = build_dimension_diagnostics(rows, thresholds, baselines)
+    overview = build_factor_overview(rows, diagnostics, thresholds, baselines)
+    leaderboard = build_leaderboard(rows, thresholds, baselines)
     summary = make_dataset_summary(rows, validation, thresholds)
 
     write_csv(output / "00_dataset_summary.csv", summary)
@@ -830,22 +832,16 @@ def main() -> None:
     matrix = build_regime_matrix(leaderboard, dimensions, rows, thresholds, top_k=args.matrix_top_k)
     write_csv(output / "04_regime_matrix.csv", matrix)
 
-    if global_rows:
-        global_matrix, global_leaderboard = build_global_matrix(global_rows, thresholds, args.matrix_top_k)
-        write_csv(output / "05_global_matrix.csv", global_matrix)
-        write_csv(output / "leaderboards" / f"{UNCONDITIONAL_DIMENSION}_ALL_top.csv", global_leaderboard[: args.top_n])
-    else:
-        print(
-            "Warning: input has no dimension=unconditional rows, 05_global_matrix.csv not written "
-            "(re-run run_alpha_regime_profile.py to produce them)."
-        )
+    global_matrix, global_leaderboard = build_global_matrix(global_rows, thresholds, baselines, args.matrix_top_k)
+    write_csv(output / "05_global_matrix.csv", global_matrix)
+    write_csv(output / "leaderboards" / f"{UNCONDITIONAL_DIMENSION}_ALL_top.csv", global_leaderboard[: args.top_n])
 
     for dim in dimensions:
-        wide = build_dimension_wide(rows, dim, diagnostics, thresholds)
+        wide = build_dimension_wide(rows, dim, diagnostics, thresholds, baselines)
         write_csv(output / "dimensions" / f"{dim}_report.csv", wide)
 
     for dim in dimensions:
-        states = sorted(set(r["state"] for r in rows if r["dimension"] == dim and r["state"] != "ALL"))
+        states = sorted(set(r["state"] for r in rows if r["dimension"] == dim))
         for state in states:
             subset = [r for r in leaderboard if r["dimension"] == dim and r["state"] == state]
             subset.sort(key=lambda r: (not r["significant"], r["low_sample"], -r["abs_ic_ir"], r["alpha"]))

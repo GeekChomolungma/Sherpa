@@ -48,10 +48,11 @@ def test_profile_alphas_by_regime_produces_long_table_per_alpha_and_dimension():
     profile = profile_alphas_by_regime(ic_series_by_alpha, regime, dimensions=["trend", "volatility"])
 
     assert set(profile["alpha"]) == {"custom.a", "custom.b"}
-    assert set(profile["dimension"]) == {"trend", "volatility"}
-    # 每个 (alpha, dimension) 组合都应该有一行 "ALL" 基线。
+    assert set(profile["dimension"]) == {"trend", "volatility", "unconditional"}
+    # 各维度不再有自己的 "ALL" 行；每个 alpha 只有一行 unconditional/ALL 作为全历史基线。
     all_rows = profile[profile["state"] == "ALL"]
-    assert len(all_rows) == len(ic_series_by_alpha) * 2
+    assert len(all_rows) == len(ic_series_by_alpha)
+    assert set(all_rows["dimension"]) == {"unconditional"}
 
     a_trend_bull = profile[(profile["alpha"] == "custom.a") & (profile["dimension"] == "trend") & (profile["state"] == "bull")]
     assert a_trend_bull["ic_mean"].iloc[0] == pytest.approx(0.5)
@@ -65,7 +66,7 @@ def test_profile_alphas_by_regime_unconditional_row_uses_full_series():
     regime["trend"] = regime["trend"].astype(object)
     regime.iloc[:3, regime.columns.get_loc("trend")] = pd.NA
 
-    profile = profile_alphas_by_regime({"custom.a": ic_series}, regime, dimensions=["trend"], include_unconditional=True)
+    profile = profile_alphas_by_regime({"custom.a": ic_series}, regime, dimensions=["trend"])
 
     unconditional = profile[profile["dimension"] == "unconditional"]
     assert len(unconditional) == 1
@@ -75,11 +76,7 @@ def test_profile_alphas_by_regime_unconditional_row_uses_full_series():
     assert row["ic_mean"] == pytest.approx(ic_series.mean())
     assert {"t_stat", "p_value"} <= set(profile.columns)
 
-    trend_all = profile[(profile["dimension"] == "trend") & (profile["state"] == "ALL")].iloc[0]
-    assert trend_all["samples"] == 7
-
-
-def test_profile_alphas_by_regime_unconditional_off_by_default():
-    index = pd.date_range("2026-01-01", periods=10, freq="4h", tz="UTC")
-    profile = profile_alphas_by_regime({"custom.a": pd.Series([0.1] * 10, index=index)}, _regime_frame(index), dimensions=["trend"])
-    assert "unconditional" not in set(profile["dimension"])
+    # trend 维度只剩具体 state 行，样本合计 7（warm-up 的 3 根不属于任何 state）。
+    trend_rows = profile[profile["dimension"] == "trend"]
+    assert "ALL" not in set(trend_rows["state"])
+    assert trend_rows["samples"].sum() == 7

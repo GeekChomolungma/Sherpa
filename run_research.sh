@@ -9,6 +9,7 @@
 # 默认流程（每一步的产出都落在各自脚本所在目录，不再散落在仓库根目录）：
 #   1  run_regime_report.py          -> alpha_research/worldquant_101/regime_report.csv
 #   2  run_screening.py              -> alpha_research/worldquant_101/screening_report.csv
+#      （步骤 1、2 是独立的参考报告，后续步骤不读它们的产出；只改了下游时可以 --from-step 3）
 #   3  run_alpha_regime_profile.py   -> alpha_research/worldquant_101/regime_alpha_profile.csv
 #                                       （是否中性化由该脚本顶部的 USE_NEUTRALIZATION 开关决定）
 #   4  regime_factor_report.py       -> regime_factor_report/results/（含 04_regime_matrix.csv；
