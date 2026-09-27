@@ -27,11 +27,15 @@
 产出（`results/`）：
 - `00_case_consistency.csv`：重建出来的每个 case 的合成分数，按关卡2 同一口径重算的 RankIC_IR vs 关卡2 报告的
   数字——两者应一致（浮点误差内），不一致说明配方重建或数据口径出了问题，后面的回测结论都不可信；
-- `01_friction_summary.csv`：case × 映射 × 平滑 × 调仓频率 × 成本假设 × 段 的完整绩效长表；
-- `02_validation_base_cost.csv`：验证段、`BASE_COST` 下每种 (case, 映射, 平滑, 频率) 一行，附其它成本假设下的
+- `01_friction_summary.csv`：case × 映射 × 调仓频率 × 成本假设 × 段 的完整绩效长表；
+- `02_validation_base_cost.csv`：验证段、`BASE_COST` 下每种 (case, 映射, 频率) 一行，附其它成本假设下的
   净 Sharpe（`net_sharpe[<成本名>]`）和验收红线判定，按净 Sharpe 从高到低排序——**先看这张**；
 - `03_validation_net_equity.csv`：验证段、`BASE_COST` 下净 Sharpe 前 `EQUITY_TOP_N` 名组合的净值曲线（宽表，
-  列 = 组合），方便画图。全部组合都存会有几十 MB。
+  列 = 组合），方便画图。全部组合都存会有几十 MB；
+- `case_grids/<case>.csv`：每个 case 一张验证段净 Sharpe 的二维截面（行 = 映射，列 = 成本假设 × 调仓频率，
+  `zero` 那几列就是毛 Sharpe），从 `01_friction_summary.csv` pivot 出来，看一个 case 的稳健区域用。
+
+怎么读这些结果，见同目录的 `RESULT_READING.md`。
 
 回测按 case 分到多个进程并行（每个 case 的整套网格在一个进程里跑完），进程数见 `MAX_WORKERS`。
 
@@ -43,6 +47,7 @@
 from __future__ import annotations
 
 import os
+import re
 import sys
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -95,6 +100,7 @@ CONSISTENCY_PATH = _RESULTS_DIR / "00_case_consistency.csv"
 SUMMARY_PATH = _RESULTS_DIR / "01_friction_summary.csv"
 RANKING_PATH = _RESULTS_DIR / "02_validation_base_cost.csv"
 EQUITY_PATH = _RESULTS_DIR / "03_validation_net_equity.csv"
+CASE_GRIDS_DIR = _RESULTS_DIR / "case_grids"
 SYNTH_COMPARISON = Path(__file__).resolve().parent.parent / "factor_synthesis" / "results" / "01_scheme_comparison.csv"
 
 # 重算的验证段 IC_IR 跟关卡2 报告的差多少算"对不上"。同一份数据、同一套公式，理论上只有浮点误差；
@@ -225,6 +231,7 @@ def main() -> None:
     ranking.to_csv(RANKING_PATH, index=False)
     top_labels = [_label(row) for row in ranking.head(EQUITY_TOP_N).to_dict("records")]
     pd.DataFrame({label: equity[label] for label in top_labels}).to_csv(EQUITY_PATH)
+    write_case_grids(summary_df)
 
     other_costs = [f"net_sharpe[{name}]" for name in config.COST_MODELS if name not in (config.BASE_COST, "zero")]
     columns = [*KEYS, "gross_sharpe", "net_sharpe", *other_costs,
@@ -233,7 +240,31 @@ def main() -> None:
     print(ranking[columns].head(20).round(3).to_string(index=False))
     print(f"\n== 验证段 · 各 case 的最好组合（红线：净 Sharpe >= {config.MIN_NET_SHARPE}，换手衰减 < {config.MAX_TURNOVER_DECAY:.0%}） ==")
     print(ranking.drop_duplicates("case")[columns].round(3).to_string(index=False))
-    print(f"\n结果已写入：\n  {CONSISTENCY_PATH}\n  {SUMMARY_PATH}\n  {RANKING_PATH}\n  {EQUITY_PATH}")
+    print(f"\n结果已写入：\n  {CONSISTENCY_PATH}\n  {SUMMARY_PATH}\n  {RANKING_PATH}\n  {EQUITY_PATH}\n  {CASE_GRIDS_DIR}\\")
+
+
+def write_case_grids(summary_df: pd.DataFrame, out_dir: Path = CASE_GRIDS_DIR) -> list[Path]:
+    """每个 case 写一张验证段净 Sharpe 的二维截面：行 = 映射（`config.WEIGHTINGS` 的顺序），
+    列 = `<成本假设>|every<N>`（成本按 `config.COST_MODELS` 的顺序、再按调仓频率）。
+
+    只做 pivot、不重跑回测，所以也可以单独对已有的 `01_friction_summary.csv` 调用。写之前清空目录，
+    避免 case 名单变了以后留下过期文件。文件名里 Windows 不允许的字符（如 `single:` 里的冒号）换成 `_`。
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for old in out_dir.glob("*.csv"):
+        old.unlink()
+    validation = summary_df[summary_df["segment"].str.startswith("validation")]
+    costs = [c for c in config.COST_MODELS if c in set(validation["cost_model"])]
+    written = []
+    for case, rows in validation.groupby("case", sort=False):
+        grid = rows.pivot_table(index="weighting", columns=["cost_model", "rebalance_every"], values="net_sharpe")
+        grid = grid.reindex(index=[w for w in config.WEIGHTINGS if w in grid.index])
+        grid = grid.reindex(columns=[(c, r) for c in costs for r in sorted(set(rows["rebalance_every"]))])
+        grid.columns = [f"{cost}|every{rebalance}" for cost, rebalance in grid.columns]
+        path = out_dir / (re.sub(r'[<>:"/\\|?*\s]+', "_", str(case)).strip("_") + ".csv")
+        grid.round(4).to_csv(path, index_label="weighting")
+        written.append(path)
+    return written
 
 
 def _label(row: dict[str, Any]) -> str:

@@ -62,18 +62,17 @@ bash run_research.sh --from-step 10 --refresh-friction-cases
 
 `refresh_candidates.py --max-composites N` 只保留验证段 IC_IR 前 N 个合成方案；`--singles N` 设置单因子参照的个数。回测按 case 分到多个进程并行（`run_friction.MAX_WORKERS`）。
 
-## 6. 产出（`results/`）与阅读顺序
+## 6. 产出（`results/`）
 
-1. **`00_case_consistency.csv`**：先确认 `consistent` 全部是 True。
-2. **`02_validation_base_cost.csv`**：验证段、`all_taker` 成本下，每种 (case, 映射, 调仓频率) 一行，按净 Sharpe 排序。重点看这几列：
-   - `gross_sharpe` → `net_sharpe[all_maker]` → `net_sharpe`（all_taker）→ `net_sharpe[stress]`：零成本、两种极端执行方式、大滑点下 Sharpe 各剩多少；
-   - `turnover_per_bar`、`turnover_decay`：换手有多高，成本吃掉了毛利的多大比例；
-   - `breakeven_cost_bps`：单边成本涨到多少 bps 时净收益归零。直接拿它跟 maker / taker 费率比较，最直观；
-   - `passes_red_lines`：是否满足验收红线。
-3. **`01_friction_summary.csv`**：完整长表，包含所有成本假设和选择段。用来确认结论不是只在验证段上成立。
-4. **`03_validation_net_equity.csv`**：验证段净 Sharpe 前 30 名组合的净值曲线（宽表），用来画图、看回撤出现在什么时候。
+| 文件 | 内容 |
+|---|---|
+| `00_case_consistency.csv` | 配方重建一致性：重算的验证段 IC_IR 对照关卡2 的报告值 |
+| `01_friction_summary.csv` | 完整长表：case × 映射 × 调仓频率 × 成本 × 数据段 |
+| `02_validation_base_cost.csv` | 验证段、全吃单成本下每个组合一行，附其他成本下的净 Sharpe 和红线判定，按净 Sharpe 排序 |
+| `03_validation_net_equity.csv` | 验证段、全吃单成本下净 Sharpe 前 30 名组合的净值曲线 |
+| `case_grids/<case>.csv` | 每个 case 一张验证段净 Sharpe 的二维截面（行 = 映射，列 = 成本 × 调仓频率），找稳健区域用 |
 
-**关于网格搜索的偏差**：在验证段上从几百种组合里挑最高的那一格，结果天然偏乐观。要看**稳健的区域**（相邻参数都不错），比如按映射 × 调仓频率看 8 个 case 的中位数，不要只看单独最好的一格。无偏的估计留给阶段二在 holdout 上跑。
+**怎么读、按什么顺序读、什么情况算好，见 [`RESULT_READING.md`](RESULT_READING.md)。**不要只看 `02` 排第一的那一行：在几百个组合里挑最高的一格，结果天然偏乐观。
 
 ## 7. 已经试过、已排除的做法
 
