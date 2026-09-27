@@ -52,6 +52,7 @@ def profile_alphas_by_regime(
     regime: pd.DataFrame,
     *,
     dimensions: Sequence[str] = DEFAULT_REGIME_DIMENSIONS,
+    label_horizon: int = 1,
 ) -> pd.DataFrame:
     """对 `ic_series_by_alpha` 里每个 alpha，分别在 `regime` 的每个维度上做条件 IC 切片统计，
     汇总成一张长表：列为 `alpha, dimension, state, samples, ic_mean, ic_std, ic_ir, win_rate, t_stat, p_value`。
@@ -70,26 +71,28 @@ def profile_alphas_by_regime(
     命名状态"的决策矩阵），是因为现在四个维度各自的状态还没有归并/挑选出"哪几个组合值得单独
     成列"——先如实穷举，宽表的列该怎么选，等看过这张长表的实际分布后再决定（跟之前确认过的
     "先穷举、落地体检时再归并"一致）。`regime` 通常直接传 `regime_report()` 的输出。
+
+    `label_horizon`：算 IC 用的标签持有期，透传给 `ic_significance`（标签重叠时 t 值的滞后阶数要加大）。
     """
     rows = []
     for alpha_name, ic_series in ic_series_by_alpha.items():
         for dim in dimensions:
-            profile = conditional_ic_summary(ic_series, regime[dim]).drop(index="ALL")
+            profile = conditional_ic_summary(ic_series, regime[dim], label_horizon=label_horizon).drop(index="ALL")
             profile = profile.rename_axis("state").reset_index()
             profile.insert(0, "dimension", dim)
             profile.insert(0, "alpha", alpha_name)
             rows.append(profile)
-        rows.append(_unconditional_row(alpha_name, ic_series))
+        rows.append(_unconditional_row(alpha_name, ic_series, label_horizon))
     return pd.concat(rows, ignore_index=True)
 
 
 UNCONDITIONAL_DIMENSION = "unconditional"
 
 
-def _unconditional_row(alpha_name: str, ic_series: pd.Series) -> pd.DataFrame:
+def _unconditional_row(alpha_name: str, ic_series: pd.Series, label_horizon: int = 1) -> pd.DataFrame:
     """完整 `ic_series`（不做 regime 过滤）的统计，列口径跟 `conditional_ic_summary` 的一行完全一致。"""
     summary = ic_summary(ic_series)
-    significance = ic_significance(ic_series)
+    significance = ic_significance(ic_series, label_horizon=label_horizon)
     clean = ic_series.dropna()
     return pd.DataFrame(
         [{

@@ -27,7 +27,7 @@ bash run_research.sh --refresh-candidates --refresh-synthesis-candidates
 
 **跑完怎么读结果、怎么下结论**：见 [`RESULT_READING_GUIDE.md`](RESULT_READING_GUIDE.md)。
 
-## 统一研究配置：时间窗、holdout、IC 标签、大盘锚点
+## 统一研究配置：时间窗、holdout、IC 标签、大盘锚点、交易成本
 
 所有子项目共用一份 [`research_config.json`](research_config.json)，按用途分节，以后有新的跨子项目
 研究配置就再加一节。**具体取值以 JSON 为准**（这里只解释含义，不抄数值，免得文档过期）；
@@ -64,6 +64,18 @@ t 行的标签 = 从 `close[t + delay]` 持有到 `close[t + delay + horizon]` �
 |---|---|
 | `benchmark_symbol` | regime 打标的趋势锚点，同时也是 Beta 暴露（中性化剥离的对象）的基准。各关必须一致，否则 state 的含义、残差的口径都对不上 |
 
+**`costs`：交易成本口径**（目前只有关卡3 `friction_test/` 读它）
+
+| 字段 | 含义 |
+|---|---|
+| `venue` | 交易所 / 市场，只作标注 |
+| `maker_fee_bps` / `taker_fee_bps` | 挂单 / 吃单手续费（bps，1 bp = 0.01%），按当前会员档位填 |
+| `taker_slippage_bps` | 吃单的常规滑点假设 |
+| `stress_slippage_bps` | 压力测试用的大滑点假设 |
+
+换会员档位或换交易所只改这一节。关卡3 用它构造全 maker / 全 taker / 压力三种成本模型，见
+`friction_test/README.md` §3。
+
 各子目录的 `data.py` 把配置读成常量（`INTERVAL`/`START_TIME`/`END_TIME`、`HORIZON_BARS`/
 `EXECUTION_DELAY_BARS`、`BENCHMARK_SYMBOL`），并提供 `label_forward_returns(panel)` 统一构造标签。
 阶段一体检、`run_screening`、关卡1 挑代表因子、关卡2 评估合成分数都用它们，所以**改一处配置，
@@ -94,7 +106,8 @@ t 行的标签 = 从 `close[t + delay]` 持有到 `close[t + delay + horizon]` �
 | 阶段一 `alpha_research/worldquant_101/run_alpha_regime_profile.py`（读库） | `regime_alpha_profile.csv` | `regime_factor_report/regime_factor_report.py`（不读库） | `alpha, dimension, state, samples, ic_mean, ic_std, ic_ir, win_rate, t_stat, p_value`；每个因子一行 `dimension=unconditional, state=ALL` 作为全历史基线 |
 | `regime_factor_report.py` | `results/04_regime_matrix.csv`、`results/05_global_matrix.csv` | `factor_orthogonalization/refresh_candidates.py`（步骤 6）→ 关卡1 `config.py` 的 `REGIME_ALPHA_SETS` / `UNCONDITIONAL_ALPHAS` | `dimension, state, top{i}_alpha, low_sample, significant_count, candidate_count, min_abs_t` |
 | 关卡1 `run_orthogonalization.py`（读库） | `results/02_regime_cluster_assignments.csv` | `factor_synthesis/refresh_candidates.py`（步骤 8）→ 关卡2 `config.py` 的 `REGIME_FACTOR_SETS` / `GLOBAL_FACTORS` | `dimension, state, qualified_name, recommendation, own_ic_ir, cluster_members, own_low_sample` |
-| 关卡2 `run_synthesis.py`（读库） | `results/01~04_*.csv` | 人工阅读、决策（见 [`RESULT_READING_GUIDE.md`](RESULT_READING_GUIDE.md)）；以后接关卡3 | — |
+| 关卡2 `run_synthesis.py`（读库） | `results/01_scheme_comparison.csv`、`results/03_factor_weights.csv` | `friction_test/refresh_candidates.py`（步骤 10）→ 关卡3 `config.py` 的 `CASES` | 01：`scheme, kind, segment, ic_ir, score_autocorr`；03：`scope, factor, sign, raw_weight`（scope 形如 `G0` / `L1` / `L0` / `L2-<维度>.<state>`） |
+| 关卡3 `run_friction.py`（读库） | `results/00~03_*.csv` | 人工阅读、决策；选定的组合构建方式进阶段二 | — |
 
 下游只读 `config.py`（由 refresh 脚本重写 BEGIN/END 标记之间的区块），运行时不直接读上游 CSV。
 **上游改了输出 CSV 的列名 / 含义，必须同步改下游的 refresh 脚本。**
@@ -149,6 +162,7 @@ bash run_research.sh --from-step 3 --refresh-candidates --refresh-synthesis-cand
 | [`regime_factor_report/`](regime_factor_report/) | 阶段一产出的解读/汇总层 | 通用 CLI 工具，把任意家族产出的 regime 条件 IC 长表（比如 `alpha_research/worldquant_101/regime_alpha_profile.csv`）转成人类可读的分类报告、维度宽表、状态排行榜、`04_regime_matrix.csv` 这张 12-state 作战矩阵。 |
 | [`factor_orthogonalization/`](factor_orthogonalization/) | 桥梁关卡 · 关卡1：因子相关性分析与正交化 | 对手动圈定的候选因子池（同样先中性化残差化），在每个 regime state 自己的历史切片内做截面相关聚类，标记冗余因子、推荐每簇保留信噪比最高的代表因子。以后新因子的增量检验规划见 [`INCREMENTAL_TODO.md`](factor_orthogonalization/INCREMENTAL_TODO.md)。 |
 | [`factor_synthesis/`](factor_synthesis/) | 桥梁关卡 · 关卡2：基于 Regime 的动态多因子合成 | **设计阶段**，已有入口：`refresh_candidates.py` 把关卡1 `02_regime_cluster_assignments.csv` 里 keep 的因子写进 `config.py` 的 `REGIME_FACTOR_SETS`（`run_research.sh --refresh-synthesis-candidates`，步骤 8）。合成方案：等权 / ICIR 基线 → Regime 路由 → 平滑，walk-forward 样本外比较，holdout 一次性验收，见 [`README.md`](factor_synthesis/README.md)。 |
+| [`friction_test/`](friction_test/) | 桥梁关卡 · 关卡3：换手摩擦与组合构建 | `refresh_candidates.py` 把关卡2 results 里的方案（默认全部合成方案 + 最强单因子参照）连同方向 / 权重写成 `config.py` 的冻结配方 `CASES`；`run_friction.py` 对每个 case × 权重映射（demean_l1 / Top-K）× 调仓频率跑 `run_vectorized_backtest`，在多种成本假设下扣费，验证段比较、对照 lifecycle 文档的验收红线。见 [`README.md`](friction_test/README.md)。 |
 | [`REGIME_FRAMEWORK_GUIDE.md`](REGIME_FRAMEWORK_GUIDE.md) | 阶段一理论指导 | 市场状态分类的方法论文档，不是代码目录：TradFi 四大维度到 Crypto 的映射、加密永续特有维度、Python 落地方式。 |
 | [`REGIME_ALPHA_EVALUATION_WORKFLOW.md`](REGIME_ALPHA_EVALUATION_WORKFLOW.md) | 阶段一理论指导 | 因子体检工作流 SOP：为什么不能物理切片数据、Point-in-time 条件掩码打标规范、决策分类矩阵。 |
 
@@ -157,8 +171,8 @@ bash run_research.sh --from-step 3 --refresh-candidates --refresh-synthesis-cand
 （`exposure.rolling_beta`/`neutralize.neutralize`）+ `sherpa.backtest.style_exposure`，
 并接入了上面 `alpha_research/`、`factor_orthogonalization/` 的各个脚本——不是 `research/`
 下的独立子目录，而是内嵌进阶段一各产线的一个处理步骤。关卡2（基于 Regime 的动态多因子合成）已经开了
-`factor_synthesis/` 目录，目前只有执行文档；关卡3（换手摩擦压力测试）在 `research/` 下还没有
-对应子目录，等真正开始做才会在这里加对应目录并更新这张表。
+`factor_synthesis/` 目录，关卡3（换手摩擦与组合构建）在
+`friction_test/`。
 
 ## 一个具体研究项目该放哪：判断口诀
 

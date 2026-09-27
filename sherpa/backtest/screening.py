@@ -38,6 +38,7 @@ def screen_alphas(
     n_quantiles: int = 10,
     ic_ir_threshold: float = 0.5,
     exposures: Mapping[str, pd.DataFrame] | None = None,
+    label_horizon: int = 1,
 ) -> ScreeningReport:
     """对 `alpha_engine` 里每个 alpha 跑一遍 `run_alpha_check`，汇总成一张按 IC_IR 从高到低
     排序的表。`forward_returns` 的口径跟 `run_alpha_check` 一致（要跟 alpha 对齐"未来"收益率，
@@ -72,7 +73,7 @@ def screen_alphas(
         result = run_alpha_check(
             history, forward_returns, n_quantiles=n_quantiles, ic_ir_threshold=ic_ir_threshold
         )
-        significance = ic_significance(result.ic_series)
+        significance = ic_significance(result.ic_series, label_horizon=label_horizon)
         rows[alpha.qualified_name] = {
             "ic_mean": result.ic_mean,
             "ic_std": result.ic_std,

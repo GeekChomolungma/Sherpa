@@ -12,5 +12,12 @@
   },
   "market": {
     "benchmark_symbol": "BTCUSDT"
+  },
+  "costs": {
+    "venue": "binance_usdm_futures",
+    "maker_fee_bps": 2.0,
+    "taker_fee_bps": 5.0,
+    "taker_slippage_bps": 3.0,
+    "stress_slippage_bps": 10.0
   }
 }

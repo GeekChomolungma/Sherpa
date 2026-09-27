@@ -120,7 +120,21 @@ def newey_west_lags(samples: int) -> int:
     return int(math.floor(4.0 * (samples / 100.0) ** (2.0 / 9.0)))
 
 
-def ic_significance(ic_series: pd.Series, *, lags: int | None = None) -> ICSignificance:
+def overlap_min_lags(label_horizon: int) -> int:
+    """标签持有期 `label_horizon = H > 1` 时，Newey–West 滞后阶数的下限 `2 × (H − 1)`。
+
+    H 根 bar 的收益标签相邻两期重叠 H−1 根，IC 序列天然带 H−1 阶的自相关（MA(H−1) 结构），
+    跟因子本身慢不慢无关。按样本量定的经验阶数（`newey_west_lags`）不管这个：regime 小切片
+    n≈100 时只有 4 阶，H=6 时连第 5 阶都覆盖不到；即使覆盖到了，Bartlett 权重在第 H−1 阶也已经
+    打了很大折扣，标准误仍会偏小、t 值偏高。取 2(H−1) 让第 H−1 阶的权重至少约 0.5。H=1（标签不
+    重叠）时下限是 0，行为跟以前完全一样。
+    """
+    if label_horizon < 1:
+        raise ValueError(f"label_horizon 至少是 1，收到 {label_horizon!r}")
+    return 2 * (label_horizon - 1)
+
+
+def ic_significance(ic_series: pd.Series, *, lags: int | None = None, label_horizon: int = 1) -> ICSignificance:
     """RankIC 均值的 Newey–West（HAC）t 检验：`t = mean / se_NW`，p 为双侧正态近似。
 
     为什么不用朴素的 `t = IC_IR × sqrt(n)`：因子值逐 bar 变化慢，相邻两期的 IC 往往正相关，
@@ -131,6 +145,10 @@ def ic_significance(ic_series: pd.Series, *, lags: int | None = None) -> ICSigni
     `ic_series` 是按时间排好序的序列（`rank_ic` 的输出、或者它按 regime 取出的子序列）；
     NaN 会被先剔除。对 regime 子序列来说，被剔除掉的其它 state 的 bar 会让"相邻"变成
     "子序列里相邻"，这是一个近似——同一个 state 往往连续出现好多根 bar，近似误差不大。
+
+    `label_horizon`：IC 标签的持有期（`research_config.json` 的 `label.horizon_bars`）。大于 1 时标签
+    相邻重叠，滞后阶数至少取 `overlap_min_lags(label_horizon)`，见该函数说明。显式传了 `lags` 就以
+    `lags` 为准。
 
     p 值用正态分布近似（`erfc(|t| / sqrt(2))`），不引入 scipy：样本数上百时 t 分布和
     正态分布几乎没有差别；样本很少的切片本来就会被 `low_sample` 标记，p 值只作参考。
@@ -144,7 +162,7 @@ def ic_significance(ic_series: pd.Series, *, lags: int | None = None) -> ICSigni
         return ICSignificance(t_stat=float("nan"), p_value=float("nan"), samples=n, lags=0)
 
     if lags is None:
-        lags = newey_west_lags(n)
+        lags = max(newey_west_lags(n), overlap_min_lags(label_horizon))
     lags = max(0, min(int(lags), n - 1))
 
     values = clean.to_numpy(dtype=float)
@@ -169,7 +187,7 @@ def ic_significance(ic_series: pd.Series, *, lags: int | None = None) -> ICSigni
     return ICSignificance(t_stat=float(t_stat), p_value=float(p_value), samples=n, lags=lags)
 
 
-def conditional_ic_summary(ic_series: pd.Series, regime: pd.Series) -> pd.DataFrame:
+def conditional_ic_summary(ic_series: pd.Series, regime: pd.Series, *, label_horizon: int = 1) -> pd.DataFrame:
     """按 `regime` 的取值对 `ic_series` 做条件切片统计（原理参考 `research/
     REGIME_ALPHA_EVALUATION_WORKFLOW.md` §5 步骤4），返回一行一个类别的画像表，行索引里
     多一个 `"ALL"` 基线行。
@@ -183,6 +201,8 @@ def conditional_ic_summary(ic_series: pd.Series, regime: pd.Series) -> pd.DataFr
     之和，两者可以直接比较增量信息，不会因为 `"ALL"` 悄悄多算了一段分组阶段完全没覆盖到的
     历史而失真。这里特意跟 `REGIME_ALPHA_EVALUATION_WORKFLOW.md` 给的参考代码不一样（那份
     示例用未过滤的完整 `ic_series` 当基线）——两种口径都不算错，这里选了口径更严格的一种。
+
+    `label_horizon`：IC 标签的持有期，透传给 `ic_significance`（标签重叠时加大 Newey–West 滞后阶数）。
     """
     ic_series, regime = ic_series.align(regime, join="inner")
     known = regime.notna()
@@ -191,7 +211,7 @@ def conditional_ic_summary(ic_series: pd.Series, regime: pd.Series) -> pd.DataFr
 
     def _row(values: pd.Series) -> dict[str, float]:
         summary = ic_summary(values)
-        significance = ic_significance(values)
+        significance = ic_significance(values, label_horizon=label_horizon)
         clean = values.dropna()
         return {
             "samples": int(clean.shape[0]),

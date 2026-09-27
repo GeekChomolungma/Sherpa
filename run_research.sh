@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 一键跑 research/ 全流程（阶段一 -> 关卡1 -> 关卡2 方案对比），按依赖顺序依次执行，任何一步失败立刻停下。
+# 一键跑 research/ 全流程（阶段一 -> 关卡1 -> 关卡2 方案对比 -> 关卡3 扣费回测），按依赖顺序依次执行，任何一步失败立刻停下。
 #
 # 需要先设好 ClickHouse 连接环境变量（只有 CH_HOST 是必填）：
 #   bash / Git Bash :  export CH_HOST=... CH_PASSWORD=...
@@ -16,9 +16,10 @@
 #                                       每个 state 只收 |t| >= MIN_ABS_T 的显著因子，再按 |IC_IR| 取 Top5）
 #   7  run_orthogonalization.py      -> factor_orthogonalization/results/
 #   9  run_synthesis.py              -> factor_synthesis/results/（关卡2：G0 / L0 / L2 各方案在验证段上的对比）
+#  11  run_friction.py               -> friction_test/results/（关卡3：各方案 × 权重映射 × 调仓频率 × 成本的扣费回测）
 #
 # 时间切分（research/research_config.json 的 window）：步骤 1~7 只用选择段（截止 validation_start），
-# 步骤 9 用整个研究段（选择段估方向、验证段比较方案），holdout 全程不碰。
+# 步骤 9、11 用整个研究段（选择段估方向 / 定配方、验证段比较），holdout 全程不碰。
 #
 # 可选步骤（默认不跑）：
 #   --with-calibration     步骤0  tradability_calibration 三个脚本（流动性掩码门槛校准，纯参考）
@@ -31,6 +32,9 @@
 #   --refresh-synthesis-candidates
 #                          步骤8  用关卡1 刚生成的 02_regime_cluster_assignments.csv 里 keep 的因子
 #                                 重写关卡2（factor_synthesis/config.py）的候选池，作为关卡2 的入口
+#   --refresh-friction-cases
+#                          步骤10 用关卡2 刚生成的 01_scheme_comparison.csv / 03_factor_weights.csv
+#                                 重写关卡3（friction_test/config.py）要回测的 case（冻结配方）
 #
 # 其它：
 #   --from-step N          从第 N 步开始（某一步失败后修好了，不用从头再跑）
@@ -59,6 +63,7 @@ WITH_VEC=0
 WITH_SCREENING=0
 REFRESH=0
 REFRESH_SYNTH=0
+REFRESH_FRICTION=0
 DRY=0
 FROM=0
 
@@ -72,6 +77,7 @@ while [ $# -gt 0 ]; do
     --with-screening) WITH_SCREENING=1 ;;
     --refresh-candidates) REFRESH=1 ;;
     --refresh-synthesis-candidates) REFRESH_SYNTH=1 ;;
+    --refresh-friction-cases) REFRESH_FRICTION=1 ;;
     --dry-run) DRY=1 ;;
     --from-step) shift; FROM="${1:?--from-step 需要一个步骤编号}" ;;
     -h|--help) usage; exit 0 ;;
@@ -85,6 +91,7 @@ REPORT_DIR="$ROOT/research/regime_factor_report"
 ORTHO_DIR="$ROOT/research/factor_orthogonalization"
 CAL_DIR="$ROOT/research/tradability_calibration"
 SYNTH_DIR="$ROOT/research/factor_synthesis"
+FRICTION_DIR="$ROOT/research/friction_test"
 
 # 脚本内部用 `from data import ...` 和 sherpa 包；设好 PYTHONPATH 保证 sherpa 一定能 import
 # （Git Bash 下要用 Windows 风格路径和分号分隔，纯 Linux/mac 用冒号）。
@@ -102,13 +109,14 @@ will_run() {  # will_run <步骤号>：这一步在当前参数下会不会执�
     5) [ "$WITH_VEC" -eq 1 ] ;;
     6) [ "$REFRESH" -eq 1 ] ;;
     8) [ "$REFRESH_SYNTH" -eq 1 ] ;;
+    10) [ "$REFRESH_FRICTION" -eq 1 ] ;;
     *) return 0 ;;
   esac
 }
 
-# 需要连 ClickHouse 的步骤：0 1 2 3 5 7 9。提前检查，别跑了半小时才发现没设环境变量。
+# 需要连 ClickHouse 的步骤：0 1 2 3 5 7 9 11。提前检查，别跑了半小时才发现没设环境变量。
 if [ "$DRY" -eq 0 ]; then
-  for n in 0 1 2 3 5 7 9; do
+  for n in 0 1 2 3 5 7 9 11; do
     if will_run "$n" && [ -z "${CH_HOST:-}" ]; then
       echo "缺少环境变量 CH_HOST（步骤 $n 需要连 ClickHouse）。设置方法见本脚本开头的说明。" >&2
       exit 1
@@ -195,6 +203,15 @@ if will_run 9 && [ "$REFRESH_SYNTH" -eq 0 ]; then
 fi
 step 9 "关卡2 · 合成方案对比（选择段估方向，验证段比较）" "$SYNTH_DIR" "$PYTHON" run_synthesis.py
 
+step 10 "关卡3 入口 · 刷新回测 case（关卡2 results -> friction_test/config.py）"   "$FRICTION_DIR" "$PYTHON" refresh_candidates.py
+
+if will_run 11 && [ "$REFRESH_FRICTION" -eq 0 ]; then
+  echo
+  echo "[提示] 关卡3 沿用 friction_test/config.py 现有的 case，没有跟着关卡2 的新结果刷新。"
+  echo "       如果关卡2 刚重跑过，建议加 --refresh-friction-cases。"
+fi
+step 11 "关卡3 · 扣费回测（验证段比较 case × 组合构建 × 成本）" "$FRICTION_DIR" "$PYTHON" run_friction.py
+
 CURRENT="(完成)"
 echo
 echo "=================================================================="
@@ -206,4 +223,5 @@ if [ "$REFRESH_SYNTH" -eq 1 ]; then
   echo "    research/factor_synthesis/config.py   关卡2 候选池（已按关卡1 keep 名单刷新）"
 fi
 echo "    research/factor_synthesis/results/01_scheme_comparison.csv   关卡2 各方案验证段对比"
+echo "    research/friction_test/results/02_validation_base_cost.csv   关卡3 验证段扣费回测排名"
 echo "=================================================================="

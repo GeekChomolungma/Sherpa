@@ -196,7 +196,7 @@ def main() -> None:
     print("正在做条件 IC 切片体检……")
     # 长表里每个因子 = 各维度的具体 state 行 + 一行 dimension=unconditional（完整 IC 序列、不看 regime）。
     # 后者是该因子唯一的全历史基线，也是 regime_factor_report 产出 05_global_matrix.csv（关卡2 全局对照组 G0）的来源。
-    profile = profile_alphas_by_regime(ic_series_by_alpha, regime)
+    profile = profile_alphas_by_regime(ic_series_by_alpha, regime, label_horizon=HORIZON_BARS)
     profile.to_csv(OUTPUT_PATH, index=False)
     print(f"\n完整 alpha × regime 体检长表已写入 research/alpha_research/worldquant_101/{OUTPUT_PATH}")
 

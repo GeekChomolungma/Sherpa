@@ -196,11 +196,11 @@ def segment_masks(index: pd.DatetimeIndex, validation_start: pd.Timestamp, purge
     return selection, in_validation
 
 
-def summarize_ic(ic_series: pd.Series) -> dict[str, float]:
+def summarize_ic(ic_series: pd.Series, *, label_horizon: int = 1) -> dict[str, float]:
     """一条 IC 序列的全部统计口径（跟阶段一 profile 的列一致），用于方案对比表。"""
     clean = ic_series.dropna()
     summary = ic_summary(ic_series)
-    significance = ic_significance(ic_series)
+    significance = ic_significance(ic_series, label_horizon=label_horizon)
     return {
         "samples": int(clean.shape[0]),
         "ic_mean": summary.mean,

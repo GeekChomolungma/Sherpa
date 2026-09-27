@@ -34,18 +34,18 @@ def test_on_intents_ignores_empty_batch():
     assert len(result.returns) == 0
 
 
-def test_first_bar_has_no_position_and_no_turnover_yet():
+def test_first_decision_is_not_settled_until_its_return_is_realized():
     index = pd.date_range("2026-01-01", periods=1, freq="1min", tz="UTC")
     prices = pd.DataFrame({"A": [100.0]}, index=index)
     simulator = Simulator(prices=prices, cost_model=ZeroCostModel())
 
     simulator.on_intents([FakeIntent("A", 1.0, _bar_end_time(index[0]))])
 
+    # target_0 的收益要等下一根 bar 才实现，建仓换手也要配对给那一期收益一起结算——
+    # 只发了这一次调用，结果里还没有任何一行（见 on_intents 的 docstring）。
     result = simulator.result()
-    assert result.returns.iloc[0] == pytest.approx(0.0)
-    # 建仓（FLAT -> target_0）产生的换手要等*下一次* on_intents 调用才被结算和记录
-    # （配对给它实际生效的那一期收益），只发了这一次调用还看不到——见 on_intents 的 docstring。
-    assert result.turnover.iloc[0] == pytest.approx(0.0)
+    assert len(result.returns) == 0
+    assert len(result.turnover) == 0
 
 
 def test_second_bar_settles_first_rebalance_turnover():
@@ -57,8 +57,10 @@ def test_second_bar_settles_first_rebalance_turnover():
     simulator.on_intents([FakeIntent("A", -1.0, _bar_end_time(index[1]))])
 
     result = simulator.result()
-    # FLAT -> target_0(1.0) 那笔满额换手，在这里才被结算
-    assert result.turnover.iloc[1] == pytest.approx(1.0)
+    # target_0 在第二次调用时结算，记在它的决策时点 index[0] 上：FLAT -> 1.0 的满额换手 + 10% 收益
+    assert list(result.returns.index) == [index[0]]
+    assert result.turnover.iloc[0] == pytest.approx(1.0)
+    assert result.returns.iloc[0] == pytest.approx(0.10)
 
 
 def test_target_takes_effect_on_the_next_bar():
@@ -71,9 +73,11 @@ def test_target_takes_effect_on_the_next_bar():
     simulator.on_intents([FakeIntent("A", 0.5, _bar_end_time(index[2]))])
 
     result = simulator.result()
-    assert result.returns.iloc[0] == pytest.approx(0.0)
+    # 第 t 行 = t 时刻决策的持仓在下一根 bar 实现的收益：
+    # index[0] 做多赶上 +10%，index[1] 做空躲过 -10%；index[2] 的决策还没有实现的收益
+    assert list(result.returns.index) == list(index[:2])
+    assert result.returns.iloc[0] == pytest.approx(0.10)
     assert result.returns.iloc[1] == pytest.approx(0.10)
-    assert result.returns.iloc[2] == pytest.approx(0.10)
 
 
 def test_event_driven_matches_vectorized_for_constant_target():
@@ -107,7 +111,8 @@ def test_unknown_bar_end_time_treated_as_zero_return():
     prices = pd.DataFrame({"A": [100.0, 110.0]}, index=index)
     simulator = Simulator(prices=prices, cost_model=ZeroCostModel())
 
-    # bar_end_time 对应不到 prices 里任何一根 bar 的 start_time
+    simulator.on_intents([FakeIntent("A", 1.0, _bar_end_time(index[0]))])
+    # bar_end_time 对应不到 prices 里任何一根 bar 的 start_time：这一期的已实现收益按 0 处理
     bogus_time = pd.Timestamp("2099-01-01", tz="UTC")
     simulator.on_intents([FakeIntent("A", 1.0, bogus_time)])
 

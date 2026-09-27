@@ -181,6 +181,7 @@ flowchart TD
   1. **被动持仓漂移追踪**：准确计算持有期内因各资产涨跌导致的权重偏移 $W^{\text{drift}}$，得出真实物理换手率；
   2. **摩擦压力测试**：分别注入 `ZeroCostModel`（测毛利）与 `FixedFeeCostModel(fee_bps=5, slippage_bps=3)`（测净利）；
   3. **指标验收红线**：扣费后净 Sharpe $\ge 2.5$，换手衰减率（Turnover Decay）$< 40\%$。
+* **执行文档与实现**：[`research/friction_test/`](research/friction_test)（关卡2 的冻结配方 × 权重映射 × 调仓频率 × 成本假设的扣费回测，验证段比较；跟阶段二共用同一套回测代码，区别是用研究段做比较、阶段二只在 holdout 上验证一次）。
 * **对应 Sherpa 模块归属**：[`sherpa.backtest.cost_model`](file:///d:/code-repo/Chomo/Sherpa/sherpa/backtest/cost_model.py) + [`sherpa.portfolio.turnover`](file:///d:/code-repo/Chomo/Sherpa/sherpa/portfolio/turnover.py)（`drift_weights`、`turnover`）。
 
 ### 关卡对应指导文档与设计原理

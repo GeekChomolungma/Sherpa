@@ -130,7 +130,7 @@ def _yearly_rows(name: str, ic: pd.Series, validation_start: pd.Timestamp) -> li
     """按自然年分组的 IC 统计（复用 conditional_ic_summary，分组标签换成年份）。"""
     clean = ic.dropna()
     years = pd.Series(clean.index.year.astype(str), index=clean.index)
-    table = conditional_ic_summary(clean, years).drop(index="ALL")
+    table = conditional_ic_summary(clean, years, label_horizon=HORIZON_BARS).drop(index="ALL")
     rows = []
     for year, row in table.iterrows():
         in_year = clean.index.year == int(year)
@@ -146,7 +146,7 @@ def _yearly_rows(name: str, ic: pd.Series, validation_start: pd.Timestamp) -> li
 def _rows_for(scheme: str, kind: str, n_factors: int, ic: pd.Series, autocorr: pd.Series, segments: dict) -> list[dict]:
     rows = []
     for segment, mask in segments.items():
-        stats = summarize_ic(ic[mask.reindex(ic.index, fill_value=False)])
+        stats = summarize_ic(ic[mask.reindex(ic.index, fill_value=False)], label_horizon=HORIZON_BARS)
         rows.append({
             "scheme": scheme,
             "kind": kind,
@@ -217,7 +217,7 @@ def main() -> None:
         ic_validation = ic[validation.reindex(ic.index, fill_value=False)]
         for dim in config.ROUTING_DIMENSIONS:
             # ALL 行就是该方案验证段的整体 IC，01_scheme_comparison.csv 里已经有，这里只留各 state。
-            table = conditional_ic_summary(ic_validation, regime[dim]).drop(index="ALL").rename_axis("state").reset_index()
+            table = conditional_ic_summary(ic_validation, regime[dim], label_horizon=HORIZON_BARS).drop(index="ALL").rename_axis("state").reset_index()
             for row in table.to_dict("records"):
                 by_state.append({"scheme": scheme, "dimension": dim, **row})
 

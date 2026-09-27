@@ -62,7 +62,8 @@ def main() -> None:
 
     print(f"\n开始跑 {len(worldquant_alphas)} 个因子的第一层检验（残差分数）……")
     report = screen_alphas(
-        engine, panel, forward_returns, n_quantiles=N_QUANTILES, ic_ir_threshold=IC_IR_THRESHOLD, exposures=exposures
+        engine, panel, forward_returns, n_quantiles=N_QUANTILES, ic_ir_threshold=IC_IR_THRESHOLD, exposures=exposures,
+        label_horizon=HORIZON_BARS,
     )
 
     passed = report.table[report.table["passed"]]

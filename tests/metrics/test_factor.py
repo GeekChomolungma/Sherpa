@@ -241,3 +241,31 @@ def test_forward_returns_rejects_invalid_arguments():
         forward_returns(close, horizon=0)
     with pytest.raises(ValueError):
         forward_returns(close, delay=-1)
+
+
+def test_overlap_min_lags_is_zero_without_overlap_and_grows_with_horizon():
+    from sherpa.metrics.factor import overlap_min_lags
+
+    assert overlap_min_lags(1) == 0
+    assert overlap_min_lags(6) == 10
+    with pytest.raises(ValueError):
+        overlap_min_lags(0)
+
+
+def test_label_horizon_raises_lags_for_overlapping_labels_and_lowers_t():
+    """H 根 bar 的重叠标签让 IC 带 MA(H-1) 自相关：label_horizon 加大滞后阶数，t 值应当变小。"""
+    import numpy as np
+
+    from sherpa.metrics.factor import ic_significance, newey_west_lags
+
+    rng = np.random.default_rng(0)
+    noise = rng.normal(size=206)
+    ic = pd.Series(np.convolve(noise, np.ones(6) / 6, mode="valid") + 0.02)  # n=201，MA(5) 结构
+    plain = ic_significance(ic)
+    overlapped = ic_significance(ic, label_horizon=6)
+    assert plain.lags == newey_west_lags(201)
+    assert overlapped.lags == 10 > plain.lags
+    assert abs(overlapped.t_stat) < abs(plain.t_stat)
+    # H=1 与不传完全一致；显式 lags 优先
+    assert ic_significance(ic, label_horizon=1) == plain
+    assert ic_significance(ic, lags=3, label_horizon=6).lags == 3
