@@ -5,6 +5,6 @@
 """
 
 from ..base import CustomAlpha, custom_alpha
-from .starter import VolumeSurge, close_momentum_20
+from .starter import LiquidMomentumRank, VolumeSurge, close_momentum_20
 
-__all__ = ["CustomAlpha", "custom_alpha", "close_momentum_20", "VolumeSurge"]
+__all__ = ["CustomAlpha", "custom_alpha", "close_momentum_20", "VolumeSurge", "LiquidMomentumRank"]
