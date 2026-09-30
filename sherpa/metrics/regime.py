@@ -80,7 +80,11 @@ def compute_trend_regime(
     known = benchmark_ma.notna()
 
     trend_up = benchmark_close > benchmark_ma  # warm-up 期间 ma 是 NaN，比较结果恒为 False，稍后被 known 掩掉
-    breadth = (close.pct_change() > 0.0).mean(axis=1)
+    # 广度 = 当期有收益的 symbol 里上涨的占比。分母只数有收益的：还没上线 / 已经下架的列收益是 NaN，
+    # `NaN > 0` 却是 False，直接 `.mean(axis=1)` 会把它们当成"没涨"算进分母——广度被整体压低，而且
+    # 随面板里有多少列而变（同一根 bar，universe 截到不同时间点的两个面板会打出不同的 trend state）。
+    returns = close.pct_change()
+    breadth = (returns > 0.0).sum(axis=1) / returns.notna().sum(axis=1)
 
     is_bull = known & trend_up & (breadth > bull_breadth)
     is_bear = known & (~trend_up) & (breadth < bear_breadth)

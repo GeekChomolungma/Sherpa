@@ -3,7 +3,7 @@
   "schema_version": 1,
   "track": "worldquant_101",
   "producer": "orthogonalization",
-  "created_at": "2026-09-30T14:03:17Z",
+  "created_at": "2026-09-30T22:27:04Z",
   "meta": {
     "input_producer": "report",
     "correlation_threshold": 0.7
@@ -266,37 +266,37 @@
         "factors": [
           {
             "name": "worldquant.alpha040",
-            "ic_ir": 0.20473144164926763,
-            "t_stat": 7.69450109502769,
+            "ic_ir": 0.16792579964198212,
+            "t_stat": 5.606393278070875,
             "baseline_ic_ir": 0.22095202824167007,
             "low_sample": false
           },
           {
             "name": "worldquant.alpha044",
-            "ic_ir": 0.17523786042465972,
-            "t_stat": 6.82888966182339,
+            "ic_ir": 0.15983111168223627,
+            "t_stat": 5.239133483681308,
             "baseline_ic_ir": 0.16304093986954837,
             "low_sample": false
           },
           {
             "name": "worldquant.alpha016",
-            "ic_ir": 0.1599474779039654,
-            "t_stat": 6.268268365582088,
+            "ic_ir": 0.1505294216991912,
+            "t_stat": 5.198526133709377,
             "baseline_ic_ir": 0.17144370823292737,
             "low_sample": false
           },
           {
-            "name": "worldquant.alpha094",
-            "ic_ir": 0.15125836046465846,
-            "t_stat": 6.032111695802914,
-            "baseline_ic_ir": 0.17869308758645347,
+            "name": "worldquant.alpha003",
+            "ic_ir": 0.14232661756434267,
+            "t_stat": 4.81793556575683,
+            "baseline_ic_ir": 0.09979826277180778,
             "low_sample": false
           },
           {
-            "name": "worldquant.alpha029",
-            "ic_ir": 0.13743047100319625,
-            "t_stat": 5.386071243012902,
-            "baseline_ic_ir": 0.1388145567868171,
+            "name": "worldquant.alpha055",
+            "ic_ir": 0.1330550945911406,
+            "t_stat": 4.628305161542587,
+            "baseline_ic_ir": 0.12496196304747907,
             "low_sample": false
           }
         ]
@@ -307,79 +307,79 @@
         "factors": [
           {
             "name": "worldquant.alpha040",
-            "ic_ir": 0.22628661796477295,
-            "t_stat": 13.683344367303999,
+            "ic_ir": 0.2208628163273659,
+            "t_stat": 11.881780613624903,
             "baseline_ic_ir": 0.22095202824167007,
             "low_sample": false
           },
           {
+            "name": "worldquant.alpha044",
+            "ic_ir": 0.17774948312556366,
+            "t_stat": 9.926841468499008,
+            "baseline_ic_ir": 0.16304093986954837,
+            "low_sample": false
+          },
+          {
             "name": "worldquant.alpha094",
-            "ic_ir": 0.1852281120491104,
-            "t_stat": 11.095424320345353,
+            "ic_ir": 0.17347887075115312,
+            "t_stat": 9.748039105383109,
             "baseline_ic_ir": 0.17869308758645347,
             "low_sample": false
           },
           {
             "name": "worldquant.alpha016",
-            "ic_ir": 0.17648795886351076,
-            "t_stat": 10.414780718620998,
+            "ic_ir": 0.17105161523213583,
+            "t_stat": 9.540031502058168,
             "baseline_ic_ir": 0.17144370823292737,
             "low_sample": false
           },
           {
-            "name": "worldquant.alpha044",
-            "ic_ir": 0.1564292483538177,
-            "t_stat": 9.40471422199577,
-            "baseline_ic_ir": 0.16304093986954837,
-            "low_sample": false
-          },
-          {
-            "name": "worldquant.alpha025",
-            "ic_ir": 0.14741460586969476,
-            "t_stat": 8.67247524571117,
-            "baseline_ic_ir": 0.11329320567203231,
+            "name": "worldquant.alpha036",
+            "ic_ir": 0.14652294693793458,
+            "t_stat": 7.802877564905705,
+            "baseline_ic_ir": 0.12510462762664476,
             "low_sample": false
           }
         ]
       },
       "bull": {
-        "low_sample": true,
+        "low_sample": false,
         "note": "",
         "factors": [
           {
             "name": "worldquant.alpha040",
-            "ic_ir": 0.24516725191924493,
-            "t_stat": 4.387159471072246,
+            "ic_ir": 0.2754107897816226,
+            "t_stat": 9.782664733952561,
             "baseline_ic_ir": 0.22095202824167007,
-            "low_sample": true
+            "low_sample": false
           },
           {
             "name": "worldquant.alpha094",
-            "ic_ir": 0.24082287669736813,
-            "t_stat": 4.66611599465608,
+            "ic_ir": 0.23934425657120345,
+            "t_stat": 8.395027221460532,
             "baseline_ic_ir": 0.17869308758645347,
-            "low_sample": true
+            "low_sample": false
           },
           {
-            "name": "worldquant.alpha036",
-            "ic_ir": 0.19135872405753196,
-            "t_stat": 3.4289496228338545,
-            "baseline_ic_ir": 0.12510462762664476,
-            "low_sample": true
+            "name": "worldquant.alpha016",
+            "ic_ir": 0.19370137468902926,
+            "t_stat": 7.202852758415137,
+            "baseline_ic_ir": 0.17144370823292737,
+            "low_sample": false
           },
           {
-            "name": "worldquant.alpha044",
-            "ic_ir": 0.17931305046814236,
-            "t_stat": 3.1689330924531074,
-            "baseline_ic_ir": 0.16304093986954837,
-            "low_sample": true
+            "name": "worldquant.alpha029",
+            "ic_ir": 0.18219286660898967,
+            "t_stat": 5.68956428149308,
+            "baseline_ic_ir": 0.1388145567868171,
+            "low_sample": false
           },
           {
-            "name": "worldquant.alpha077",
-            "ic_ir": 0.17032465611384862,
-            "t_stat": 3.040155426907186,
-            "baseline_ic_ir": 0.07032758574280845,
-            "low_sample": true
+            "name": "worldquant.alpha025",
+            "ic_ir": 0.17089521206254893,
+            "t_stat": 5.860535225486626,
+            "baseline_ic_ir": 0.11329320567203231,
+            "low_sample": false
           }
         ]
       }

@@ -48,6 +48,21 @@ def test_compute_trend_regime_bull_and_bear():
     assert (trend["trend_state"].dropna() == "bear").all()
 
 
+def test_compute_trend_regime_breadth_ignores_symbols_without_returns():
+    """还没上线 / 已下架的列（收益为 NaN）不进广度的分母；多几列全 NaN 的币，广度和 trend state 都不变。"""
+    rows = [{"BTCUSDT": 100.0 + i, "ETHUSDT": 10.0 + i, "SOLUSDT": 5.0 - 0.1 * i} for i in range(8)]
+    close = _frame(rows)
+    padded = close.assign(NEWUSDT=np.nan, OLDUSDT=[1.0, 1.1, 1.2] + [np.nan] * 5)
+
+    base = compute_trend_regime(close, benchmark_symbol="BTCUSDT", ma_period=3)
+    wide = compute_trend_regime(padded, benchmark_symbol="BTCUSDT", ma_period=3)
+
+    assert base["market_breadth"].iloc[1:].eq(2 / 3).all()  # 3 个有收益的币里 2 个涨
+    pd.testing.assert_series_equal(wide["market_breadth"].iloc[3:], base["market_breadth"].iloc[3:])
+    pd.testing.assert_series_equal(wide["trend_state"], base["trend_state"])
+    assert np.isnan(base["market_breadth"].iloc[0])  # 第一行没有任何收益
+
+
 def test_compute_volatility_regime_high_low_buckets():
     # 前半段完全不动（低波），后半段振幅递增的震荡（高波，且逐步创新高）：
     # 保证收尾那根 bar 的滚动波动率是整个回溯窗口里的最大值，percentile rank 必然落在 high 档。
