@@ -1,0 +1,29 @@
+{
+  "kind": "recipes",
+  "schema_version": 1,
+  "track": "custom_starter",
+  "producer": "synthesis:passthrough",
+  "created_at": "2026-09-30T13:58:17Z",
+  "meta": {
+    "input_producer": "orthogonalization:passthrough",
+    "options": {
+      "singles": true,
+      "equal_weight": true,
+      "routed": true
+    },
+    "note": "透传：方向取自候选集（选择段 IC 符号），等权；未经关卡2 在验证段上比较"
+  },
+  "recipes": {
+    "直通·G0 全局等权": {
+      "kind": "static",
+      "weights": {
+        "custom.close_momentum_20": -1.0
+      },
+      "equivalent_to": [
+        "直通·L0 并集等权",
+        "直通·L2-trend 路由等权",
+        "single:custom.close_momentum_20"
+      ]
+    }
+  }
+}

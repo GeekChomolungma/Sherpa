@@ -25,6 +25,19 @@ import pandas as pd
 
 DEFAULT_LOOKBACK = 120 # ~120 根k线的滚动分位数观察窗口
 
+# regime 维度名和每个维度的 state 取值——全仓库唯一的定义处。`build_regime_report()` 的列名、下面
+# 各 `compute_*_regime` 打出来的 state 字符串都必须落在这里面（`tests/metrics/test_regime.py` 有校验）。
+# 下游（阶段一体检、汇总报告的列顺序、各关卡 refresh 脚本、关卡2 的路由维度、以后的 track 配置）
+# 一律从这里取，不再各自手写一份。state 按"由低到高"排列（bear→bull、low→high、starved→high），
+# 报告宽表的列、config.py 里的名单都按这个顺序输出。
+REGIME_STATES: dict[str, tuple[str, ...]] = {
+    "trend": ("bear", "neutral", "bull"),
+    "volatility": ("low", "normal", "high"),
+    "dispersion": ("low", "normal", "high"),
+    "liquidity": ("starved", "normal", "high"),
+}
+REGIME_DIMENSIONS: tuple[str, ...] = tuple(REGIME_STATES)
+
 
 def _quantile_bucket(
     rank: pd.Series,

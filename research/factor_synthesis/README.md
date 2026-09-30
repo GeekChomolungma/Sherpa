@@ -3,8 +3,10 @@
 对应 [`QUANT_RESEARCH_TO_LIVE_LIFECYCLE.md`](../../QUANT_RESEARCH_TO_LIVE_LIFECYCLE.md) §4
 「关卡 2：基于微观 Regime 的动态多因子合成 (Synthesis)」。
 
-> **状态：设计阶段。** 已有入口脚本 `refresh_candidates.py`（把关卡1 的 keep 名单写进 `config.py`），
-> 合成本身尚无代码。本文先把架构、输入输出契约、验证方法和执行步骤定下来，代码按 §9 的里程碑逐步落地。
+> **状态：M1 已落地**（`run_synthesis.py`，方案对比）。输入输出走研究线的标准交接文件：读
+> `<研究线>/handoff/orthogonalization.json`（候选集），写 `<研究线>/handoff/synthesis.json`（配方集，交给关卡3），
+> 明细产出在 `<研究线>/results/synthesis/`。研究线可以把本关设成透传（`passthrough.py`：候选集直接变成等权配方）。
+> 本文的架构、验证方法和后续里程碑见下文。
 
 ---
 
@@ -31,11 +33,11 @@
 
 | 项 | 来源 | 说明 |
 |---|---|---|
-| 候选因子（per state） | 关卡1 的 `02_regime_cluster_assignments.csv` 里 `recommendation=keep` 的因子 | 沿用 research 子目录之间"上游结果 CSV → 下游 config.py"的通信方式：由 `refresh_candidates.py` 写进本目录 `config.py` 的 `REGIME_FACTOR_SETS`（`run_research.sh --refresh-synthesis-candidates`，步骤 8）；合成代码运行时只读 `config.py`，不直接读关卡1 的 CSV。读取规则和理由见该脚本的 docstring |
+| 候选因子（per state + 全局） | 研究线的候选集交接文件 `handoff/orthogonalization.json`：关卡1 保留（keep）的因子；关卡1 透传时是汇总报告的 Top-K | 标准格式见 `research/_shared/handoff.py`；本关不读关卡1 的明细 CSV |
 | 因子历史分数 | `sherpa.alpha.registry` 按 qualified_name 计算 → 掩码 → `neutralize()` 残差化 | 和关卡1 `_resolve_histories()` 完全相同的处理顺序 |
 | Regime 标签 | `sherpa.backtest.regime_screening.regime_report` | 和阶段一、关卡1 同一套定义；逐 bar、Point-in-time（滚动分位数，无前视） |
 | 时间窗 / 标签 | [`research/research_config.json`](../research_config.json) | 所有研究只用研究段；holdout 段的用法见 §6.4。IC 标签口径（持有期、执行延迟）也从这里读，跟阶段一、关卡1 一致 |
-| **输出** | `results/` 下的 CSV（见 §7） | 各方案的合成 IC 对比、权重表、walk-forward 明细 |
+| **输出** | `<研究线>/results/synthesis/` 下的 CSV（见 §7）+ 配方集交接文件 `handoff/synthesis.json` | 各方案的合成 IC 对比、权重表；配方集 = 全部合成方案 + 选择段最强单因子（`config.HANDOFF_*`），每个带验证段 `reference` 供关卡3 核对 |
 
 ---
 
@@ -225,15 +227,15 @@ M1 的方案（G0 / L0 / L2 等权）只需要估方向、不需要估权重，�
 ```text
 factor_synthesis/
 ├── README.md                 本文件
-├── config.py                 【已有】候选池 REGIME_FACTOR_SETS / GLOBAL_FACTORS（refresh_candidates.py 自动刷新）
-│                             + 方案参数（路由维度、方向估计的最少样本数）；以后再加收缩强度 n_0、平滑参数 m / β
-├── refresh_candidates.py     【已有】读关卡1 的 02_regime_cluster_assignments.csv，重写 config.py 的两份候选池
+├── config.py                 【已有】方案参数（方向估计的最少样本数、交给关卡3 的配方收录规则）；以后再加收缩强度 n_0、平滑参数 m / β
+├── passthrough.py            【已有】透传模式：候选集 -> 等权配方集（研究线不需要本关时用）
 ├── data.py                   【已有】取数入口（从关卡1 拷贝后独立维护；取整个研究段，VALIDATION_START 切分）
 ├── signals.py                【已有】纯函数：截面标准化、方向估计、等权合成、路由合成、分段切分、评估指标
-├── run_synthesis.py          【已有】主脚本（M1）：取数 → 残差化 → 打标 → 各方案合成 → 验证段对比 → 落盘
+├── run_synthesis.py          【已有】主脚本（M1）：读候选集 → 取数 → 残差化 → 打标 → 各方案合成 → 验证段对比 → 落盘 + 配方集
 ├── weighting.py              （以后）L1 / L2 的 ICIR 权重、收缩、迟滞与平滑
-├── walk_forward.py           （以后）选择段内的滚动训练 / 测试切分（含 purge + embargo）
-└── results/
+└── walk_forward.py           （以后）选择段内的滚动训练 / 测试切分（含 purge + embargo）
+
+<研究线>/results/synthesis/
     ├── 01_scheme_comparison.csv       方案（含单因子参照）× 段：IC / IC_IR / t / 胜率 / 分数稳定性
     ├── 02_validation_ic_by_state.csv  各合成方案在验证段、分 regime state 的条件 IC（不含 ALL 行，整体见 01）
     ├── 03_factor_weights.csv          各方案实际使用的每个因子的方向与权重占比（选择段上估出）
@@ -266,12 +268,12 @@ factor_synthesis/
 
 ## 9. 执行步骤（里程碑）
 
-前置：用三段切分后的时间窗重跑阶段一和关卡1，一路刷新到关卡2：
-`run_research.sh --refresh-candidates --refresh-synthesis-candidates`（步骤 9 会顺带跑 M1 对比）。
+前置：研究线的阶段一和关卡1 跑完（`handoff/orthogonalization.json` 存在）。世坤101 研究线里本关是
+`worldquant_101/run_track.sh` 的步骤 4。
 
-- [x] **M0 入口**：`config.py` + `refresh_candidates.py`，关卡1 的 keep 名单自动写进候选池（`run_research.sh` 步骤 8）
+- [x] **M0 入口**：候选池来自研究线的标准交接文件（最初是 `refresh_candidates.py` 重写 `config.py`，已被交接文件取代）
 - [x] **M0 准备**：`data.py`（整个研究段 + `VALIDATION_START`）；三段切分（§6.0）
-- [x] **M1 方案对比**：`signals.py` + `run_synthesis.py`（`run_research.sh` 步骤 9）：G0 / L0 / L2（4 个路由维度
+- [x] **M1 方案对比**：`signals.py` + `run_synthesis.py`：G0 / L0 / L2（4 个路由维度
       各一版）等权合成，选择段估方向、验证段比较，产出 `01~03` 三个 CSV。它回答"要不要按 regime 选因子"，
       也给出之后所有方案的及格线
 - [x] **M1.5 L1 ICIR 加权**：G0 因子按选择段 IC_IR 加权（`signals.estimate_icir_weights` + `weighted_composite`），

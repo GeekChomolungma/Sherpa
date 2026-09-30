@@ -1,167 +1,18 @@
-"""手动配置：本轮参与正交化聚类分析的候选因子池——按 12 个 regime 状态分别指定。
+"""关卡1（因子相关性分析与正交化）的参数。
 
-`QUANT_RESEARCH_TO_LIVE_LIFECYCLE.md` §4 关卡2（基于微观 Regime 的动态多因子合成）最终是
-"regime 命中 state X 时，从属于 X 的因子集合里挑权重"，所以关卡1 的正交化检验也必须限定在
-同一个 regime 历史切片里做——两个因子如果全历史看不太相关，但恰好都是"trend=bull 专属
-强因子"，会一起被装进同一个 state 的因子集合里，那就必须在 trend=bull 这段历史上专门检验
-它们两个是否冗余,而不是看一个跟 regime 无关的全局相关系数。
+候选因子池不在这里：它来自研究线上一阶段的标准交接文件（`<研究线>/handoff/report.json`，汇总报告
+按 04/05 矩阵的显著 + |IC_IR| Top-K 产出），见 `research/_shared/handoff.py`。想手动增删某条研究线的候选
+因子，直接改那份交接文件，再从关卡1 开始重跑这条研究线即可。
 
-因子名一律是 registry 的 qualified_name（`"{family}.{name}"`，参见
-`sherpa.alpha.base.Alpha.qualified_name`），worldquant / tradingview / custom 三大家族都
-能混用。新家族/自定义模块的接入方式见下面 `EXTRA_IMPORTS` 的说明。
+因子名一律是 registry 的 qualified_name（`"{family}.{name}"`），worldquant / tradingview / custom 三大家族
+都能混用；研究线 `track.json` 的 `alphas.modules` 会在运行时 import，触发注册。
 """
 
 from __future__ import annotations
 
-# 12 个 regime 状态各自的候选因子集：{dimension: {state: [qualified_name, ...]}}。
-#
-# 维度名与 state 取值必须跟 `sherpa.backtest.regime_screening.regime_report()`（即
-# `sherpa.metrics.regime.build_regime_report()`）打出来的列名/取值完全一致，否则运行时会
-# 在对应分组直接报错（找不到这个 state）：
-#     trend       -> bull / bear / neutral
-#     volatility  -> high / normal / low
-#     dispersion  -> high / normal / low
-#     liquidity   -> high / normal / starved
-#
-# 下面的值是从 `research/regime_factor_report/results/04_regime_matrix.csv`（残差化版本，
-# 由 `run_alpha_regime_profile.py`（`USE_NEUTRALIZATION=True`）→ `regime_factor_report.py`
-# 产出）里每个 state 的 Top5 alpha 抄过来的——不是原始分数版本（`04_regime_matrix_without_neutral.csv`），
-# 已经是剥离过 Beta/Size 暴露之后的排行榜，正好用来验证一个直觉：同一个 state 排行榜前几名
-# 之间是不是其实在重复下注同一份信息。按需替换成你自己想测试的候选因子。
-#
-# `trend.bull` 只有 54 个样本（占该维度 ALL 样本的 ~6%），`04_regime_matrix.csv` 里
-# `low_sample=True`——这个 state 的排行榜可信度比其余 11 个低，解读这里的聚类结果时要打
-# 折扣，不能跟其它样本充足的 state 同等看待。
-#
-# 下面两行 BEGIN/END 标记之间的内容可以被 `refresh_candidates.py`（根目录 `run_research.sh
-# --refresh-candidates` 会调用它）整块重写成最新 `04_regime_matrix.csv` 的 Top-K——只有
-# 显式传了那个开关才会覆盖，平时手动维护这块完全不受影响。
-# >>> REGIME_ALPHA_SETS BEGIN
-REGIME_ALPHA_SETS: dict[str, dict[str, list[str]]] = {
-    "trend": {
-        # trend.bull low_sample=True：样本偏少，排行榜可信度打折扣
-        "bull": [
-            "worldquant.alpha040",
-            "worldquant.alpha094",
-            "worldquant.alpha036",
-            "worldquant.alpha044",
-            "worldquant.alpha077",
-        ],
-        "bear": [
-            "worldquant.alpha040",
-            "worldquant.alpha044",
-            "worldquant.alpha016",
-            "worldquant.alpha094",
-            "worldquant.alpha029",
-        ],
-        "neutral": [
-            "worldquant.alpha040",
-            "worldquant.alpha094",
-            "worldquant.alpha016",
-            "worldquant.alpha044",
-            "worldquant.alpha025",
-        ],
-    },
-    "volatility": {
-        "high": [
-            "worldquant.alpha040",
-            "worldquant.alpha016",
-            "worldquant.alpha094",
-            "worldquant.alpha044",
-            "worldquant.alpha029",
-        ],
-        "normal": [
-            "worldquant.alpha040",
-            "worldquant.alpha025",
-            "worldquant.alpha016",
-            "worldquant.alpha094",
-            "worldquant.alpha044",
-        ],
-        "low": [
-            "worldquant.alpha040",
-            "worldquant.alpha094",
-            "worldquant.alpha044",
-            "worldquant.alpha016",
-            "worldquant.alpha055",
-        ],
-    },
-    "dispersion": {
-        "high": [
-            "worldquant.alpha040",
-            "worldquant.alpha016",
-            "worldquant.alpha094",
-            "worldquant.alpha029",
-            "worldquant.alpha044",
-        ],
-        "normal": [
-            "worldquant.alpha040",
-            "worldquant.alpha094",
-            "worldquant.alpha016",
-            "worldquant.alpha044",
-            "worldquant.alpha050",
-        ],
-        "low": [
-            "worldquant.alpha040",
-            "worldquant.alpha044",
-            "worldquant.alpha094",
-            "worldquant.alpha016",
-            "worldquant.alpha015",
-        ],
-    },
-    "liquidity": {
-        "high": [
-            "worldquant.alpha040",
-            "worldquant.alpha055",
-            "worldquant.alpha025",
-            "worldquant.alpha094",
-            "worldquant.alpha037",
-        ],
-        "normal": [
-            "worldquant.alpha040",
-            "worldquant.alpha016",
-            "worldquant.alpha094",
-            "worldquant.alpha044",
-            "worldquant.alpha029",
-        ],
-        "starved": [
-            "worldquant.alpha040",
-            "worldquant.alpha094",
-            "worldquant.alpha044",
-            "worldquant.alpha016",
-            "worldquant.alpha073",
-        ],
-    },
-}
-# <<< REGIME_ALPHA_SETS END
-
-# 不区分 regime、直接用全历史做去冗余的一组候选。非空时会额外产出一组
-# `dimension=unconditional, state=ALL` 的结果行。两个用途：
-# 1. 关卡2 全局对照组 G0 的候选池：`refresh_candidates.py` 会用阶段一 `05_global_matrix.csv`
-#    （完整 IC 序列、不看 regime 的 |t| >= 3 + |IC_IR| Top-K）重写下面 BEGIN/END 之间的名单；
-#    它的去冗余结果（02 里 unconditional 的 keep 行）再被关卡2 读成 GLOBAL_FACTORS。
-# 2. 对比"某对因子是只在特定 regime 下冗余，还是从头到尾都冗余"（后者说明重复关系更根本）。
-# 设成空列表即跳过。
-# >>> UNCONDITIONAL_ALPHAS BEGIN
-UNCONDITIONAL_ALPHAS: list[str] = [
-    "worldquant.alpha040",
-    "worldquant.alpha094",
-    "worldquant.alpha016",
-    "worldquant.alpha044",
-    "worldquant.alpha029",
-]
-# <<< UNCONDITIONAL_ALPHAS END
-
-# 新家族/自定义模块接入：worldquant / tradingview / custom 三个内置家族已经在
-# `run_orthogonalization.py` 里统一 import 触发 `@register_alpha` 注册，这里不用管。如果
-# 因子定义在这三个包之外的某个模块里，把该模块的可 import 路径加进来，脚本启动时会自动
-# `importlib.import_module()` 一遍触发注册，之后就能在上面按 qualified_name 引用它。
-EXTRA_IMPORTS: list[str] = [
-    # "my_project.custom_alphas",
-]
-
 # 两个因子在某个 state 切片内的截面相关均值 |corr_mean| 达到这个阈值，就判定它们在这个 state
 # 下冗余——四大关卡·关卡1 的核心判据。0.7 是常见的经验起点，不是理论最优值：具体项目应该
-# 结合 `results/01_regime_factor_correlation_pairs.csv` 里实际的相关性分布去调整。
+# 结合 `results/orthogonalization/01_regime_factor_correlation_pairs.csv` 里实际的相关性分布去调整。
 CORRELATION_THRESHOLD: float = 0.7
 
 # 大盘锚点（regime 打标 + Beta 暴露）不在这里配置：统一来自 `research/research_config.json` 的

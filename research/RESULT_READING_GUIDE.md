@@ -28,15 +28,17 @@ research_start ── 选择段 ── validation_start ── 验证段 ── 
 
 ## 1. 各阶段产物：按漏斗顺序快速过一遍
 
+所有路径都在研究线目录下（比如 `alpha_research/worldquant_101/`），见 `alpha_research/README.md`。
+
 | 阶段 | 文件 | 重点看 |
 |---|---|---|
-| 阶段一 | `regime_factor_report/results/04_regime_matrix.csv` | 每个 regime state 的 Top K；`significant_count / candidate_count`（多少因子过了 \|t\| 门槛）；`low_sample` |
-| 阶段一 | `regime_factor_report/results/05_global_matrix.csv` | 不看 regime 的全局 Top K（G0 的来源） |
-| 关卡1 | `factor_orthogonalization/results/02_regime_cluster_assignments.csv` | 每个 state 的 `keep` 名单；被 `drop` 的因子和它的 `redundant_with`；相关系数接近阈值 0.7 的因子对 |
-| 关卡2 | `factor_synthesis/config.py` | 刷新后的两份候选池（`REGIME_FACTOR_SETS`、`GLOBAL_FACTORS`），行尾注释有 IC_IR 和冗余簇 |
-| 关卡2 | `factor_synthesis/results/01_scheme_comparison.csv` | **方案比较的主表**，按下面第 2 节的步骤读 |
-| 关卡2 | `factor_synthesis/results/03_factor_weights.csv` | 各方案实际使用的方向和权重 |
-| 关卡2 | `factor_synthesis/results/04_yearly_ic.csv` | 分年 IC，判断预测力是否衰减 |
+| 阶段一 | `results/report/04_regime_matrix.csv` | 每个 regime state 的 Top K；`significant_count / candidate_count`（多少因子过了 \|t\| 门槛）；`low_sample` |
+| 阶段一 | `results/report/05_global_matrix.csv` | 不看 regime 的全局 Top K（G0 的来源） |
+| 关卡1 | `results/orthogonalization/02_regime_cluster_assignments.csv` | 每个 state 的 `keep` 名单；被 `drop` 的因子和它的 `redundant_with`；相关系数接近阈值 0.7 的因子对 |
+| 关卡2 | `handoff/orthogonalization.json` | 关卡2 实际拿到的候选池（各 state 名单 + 全局名单），条目里有 IC_IR 和被吸收的冗余因子（`absorbed`） |
+| 关卡2 | `results/synthesis/01_scheme_comparison.csv` | **方案比较的主表**，按下面第 2 节的步骤读 |
+| 关卡2 | `results/synthesis/03_factor_weights.csv` | 各方案实际使用的方向和权重 |
+| 关卡2 | `results/synthesis/04_yearly_ic.csv` | 分年 IC，判断预测力是否衰减 |
 
 前面几个阶段的产物主要用来**确认上游没有异常**（比如某个 state 显著因子突然变成 0 个、keep 名单大换血）。
 真正做决策的是关卡2 的对比表。

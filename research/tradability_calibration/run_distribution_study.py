@@ -5,7 +5,7 @@
 
 方法论红线（如实抄一遍免得以后忘）：`sherpa.metrics.tradability.tradable_mask` 这三个参数
 的选择只能依据这里、以及 Study 2/3 里跟成交量/成交笔数本身相关的独立证据来定，不能拿
-`run_alpha_regime_profile.py` 算出来的 IC_IR 好不好看去反推——那样等于用因子表现去调因子
+阶段一体检（`alpha_research/_pipeline/run_profile.py`）算出来的 IC_IR 好不好看去反推——那样等于用因子表现去调因子
 表现赖以计算的输入数据，是彻头彻尾的数据窥探/过拟合。
 
 输出三张表到 `results/`：
@@ -20,7 +20,7 @@
   不是特别少"（如果 Study 2 发现某段时间通过筛选的数量塌缩，回来这张表能查是不是因为
   当时 universe 本来就小，而不是筛选太严）。
 
-运行前先设好连接环境变量（同 `research/alpha_research/worldquant_101/run_screening.py`）：
+运行前先设好连接环境变量（同各研究线的 `run_track.sh`）：
     CH_HOST=... CH_PASSWORD=... python research/tradability_calibration/run_distribution_study.py
 """
 

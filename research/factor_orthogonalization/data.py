@@ -1,6 +1,6 @@
 """本项目专用的取数入口：接真实 ClickHouse，不是合成数据。
 
-刻意不 import `research/alpha_research/worldquant_101/data.py`（两者内容看起来相似，但故意各自维护一份）
+刻意不 import `research/alpha_research/_pipeline/data.py`（两者内容看起来相似，但故意各自维护一份）
 ——本模块要求跟其它 research 子项目解耦：不共享代码、不共享中间结果，改任何一边都不会
 波及另一边。唯一的例外是研究配置：它统一读 `research/research_config.json`（时间窗 + IC 标签
 口径），必须跟阶段一体检用同一段历史、同一种标签，否则候选因子是在 A 口径下选出来的、冗余和
@@ -83,7 +83,7 @@ def load_universe_panel(
     universe 用 `Universe.as_of(end_time)`（point-in-time 口径），避免把区间内还没上线/
     已经退市的 symbol 也当成"从头到尾都在"，防止幸存者偏差。
 
-    `include_open_interest` 默认打开，行为跟 `alpha_research/worldquant_101/data.py`
+    `include_open_interest` 默认打开，行为跟 `alpha_research/_pipeline/data.py`
     里同名参数一致（见那边的注释）；interval="1m" 时无效。
     """
     ch_reader = ch_reader or connect_ch_reader()

@@ -1,0 +1,23 @@
+{
+  "id": "worldquant_101",
+  "description": "世坤101 全量因子的完整研究线（阶段一 -> 关卡1 正交 -> 关卡2 合成 -> 关卡3 摩擦），全流程样板",
+  "alphas": {
+    "modules": ["sherpa.alpha.worldquant"],
+    "family": "worldquant"
+  },
+  "preprocess": {
+    "tradable_mask": true,
+    "neutralize": true
+  },
+  "regime": {
+    "dimensions": ["trend", "volatility", "dispersion", "liquidity"]
+  },
+  "report": {
+    "matrix_top_k": 5,
+    "min_abs_t": 3.0
+  },
+  "stages": {
+    "orthogonalization": {"mode": "run"},
+    "synthesis": {"mode": "run"}
+  }
+}

@@ -3,7 +3,7 @@
 合成部分（`cross_sectional_rank` / `weighted_composite` / 路由）从 `research/factor_synthesis/signals.py`
 拷贝后独立维护（research 子项目之间不互相 import），口径必须跟关卡2 保持一致：关卡3 回测的就是关卡2
 在验证段上比较过的那个分数，差一点就不是同一个信号了。不同的是**权重不再在这里估计**——方向、权重
-都已经由关卡2 在选择段上估好、经 `refresh_candidates.py` 写进 `config.CASES`，这里只照配方复现。
+都已经由上游（关卡2 或它的透传）写进研究线的配方交接文件（`handoff/synthesis.json`），这里只照配方复现。
 
 矩阵约定跟 sherpa 其余部分一致：`(T, N)` DataFrame，行 = bar 时间，列 = symbol。
 """
@@ -56,11 +56,12 @@ def weighted_composite(ranked: Mapping[str, pd.DataFrame], weights: Mapping[str,
 
 
 def case_scores(case: Mapping[str, Any], ranked: Mapping[str, pd.DataFrame], regime: pd.DataFrame) -> pd.DataFrame:
-    """按 `config.CASES` 里一个 case 的配方算出合成分数。
+    """按配方交接文件里一个配方算出合成分数。
 
     - `kind="static"`：全程同一组权重（G0 / L1 / L0 / 单因子参照）；
     - `kind="routed"`：每根 bar 按它所处的 `dimension` state 选那个 state 的权重；state 未知（滚动窗口
       warm-up）或该 state 没有配方时退回 `fallback` 的权重——跟关卡2 `routed_composite` 的规则一致。
+      `fallback` 为空时这些 bar 的分数是 NaN（不持仓）。
       regime 标签是 point-in-time 的（滚动分位数只看 <= t 的数据），路由不引入未来信息。
     """
     if case["kind"] == "static":
@@ -68,7 +69,12 @@ def case_scores(case: Mapping[str, Any], ranked: Mapping[str, pd.DataFrame], reg
     if case["kind"] != "routed":
         raise ValueError(f"未知的 case kind：{case['kind']!r}")
 
-    result = weighted_composite(ranked, case["fallback"])
+    fallback = case.get("fallback") or {}
+    if any(w != 0.0 for w in fallback.values()):
+        result = weighted_composite(ranked, fallback)
+    else:
+        template = next(iter(ranked.values()))
+        result = pd.DataFrame(np.nan, index=template.index, columns=template.columns)
     labels = regime[case["dimension"]]
     for state, weights in case["states"].items():
         if not any(w != 0.0 for w in weights.values()):
@@ -78,17 +84,6 @@ def case_scores(case: Mapping[str, Any], ranked: Mapping[str, pd.DataFrame], reg
             continue
         result.loc[rows] = weighted_composite(ranked, weights).loc[rows]
     return result
-
-
-def required_factors(cases: Mapping[str, Mapping[str, Any]]) -> list[str]:
-    """所有 case 用到的因子并集（按首次出现顺序去重），决定要算哪些因子的残差分数。"""
-    seen: dict[str, None] = {}
-    for case in cases.values():
-        groups = [case["weights"]] if case["kind"] == "static" else [case["fallback"], *case["states"].values()]
-        for weights in groups:
-            for name in weights:
-                seen.setdefault(name, None)
-    return list(seen)
 
 
 # ---------------------------------------------------------------------------

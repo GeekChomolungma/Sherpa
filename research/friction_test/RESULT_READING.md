@@ -1,6 +1,6 @@
 # 关卡3 结果阅读指南
 
-`run_friction.py` 跑完后，按这份指南读 `results/` 下的文件。目标是回答两个问题：
+`run_friction.py` 跑完后，按这份指南读研究线的 `results/friction/` 下的文件。目标是回答两个问题：
 
 1. 有没有**稳健的**组合构建方式，在扣完成本之后还能赚钱？
 2. 如果有，它能不能交给阶段二去跑 holdout？
@@ -26,7 +26,7 @@
 
 | 维度 | 取值 | 来源 |
 |---|---|---|
-| case | 关卡2 的全部合成方案（G0 / L1 / L0 / 4 个 L2）+ 选择段最强的单因子 | `config.CASES`（`refresh_candidates.py` 生成） |
+| case | 关卡2 的全部合成方案（G0 / L1 / L0 / 4 个 L2）+ 选择段最强的单因子 | 研究线的配方集交接文件 `handoff/synthesis.json`（关卡2 产出；透传时是 `直通·` 等权配方） |
 | 映射 `weighting` | top10、top10_exit20/30/50，top20、top20_exit40/60/100 | `config.WEIGHTINGS` |
 | 调仓频率 `rebalance_every` | 1 / 3 / 6 根 bar（4h 周期下是 4 小时 / 12 小时 / 1 天） | `config.REBALANCE_EVERY` |
 | 成本 `cost_model` | `zero` / `all_maker` / `all_taker` / `stress` | `config.COST_MODELS`，费率来自 `research_config.json` 的 `costs` |

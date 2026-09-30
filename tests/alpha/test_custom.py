@@ -26,3 +26,9 @@ def test_volume_surge_matches_manual_formula():
 def test_volume_surge_default_window():
     alpha = VolumeSurge()
     assert alpha.qualified_name == "custom.volume_surge_20"
+
+
+def test_custom_alphas_report_their_defining_module():
+    """研究线按 `cls.__module__` 挑因子：函数式写法生成的类也必须记在定义它的主题模块下。"""
+    assert close_momentum_20.__module__ == "sherpa.alpha.custom.starter"
+    assert VolumeSurge.__module__ == "sherpa.alpha.custom.starter"

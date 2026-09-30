@@ -1,28 +1,21 @@
-"""关卡3（换手摩擦与组合构建测试）的配置。
+"""关卡3（换手摩擦与组合构建测试）的参数：组合构建网格与成本假设。
 
-分两部分：
+要回测的配方不在这里：它来自研究线上一阶段的标准交接文件（`<研究线>/handoff/synthesis.json`，
+见 `research/_shared/handoff.py`）——关卡2 真跑时是它在验证段上比较过的全部合成方案 + 最强单因子参照，
+方向 / 权重都是关卡2 在选择段上估好的，不在关卡3 重估；关卡2 透传时是候选集直接变成的等权配方（名字带
+`直通·` 前缀）。想手动删减 / 增加配方，直接改那份交接文件，再从关卡3 开始重跑即可。
 
-1. **`CASES`：要回测的"冻结配方"**，由 `refresh_candidates.py` 从关卡2 的产出自动重写（BEGIN/END 之间）。
-   每个 case 是一套完整的合成规则——用哪些因子、方向、权重、是否按 regime 路由——直接取自关卡2
-   `factor_synthesis/results/03_factor_weights.csv`（关卡2 在选择段上估出的方向 / 权重），不在关卡3 重估。
-   默认收录关卡2 的**全部**合成方案，再加选择段最强的单因子作参照：关卡2 只看 IC，IC 相近的方案扣费后
-   排名完全可能翻转，所以不在这一关之前就只留一个。想手动删减 / 增加 case，直接改区块里的内容即可，
-   但下次跑 `refresh_candidates.py` 时这一块会被整块覆盖。
+配方格式（`handoff.validate_recipe`）：
 
-2. **组合构建网格与成本假设**（区块外，手动维护）：`WEIGHTINGS`（Top-K + 排名迟滞）× `REBALANCE_EVERY`（调仓频率）
-   每种组合都对每个 case 跑一遍回测，再在 `COST_MODELS` 的每种成本假设下各算一套扣费绩效。费率读自
-   `research_config.json` 的 `costs` 一节。
-
-case 的格式：
-
-    "G0 全局等权": {"kind": "static", "weights": {qualified_name: 带符号权重, ...}}
-    "L2-volatility 路由等权": {
-        "kind": "routed", "dimension": "volatility",
-        "states": {state: {qualified_name: 带符号权重, ...}, ...},
-        "fallback": {qualified_name: 带符号权重, ...},   # state 未知 / 没有配方时用（关卡2 用的是 L0）
-    }
+    {"kind": "static", "weights": {qualified_name: 带符号权重, ...}}
+    {"kind": "routed", "dimension": "volatility",
+     "states": {state: {qualified_name: 带符号权重, ...}, ...},
+     "fallback": {qualified_name: 带符号权重, ...}}   # state 未知 / 没有配方时用；空 = 不持仓
 
 权重带符号：符号 = 方向，绝对值 = 权重大小（`signals.weighted_composite` 会按 Σ|w| 归一）。
+
+`WEIGHTINGS`（Top-K + 排名迟滞）× `REBALANCE_EVERY`（调仓频率）每种组合都对每个配方跑一遍回测，再在
+`COST_MODELS` 的每种成本假设下各算一套扣费绩效。费率读自 `research_config.json` 的 `costs` 一节。
 """
 
 from __future__ import annotations
@@ -33,234 +26,8 @@ from sherpa.backtest.cost_model import CostModel, FixedFeeCostModel, ZeroCostMod
 
 from data import MAKER_FEE_BPS, STRESS_SLIPPAGE_BPS, TAKER_FEE_BPS, TAKER_SLIPPAGE_BPS
 
-# >>> CASES BEGIN
-CASES: dict[str, dict[str, Any]] = {
-    # 关卡2：验证段 IC_IR=+0.326，选择段 IC_IR=+0.259，验证段 score_autocorr=0.764
-    'L2-volatility 路由等权': {
-        'kind': 'routed',
-        'dimension': 'volatility',
-        'states': {
-            'high': {
-                'worldquant.alpha040': 1.0,
-                'worldquant.alpha016': 1.0,
-                'worldquant.alpha094': 1.0,
-                'worldquant.alpha044': 1.0,
-                'worldquant.alpha029': 1.0,
-            },
-            'normal': {
-                'worldquant.alpha040': 1.0,
-                'worldquant.alpha025': 1.0,
-                'worldquant.alpha016': 1.0,
-                'worldquant.alpha094': 1.0,
-                'worldquant.alpha044': 1.0,
-            },
-            'low': {
-                'worldquant.alpha040': 1.0,
-                'worldquant.alpha094': 1.0,
-                'worldquant.alpha044': 1.0,
-                'worldquant.alpha016': 1.0,
-                'worldquant.alpha055': 1.0,
-            },
-        },
-        'fallback': {
-            'worldquant.alpha040': 1.0,
-            'worldquant.alpha094': 1.0,
-            'worldquant.alpha036': 1.0,
-            'worldquant.alpha044': 1.0,
-            'worldquant.alpha077': 1.0,
-            'worldquant.alpha016': 1.0,
-            'worldquant.alpha029': 1.0,
-            'worldquant.alpha025': 1.0,
-            'worldquant.alpha055': 1.0,
-            'worldquant.alpha050': 1.0,
-            'worldquant.alpha015': 1.0,
-            'worldquant.alpha037': 1.0,
-            'worldquant.alpha073': 1.0,
-        },
-    },
-    # 关卡2：验证段 IC_IR=+0.321，选择段 IC_IR=+0.254，验证段 score_autocorr=0.708
-    'L2-trend 路由等权': {
-        'kind': 'routed',
-        'dimension': 'trend',
-        'states': {
-            'bull': {
-                'worldquant.alpha040': 1.0,
-                'worldquant.alpha094': 1.0,
-                'worldquant.alpha036': 1.0,
-                'worldquant.alpha044': 1.0,
-                'worldquant.alpha077': 1.0,
-            },
-            'bear': {
-                'worldquant.alpha040': 1.0,
-                'worldquant.alpha044': 1.0,
-                'worldquant.alpha016': 1.0,
-                'worldquant.alpha094': 1.0,
-                'worldquant.alpha029': 1.0,
-            },
-            'neutral': {
-                'worldquant.alpha040': 1.0,
-                'worldquant.alpha094': 1.0,
-                'worldquant.alpha016': 1.0,
-                'worldquant.alpha044': 1.0,
-                'worldquant.alpha025': 1.0,
-            },
-        },
-        'fallback': {
-            'worldquant.alpha040': 1.0,
-            'worldquant.alpha094': 1.0,
-            'worldquant.alpha036': 1.0,
-            'worldquant.alpha044': 1.0,
-            'worldquant.alpha077': 1.0,
-            'worldquant.alpha016': 1.0,
-            'worldquant.alpha029': 1.0,
-            'worldquant.alpha025': 1.0,
-            'worldquant.alpha055': 1.0,
-            'worldquant.alpha050': 1.0,
-            'worldquant.alpha015': 1.0,
-            'worldquant.alpha037': 1.0,
-            'worldquant.alpha073': 1.0,
-        },
-    },
-    # 关卡2：验证段 IC_IR=+0.319，选择段 IC_IR=+0.248，验证段 score_autocorr=0.808
-    'L1 全局ICIR加权': {
-        'kind': 'static',
-        'weights': {
-            'worldquant.alpha040': 0.2209336582227068,
-            'worldquant.alpha094': 0.1786683463002915,
-            'worldquant.alpha016': 0.1715250600551104,
-            'worldquant.alpha044': 0.1629059271777197,
-            'worldquant.alpha029': 0.138624699758571,
-        },
-    },
-    # 关卡2：验证段 IC_IR=+0.315，选择段 IC_IR=+0.259，验证段 score_autocorr=0.688
-    'L2-liquidity 路由等权': {
-        'kind': 'routed',
-        'dimension': 'liquidity',
-        'states': {
-            'high': {
-                'worldquant.alpha040': 1.0,
-                'worldquant.alpha055': 1.0,
-                'worldquant.alpha025': 1.0,
-                'worldquant.alpha094': 1.0,
-                'worldquant.alpha037': 1.0,
-            },
-            'normal': {
-                'worldquant.alpha040': 1.0,
-                'worldquant.alpha016': 1.0,
-                'worldquant.alpha094': 1.0,
-                'worldquant.alpha044': 1.0,
-                'worldquant.alpha029': 1.0,
-            },
-            'starved': {
-                'worldquant.alpha040': 1.0,
-                'worldquant.alpha094': 1.0,
-                'worldquant.alpha044': 1.0,
-                'worldquant.alpha016': 1.0,
-                'worldquant.alpha073': 1.0,
-            },
-        },
-        'fallback': {
-            'worldquant.alpha040': 1.0,
-            'worldquant.alpha094': 1.0,
-            'worldquant.alpha036': 1.0,
-            'worldquant.alpha044': 1.0,
-            'worldquant.alpha077': 1.0,
-            'worldquant.alpha016': 1.0,
-            'worldquant.alpha029': 1.0,
-            'worldquant.alpha025': 1.0,
-            'worldquant.alpha055': 1.0,
-            'worldquant.alpha050': 1.0,
-            'worldquant.alpha015': 1.0,
-            'worldquant.alpha037': 1.0,
-            'worldquant.alpha073': 1.0,
-        },
-    },
-    # 关卡2：验证段 IC_IR=+0.314，选择段 IC_IR=+0.261，验证段 score_autocorr=0.760
-    'L0 并集等权': {
-        'kind': 'static',
-        'weights': {
-            'worldquant.alpha040': 1.0,
-            'worldquant.alpha094': 1.0,
-            'worldquant.alpha036': 1.0,
-            'worldquant.alpha044': 1.0,
-            'worldquant.alpha077': 1.0,
-            'worldquant.alpha016': 1.0,
-            'worldquant.alpha029': 1.0,
-            'worldquant.alpha025': 1.0,
-            'worldquant.alpha055': 1.0,
-            'worldquant.alpha050': 1.0,
-            'worldquant.alpha015': 1.0,
-            'worldquant.alpha037': 1.0,
-            'worldquant.alpha073': 1.0,
-        },
-    },
-    # 关卡2：验证段 IC_IR=+0.313，选择段 IC_IR=+0.254，验证段 score_autocorr=0.782
-    'L2-dispersion 路由等权': {
-        'kind': 'routed',
-        'dimension': 'dispersion',
-        'states': {
-            'high': {
-                'worldquant.alpha040': 1.0,
-                'worldquant.alpha016': 1.0,
-                'worldquant.alpha094': 1.0,
-                'worldquant.alpha029': 1.0,
-                'worldquant.alpha044': 1.0,
-            },
-            'normal': {
-                'worldquant.alpha040': 1.0,
-                'worldquant.alpha094': 1.0,
-                'worldquant.alpha016': 1.0,
-                'worldquant.alpha044': 1.0,
-                'worldquant.alpha050': 1.0,
-            },
-            'low': {
-                'worldquant.alpha040': 1.0,
-                'worldquant.alpha044': 1.0,
-                'worldquant.alpha094': 1.0,
-                'worldquant.alpha016': 1.0,
-                'worldquant.alpha015': 1.0,
-            },
-        },
-        'fallback': {
-            'worldquant.alpha040': 1.0,
-            'worldquant.alpha094': 1.0,
-            'worldquant.alpha036': 1.0,
-            'worldquant.alpha044': 1.0,
-            'worldquant.alpha077': 1.0,
-            'worldquant.alpha016': 1.0,
-            'worldquant.alpha029': 1.0,
-            'worldquant.alpha025': 1.0,
-            'worldquant.alpha055': 1.0,
-            'worldquant.alpha050': 1.0,
-            'worldquant.alpha015': 1.0,
-            'worldquant.alpha037': 1.0,
-            'worldquant.alpha073': 1.0,
-        },
-    },
-    # 关卡2：验证段 IC_IR=+0.312，选择段 IC_IR=+0.241，验证段 score_autocorr=0.795
-    'G0 全局等权': {
-        'kind': 'static',
-        'weights': {
-            'worldquant.alpha040': 1.0,
-            'worldquant.alpha094': 1.0,
-            'worldquant.alpha016': 1.0,
-            'worldquant.alpha044': 1.0,
-            'worldquant.alpha029': 1.0,
-        },
-    },
-    # 关卡2：验证段 IC_IR=+0.260，选择段 IC_IR=+0.221，验证段 score_autocorr=0.861（单因子参照，按选择段 IC_IR 挑选）
-    'single:worldquant.alpha040': {
-        'kind': 'static',
-        'weights': {
-            'worldquant.alpha040': 1.0,
-        },
-    },
-}
-# <<< CASES END
-
-
 # ---------------------------------------------------------------------------
-# 组合构建网格（run_friction.py 用；以下不会被 refresh_candidates.py 改动）
+# 组合构建网格（run_friction.py 用）
 # 前几轮网格的结论（为什么现在只剩这些）见 README「已经试过、已排除的做法」。
 # ---------------------------------------------------------------------------
 

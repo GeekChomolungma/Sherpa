@@ -14,7 +14,7 @@
    因子的原始分数先套可流通性掩码，再用 `sherpa.risk.neutralize.neutralize()` 逐期截面 OLS
    剔除对 Beta（滚动对 `research_config.json` 的 `market.benchmark_symbol`）、Size（`log(quote_volume)`）的被动暴露，
    只留残差。原因见下方"为什么先中性化，再做相关性聚类"。
-1. 按 `config.REGIME_ALPHA_SETS` 手动指定的"12 个 regime 状态各自的候选因子集"，**在每个
+1. 按研究线候选集交接文件（`handoff/report.json`）里"各 regime 状态各自的候选因子集"，**在每个
    state 自己的历史切片内**逐对计算候选因子（残差分数）之间的**截面 Spearman 相关**（不是
    时序相关——见下方"为什么用截面相关"）。
 2. 每个 (dimension, state) 切片各自按相关强度做单链聚类（single-linkage clustering），把
@@ -40,23 +40,21 @@
 
 ## 跟其它 research 子项目的关系：故意解耦，但不跟 sherpa 核心模块解耦
 
-- **候选池不自动继承体检结果**。`config.py` 里的 `REGIME_ALPHA_SETS` 是手写的 qualified_name
-  清单（默认值取自 `regime_factor_report/results/04_regime_matrix.csv` 的 Top3，只是作为
-  示例抄了一份数字，运行时不读那份 CSV），不读取 `regime_factor_report/results/*.csv`、也
-  不读取 `alpha_research/worldquant_101/regime_alpha_profile.csv`。想测哪些因子，自己往清单里加/删。
-- **数据接入自成一份**（`data.py`），跟 `alpha_research/worldquant_101/data.py` 内容相似但独立维护。
+- **输入输出都是标准交接文件**（`research/_shared/handoff.py`）。候选池来自研究线的
+  `<研究线>/handoff/report.json`（汇总报告按 04/05 矩阵产出的候选集），不读汇总报告的明细 CSV、也不读
+  阶段一长表；去冗余后的保留名单写成 `<研究线>/handoff/orthogonalization.json` 交给关卡2。想手动增删候选，
+  直接改 `report.json` 再从本关续跑。研究线 `track.json` 把本关设成 `passthrough` 时，不取数、原样转交候选集。
+- **数据接入自成一份**（`data.py`），跟 `alpha_research/_pipeline/data.py` 内容相似但独立维护。
   唯一共享的是研究配置：两边都读 `research/research_config.json`（研究段时间窗 + IC 标签口径），
   保证关卡1 检验冗余、挑代表因子用的历史和标签，跟阶段一选出候选因子时是同一套
   （见 `research/README.md`「统一研究配置」）。
-- **下游关卡2 读本目录的结果**：`factor_synthesis/refresh_candidates.py` 读
-  `results/02_regime_cluster_assignments.csv` 里 keep 的因子，写进关卡2 的候选池。所以这份 CSV 的列名
-  （`dimension`/`state`/`qualified_name`/`recommendation`/`own_ic_ir`/`cluster_members`/`own_low_sample`）
-  是跟下游的接口，改名要同步改下游脚本。只有 1 个候选的 state 也会输出一行（自成一簇、keep），
-  不会被跳过，否则下游会丢掉这个 state。
+- **下游关卡2 只读交接文件**：`candidates_from_assignments()` 把 `02_regime_cluster_assignments.csv` 里保留
+  （keep）的行转成候选集（按 |own_ic_ir| 排序，代表因子带上被它吸收的 `absorbed` 名单）。明细 CSV 的列可以
+  自由改，不影响下游。只有 1 个候选的 state 也会输出一行（自成一簇、keep），不会被跳过，否则下游会丢掉这个 state。
 - **regime 打标复用核心模块，不是解耦对象**。这里说的"解耦"针对的是其它 research 子项目
   的 CSV 中间产出（文件格式/目录结构可能随时变），不针对 `sherpa` 包本身——regime 归类直接
   调用 `sherpa.backtest.regime_screening.regime_report()`，这正是
-  `alpha_research/worldquant_101/run_alpha_regime_profile.py` 产出 `04_regime_matrix.csv` 时用的同一个
+  阶段一（`alpha_research/_pipeline/run_profile.py`）产出 `04_regime_matrix.csv` 时用的同一个
   函数。这样才能保证这里聚类用的 state 跟 `04_regime_matrix.csv` 里说的是同一件事，不是
   自己另发明一套 regime 定义。
 - 好处：候选池可以任意混搭——体检阶段表现好的世坤101因子、以后接入的 TradingView 因子、
@@ -66,12 +64,13 @@
 
 ```text
 factor_orthogonalization/
-├── config.py                  12 个 regime 状态各自的候选因子集 + 聚类阈值（手动维护）
+├── config.py                  聚类阈值、low-sample 红线（候选池来自研究线的交接文件）
 ├── data.py                    ClickHouse 取数入口（自成一份，不依赖其它 research 子项目）
 ├── clustering.py               并查集实现的单链聚类，纯函数、不碰 pandas/IO
-├── run_orthogonalization.py   主脚本：取数 -> regime 打标 -> 算相关 -> 按 state 聚类 -> 落盘
-├── README.md
-└── results/
+├── run_orthogonalization.py   主脚本：读候选集 -> 取数 -> regime 打标 -> 算相关 -> 按 state 聚类 -> 落盘 + 交接
+└── README.md
+
+<研究线>/results/orthogonalization/
     ├── 01_regime_factor_correlation_pairs.csv   每一对因子在每个 state 一行的长表（主要阅读入口）
     └── 02_regime_cluster_assignments.csv        每个因子在每个 state 一行：所属簇 + keep/drop 建议
 ```
@@ -79,18 +78,14 @@ factor_orthogonalization/
 ## 运行方法
 
 ```bash
-CH_HOST=... CH_PASSWORD=... python research/factor_orthogonalization/run_orthogonalization.py
+CH_HOST=... CH_PASSWORD=... python research/factor_orthogonalization/run_orthogonalization.py --track worldquant_101
+# 或者用研究线的编排脚本（关卡1 是步骤 3）：
+bash research/alpha_research/worldquant_101/run_track.sh --from-step 3
 ```
 
-先在 `config.py` 里编辑：
-
-- `REGIME_ALPHA_SETS`：12 个 regime 状态（`trend.bull/bear/neutral`、
-  `volatility.high/normal/low`、`dispersion.high/normal/low`、
-  `liquidity.high/normal/starved`）各自要测试哪些因子；
-- `UNCONDITIONAL_ALPHAS`：一组不区分 regime、按全历史去冗余的候选。`--refresh-candidates` 时由
-  `refresh_candidates.py` 用阶段一的 `05_global_matrix.csv` 自动重写（BEGIN/END 标记之间），它的结果
-  （02 里 `dimension=unconditional` 的 keep 行）是关卡2 全局对照组 G0 的候选来源；
-- `CORRELATION_THRESHOLD`：多高的相关性算冗余。
+候选集里有两部分：各 regime state 的名单（汇总报告 04 矩阵），和一份不区分 regime、按全历史去冗余的全局名单
+（05 矩阵；它的 keep 结果是关卡2 全局对照组 G0 的候选来源）。`config.py` 里只剩 `CORRELATION_THRESHOLD`
+（多高的相关性算冗余）和 low-sample 红线。
 
 ## 为什么用「截面相关」而不是「IC 时序相关」
 
@@ -121,7 +116,7 @@ CH_HOST=... CH_PASSWORD=... python research/factor_orthogonalization/run_orthogo
   自身 ic_series"当成输入，按 `regime[dimension]` 分组，一次性拿到该维度下每个 state（含
   `ALL` 基线）各自的均值/标准差/samples——12 个 state 的切片统计不需要对每个 state 重新
   跑一遍 `rank_ic`，只是分组取行。
-- **`sherpa.metrics.tradability.tradable_mask`**：跟 `alpha_research/worldquant_101/run_alpha_regime_profile.py`
+- **`sherpa.metrics.tradability.tradable_mask`**：跟阶段一 `alpha_research/_pipeline/run_profile.py`
   一致，算任何 IC/相关性之前先把"上线了但没有真实流动性"的 symbol 掩掉，避免插针小币
   污染秩相关。
 - **`sherpa.alpha.base.registry`**：候选因子按 qualified_name（`"{family}.{name}"`）从全局

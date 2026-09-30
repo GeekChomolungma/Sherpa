@@ -1,6 +1,11 @@
 """三大工程关卡 · 关卡1：因子相关性分析与正交化（按 regime state 切片）。
 
-对 `config.REGIME_ALPHA_SETS` 里手动圈定的"12 个 regime 状态各自的候选因子集"，在**每个
+**输入 / 输出都是流水线的标准候选集**（`research/_shared/handoff.py`）：读研究线上一阶段（汇总报告）的
+交接文件 `<研究线>/handoff/report.json`，把去冗余后的保留名单写成 `<研究线>/handoff/orthogonalization.json`
+给关卡2。明细产出写到 `<研究线>/results/orthogonalization/`。研究线的 `track.json` 把关卡1 设成
+`passthrough` 时，不取数、不计算，把输入候选集原样转交下游。
+
+对候选集里"每个 regime 状态各自的候选因子集"，在**每个
 state 自己的历史切片内**逐对计算截面 Spearman 相关，按 `config.CORRELATION_THRESHOLD` 做
 单链聚类，每簇只保留该 state 切片内信噪比（|IC_IR|）最高的一个代表因子——
 `QUANT_RESEARCH_TO_LIVE_LIFECYCLE.md` §4 关卡1 的落地实现。
@@ -11,8 +16,7 @@ state 自己的历史切片内**逐对计算截面 Spearman 相关，按 `config
 对因子，完全可能在具体某个 state（比如 trend=bull 这种样本本来就少的极端切片）里其实高度
 重合，全局分析会漏掉这种情况。
 
-跟阶段一体检（`research/regime_factor_report/`、`research/alpha_research/worldquant_101/`）刻意不共享
-任何中间结果：候选池只认 `config.py` 手写的名单，不读它们的 CSV。但 regime 打标本身复用
+跟阶段一体检刻意不共享任何中间结果：候选池只认标准交接文件，不读上游的明细 CSV。但 regime 打标本身复用
 `sherpa.backtest.regime_screening.regime_report()`——这是核心 sherpa 模块，不是某个
 research 子项目的 CSV 产出，复用它不违反"跟 research 子项目解耦"的边界，反而能保证这里说
 的 state 跟 `04_regime_matrix.csv` 里说的是同一件事。
@@ -29,19 +33,19 @@ research 子项目的 CSV 产出，复用它不违反"跟 research 子项目解�
 因为拆成 12 个 state 就把计算量乘以 12。
 
 **候选因子先中性化残差化，再进相关性聚类**（`QUANT_RESEARCH_TO_LIVE_LIFECYCLE.md` §3.2/
-关卡1 的顺序结论）：`_resolve_histories()` 里每个因子的原始分数先套可流通性掩码，再用
-`sherpa.risk.neutralize.neutralize()` 剔除对 Beta/Size 的被动暴露。原因是这里做聚类判断
+关卡1 的顺序结论）：每个因子的原始分数走 `sherpa.backtest.residual` 的标准处理链——先套可流通性
+掩码，再剔除对 Beta/Size 的被动暴露（跟阶段一、关卡2、关卡3 是同一个函数）。原因是这里做聚类判断
 的"高相关"本该衡量"两个因子是否提供重复信息"——如果不先中性化，两个因子只要共同承担了
 同一份 Beta 暴露，相关系数照样会很高，会被错误地当成"信息冗余"聚成一簇，实际上它们只是
 共享了同一份风险底色，不是在表达同一份选股信息。
 
-运行前先设好 ClickHouse 连接环境变量（同 `research/alpha_research/worldquant_101/`）：
-    CH_HOST=... CH_PASSWORD=... python research/factor_orthogonalization/run_orthogonalization.py
+运行前先设好 ClickHouse 连接环境变量（透传模式不需要）：
+    CH_HOST=... CH_PASSWORD=... python research/factor_orthogonalization/run_orthogonalization.py --track <研究线>
 """
 
 from __future__ import annotations
 
-import importlib
+import argparse
 import sys
 from itertools import combinations
 from pathlib import Path
@@ -54,31 +58,26 @@ import pandas as pd
 import sherpa.alpha.custom  # noqa: F401  触发内置三大家族的 @register_alpha 注册
 import sherpa.alpha.tradingview  # noqa: F401
 import sherpa.alpha.worldquant  # noqa: F401
-from sherpa.alpha import registry
 from sherpa.backtest.regime_screening import regime_report
-from sherpa.backtest.style_exposure import default_style_exposures
+from sherpa.backtest.residual import ScorePreprocessor, residual_scores
 from sherpa.metrics.factor import conditional_ic_summary, ic_summary, rank_ic
-from sherpa.metrics.tradability import tradable_mask
-from sherpa.risk.neutralize import neutralize
 
 from clustering import cluster_by_correlation
-from config import (
-    CORRELATION_THRESHOLD,
-    EXTRA_IMPORTS,
-    LOW_SAMPLE_MIN_FRACTION,
-    LOW_SAMPLE_MIN_SAMPLES,
-    REGIME_ALPHA_SETS,
-    UNCONDITIONAL_ALPHAS,
-)
+from config import CORRELATION_THRESHOLD, LOW_SAMPLE_MIN_FRACTION, LOW_SAMPLE_MIN_SAMPLES
 from data import BENCHMARK_SYMBOL, EXECUTION_DELAY_BARS, HORIZON_BARS, label_forward_returns, load_universe_panel
 
-# 相对脚本自身所在目录解析，不依赖进程当前工作目录（cwd）——`python
-# research/factor_orthogonalization/run_orthogonalization.py` 从仓库根目录运行时，
-# cwd 是仓库根目录而不是这个脚本所在目录，如果 PAIRS_PATH/CLUSTERS_PATH 写成相对 cwd
-# 的 "results/..."，会去找一个仓库根目录下根本不存在的 results/ 文件夹，直接报错崩溃。
-_RESULTS_DIR = Path(__file__).resolve().parent / "results"
-PAIRS_PATH = _RESULTS_DIR / "01_regime_factor_correlation_pairs.csv"
-CLUSTERS_PATH = _RESULTS_DIR / "02_regime_cluster_assignments.csv"
+# 研究线配置和交接格式在 research/_shared/。
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "_shared"))
+import handoff  # noqa: E402
+from track import Track, load_track  # noqa: E402
+
+STAGE = "orthogonalization"
+PAIRS_FILE = "01_regime_factor_correlation_pairs.csv"
+CLUSTERS_FILE = "02_regime_cluster_assignments.csv"
+
+# 视为"保留"的 recommendation：`keep` = 不冗余 / 冗余簇的代表；`keep_complementary` 预留给以后的
+# "剔除复核"（INCREMENTAL_TODO.md §5.0），现在还不会产出。`drop_redundant` 的信息已由同簇代表承载。
+KEEP_RECOMMENDATIONS = frozenset({"keep", "keep_complementary"})
 
 # 不区分 regime 的全历史对照组用这对哨兵值占位 dimension/state，跟真实的 4 个 regime
 # 维度、12 个 state 明显区分开，不会在输出里混淆。
@@ -86,17 +85,88 @@ UNCONDITIONAL_DIMENSION = "unconditional"
 UNCONDITIONAL_STATE = "ALL"
 
 
-def _groups() -> list[tuple[str, str, list[str]]]:
-    """把 `config.REGIME_ALPHA_SETS` 摊平成 `(dimension, state, alphas)` 列表，顺序固定
-    （先 REGIME_ALPHA_SETS 声明顺序，`unconditional` 永远排最后），方便结果可复现地排序。
+def _groups(candidates: handoff.CandidateSet) -> list[tuple[str, str, list[str]]]:
+    """把候选集摊平成 `(dimension, state, alphas)` 列表，顺序固定（先候选集里的声明顺序，
+    `unconditional` 永远排最后），方便结果可复现地排序。全局名单为空时不产出 unconditional 组。
     """
     groups: list[tuple[str, str, list[str]]] = []
-    for dimension, states in REGIME_ALPHA_SETS.items():
-        for state, alphas in states.items():
-            groups.append((dimension, state, list(alphas)))
-    if UNCONDITIONAL_ALPHAS:
-        groups.append((UNCONDITIONAL_DIMENSION, UNCONDITIONAL_STATE, list(UNCONDITIONAL_ALPHAS)))
+    for dimension, states in candidates.regime_sets.items():
+        for state, cands in states.items():
+            groups.append((dimension, state, cands.names))
+    if candidates.global_set.names:
+        groups.append((UNCONDITIONAL_DIMENSION, UNCONDITIONAL_STATE, candidates.global_set.names))
     return groups
+
+
+def candidates_from_assignments(
+    clusters_df: pd.DataFrame, source: handoff.CandidateSet, *, track_id: str
+) -> handoff.CandidateSet:
+    """`02_regime_cluster_assignments.csv` 的保留行 -> 标准候选集（关卡1 给下游的交接物）。
+
+    - 每个 (dimension, state) 只取 `KEEP_RECOMMENDATIONS` 的行，按该 state 内 |own_ic_ir| 从高到低排；
+    - 条目沿用上游条目的元信息（比如 `baseline_ic_ir`），`ic_ir`/`low_sample` 换成关卡1 在该切片内重算的值，
+      代表冗余簇的因子多一个 `absorbed`（被它吸收的因子）；
+    - 输入里有、但这里一个保留行都没有的 state 照样保留（空名单 + note），下游据此退回全局；
+    - 小样本 state 照样保留，`low_sample=True` 由下游决定怎么打折扣，不在这里删掉。
+    """
+    kept: dict[tuple[str, str], list[dict]] = {}
+    if not clusters_df.empty:
+        rows = clusters_df[clusters_df["recommendation"].isin(KEEP_RECOMMENDATIONS)].copy()
+        rows["_abs_ir"] = rows["own_ic_ir"].apply(_safe_abs)
+        rows = rows.sort_values("_abs_ir", ascending=False, kind="stable")
+        for row in rows.to_dict("records"):
+            kept.setdefault((row["dimension"], row["state"]), []).append(row)
+
+    def to_state(key: tuple[str, str], upstream: handoff.StateCandidates) -> handoff.StateCandidates:
+        # 元信息取同一个 state 的上游条目（关卡1 只会保留该 state 输入名单里的因子），不能拿别的 state 或全局的。
+        upstream_entries = {f["name"]: f for f in upstream.factors}
+        factors = []
+        for row in kept.get(key, []):
+            name = row["qualified_name"]
+            members = [m.strip() for m in str(row.get("cluster_members", "")).split("|") if m.strip()]
+            entry = {
+                **upstream_entries.get(name, {}),
+                "name": name,
+                "ic_ir": None if pd.isna(row["own_ic_ir"]) else float(row["own_ic_ir"]),
+                "low_sample": bool(row["own_low_sample"]),
+            }
+            absorbed = [m for m in members if m != name]
+            if absorbed:
+                entry["absorbed"] = absorbed
+            if row["recommendation"] != "keep":
+                entry["recommendation"] = row["recommendation"]
+            factors.append(entry)
+        note = upstream.note
+        if not factors:
+            note = "关卡1 这个 state 没有可用因子，下游应退回全局" + (f"（上游：{note}）" if note else "")
+        return handoff.StateCandidates(
+            factors=factors,
+            low_sample=upstream.low_sample or any(f["low_sample"] for f in factors),
+            note=note,
+        )
+
+    return handoff.CandidateSet(
+        track=track_id,
+        producer=STAGE,
+        regime_sets={
+            dim: {state: to_state((dim, state), cands) for state, cands in states.items()}
+            for dim, states in source.regime_sets.items()
+        },
+        global_set=to_state((UNCONDITIONAL_DIMENSION, UNCONDITIONAL_STATE), source.global_set),
+        meta={"input_producer": source.producer, "correlation_threshold": CORRELATION_THRESHOLD},
+    )
+
+
+def passthrough(track: Track, source: handoff.CandidateSet) -> Path:
+    """透传：不做去冗余，输入候选集原样转交下游（只改 producer），研究线不需要关卡1 时用。"""
+    forwarded = handoff.CandidateSet(
+        track=track.id,
+        producer=f"{STAGE}:passthrough",
+        regime_sets=source.regime_sets,
+        global_set=source.global_set,
+        meta={**source.meta, "input_producer": source.producer},
+    )
+    return handoff.write(track.handoff_path(STAGE), forwarded)
 
 
 def _all_referenced_alphas(groups: list[tuple[str, str, list[str]]]) -> list[str]:
@@ -108,30 +178,16 @@ def _all_referenced_alphas(groups: list[tuple[str, str, list[str]]]) -> list[str
 
 
 def _resolve_histories(
-    names: list[str], panel, mask: pd.DataFrame, exposures: dict[str, pd.DataFrame]
+    names: list[str], panel, preprocessor: ScorePreprocessor
 ) -> tuple[dict[str, pd.DataFrame], dict[str, str]]:
-    """按 qualified_name 逐个算历史分数，套流通性掩码，再中性化残差化。
+    """按 qualified_name 逐个算历史分数，走标准处理链（掩码 → 中性化残差）。
 
     在 registry 里找不到（名字写错/对应家族没注册）直接 `KeyError` 崩溃，不静默跳过——
     候选池是手写的，名字打错属于配置错误，应该第一时间暴露。因子本身算不出来（占位实现
     `raise NotImplementedError`，比如缺行业分类/市值的世坤101因子）才计入 `errors` 并跳过。
-
-    先掩码、再中性化：不让插针小币的噪声分数混进当期的截面回归，跟
-    `alpha_research/worldquant_101/run_alpha_regime_profile.py` 的处理顺序一致。返回的是
-    剥离过 Beta/Size 暴露的残差分数——后续的相关性聚类、`own_ic_ir` 全部基于这份残差算。
+    返回的是剥离过 Beta/Size 暴露的残差分数——后续的相关性聚类、`own_ic_ir` 全部基于这份残差算。
     """
-    histories: dict[str, pd.DataFrame] = {}
-    errors: dict[str, str] = {}
-    for qualified_name in names:
-        alpha = registry.get(qualified_name)()
-        try:
-            history = alpha.compute(panel)
-        except NotImplementedError as exc:
-            errors[qualified_name] = str(exc)
-            continue
-        history = history.where(mask)
-        histories[qualified_name] = neutralize(history, exposures)
-    return histories, errors
+    return residual_scores(names, panel, preprocessor, skip_not_implemented=True)
 
 
 def _pair_key(a: str, b: str) -> tuple[str, str]:
@@ -206,16 +262,26 @@ def _safe_abs(value: float) -> float:
     return abs(value) if not pd.isna(value) else -1.0
 
 
-def main() -> None:
-    for module_path in EXTRA_IMPORTS:
-        importlib.import_module(module_path)
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description="关卡1：按 regime state 切片的因子去冗余")
+    parser.add_argument("--track", required=True, help="研究线 id（research/alpha_research/<id>/）或目录")
+    args = parser.parse_args(argv)
+    track = load_track(args.track)
+    input_path = track.handoff_path(handoff.INPUT_STAGE[STAGE])
+    source = handoff.read_candidates(input_path, expect_track=track.id)
+    print(f"研究线 {track.id} · 关卡1 模式：{track.gate_mode(STAGE)}；输入候选集 {input_path}（producer={source.producer}）")
 
-    groups = _groups()
-    if not groups:
-        raise SystemExit("config.REGIME_ALPHA_SETS 是空的，至少要给 12 个 regime 状态里的一部分配置候选因子")
+    if track.gate_mode(STAGE) == "passthrough":
+        out = passthrough(track, source)
+        print(f"透传：候选集原样写入 {out}")
+        return
 
+    track.import_alpha_modules()
+    groups = _groups(source)
     all_names = _all_referenced_alphas(groups)
-    print(f"配置里一共引用了 {len(all_names)} 个不同因子，覆盖 {len(groups)} 个 (dimension, state) 分组")
+    if not all_names:
+        raise SystemExit(f"{input_path} 里一个候选因子都没有，关卡1 无从做起（上游显著因子为 0？）")
+    print(f"候选集一共引用了 {len(all_names)} 个不同因子，覆盖 {len(groups)} 个 (dimension, state) 分组")
 
     print("\n正在从 ClickHouse 拉取全市场数据……")
     panel = load_universe_panel()
@@ -224,18 +290,17 @@ def main() -> None:
     forward_returns = label_forward_returns(panel)
     print(f"IC 标签：持有 {HORIZON_BARS} 根 bar、执行延迟 {EXECUTION_DELAY_BARS} 根 bar（research_config.json 的 label 一节）")
 
-    print("正在计算可流通性掩码（剔除上线了但没有真实流动性的 symbol）……")
-    mask = tradable_mask(panel.quote_volume, panel.trades_count)
-    forward_returns = forward_returns.where(mask)
+    print(f"正在计算处理链（掩码={track.tradable}，中性化={track.neutralize}；Beta 对 {BENCHMARK_SYMBOL}）……")
+    preprocessor = ScorePreprocessor.from_panel(
+        panel, benchmark_symbol=BENCHMARK_SYMBOL, tradable=track.tradable, neutralize=track.neutralize
+    )
+    forward_returns = preprocessor.mask_labels(forward_returns)
 
-    print("正在计算 regime 打标（跟 regime_factor_report 体检同一套 regime_screening.regime_report）……")
+    print("正在计算 regime 打标（跟阶段一体检同一套 regime_screening.regime_report）……")
     regime = regime_report(panel, benchmark_symbol=BENCHMARK_SYMBOL)
 
-    print(f"正在计算中性化用的风险暴露矩阵（Beta 对 {BENCHMARK_SYMBOL} / Size 用 log(quote_volume)）……")
-    exposures = default_style_exposures(panel, benchmark_symbol=BENCHMARK_SYMBOL)
-
     print("正在计算候选因子历史分数（残差化后）……")
-    histories, errors = _resolve_histories(all_names, panel, mask, exposures)
+    histories, errors = _resolve_histories(all_names, panel, preprocessor)
     if errors:
         print(f"  跳过 {len(errors)} 个算不出来的因子（占位实现）：{list(errors)}")
     groups = [(dim, state, [a for a in alphas if a in histories]) for dim, state, alphas in groups]
@@ -327,13 +392,15 @@ def main() -> None:
             ascending=[True, True, True, False],
         ).drop(columns=["own_abs_ic_ir"])
 
-    _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    pairs_df.to_csv(PAIRS_PATH, index=False)
-    clusters_df.to_csv(CLUSTERS_PATH, index=False)
+    results_dir = track.stage_results_dir(STAGE)
+    results_dir.mkdir(parents=True, exist_ok=True)
+    pairs_df.to_csv(results_dir / PAIRS_FILE, index=False)
+    clusters_df.to_csv(results_dir / CLUSTERS_FILE, index=False)
+    out = handoff.write(track.handoff_path(STAGE), candidates_from_assignments(clusters_df, source, track_id=track.id))
 
     n_dropped = int((clusters_df["recommendation"] == "drop_redundant").sum()) if not clusters_df.empty else 0
     print(f"\n共产出 {len(clusters_df)} 行按 (dimension, state) 切片的因子归属结果，其中建议剔除 {n_dropped} 处冗余。")
-    print(f"结果已写入：\n  {PAIRS_PATH}\n  {CLUSTERS_PATH}")
+    print(f"结果已写入：\n  {results_dir / PAIRS_FILE}\n  {results_dir / CLUSTERS_FILE}\n  交接文件 {out}")
 
 
 if __name__ == "__main__":

@@ -22,9 +22,10 @@ import pandas as pd
 
 from sherpa.data.schema import BarPanel
 from sherpa.metrics.factor import conditional_ic_summary, ic_significance, ic_summary
-from sherpa.metrics.regime import DEFAULT_LOOKBACK, build_regime_report
+from sherpa.metrics.regime import DEFAULT_LOOKBACK, REGIME_DIMENSIONS, build_regime_report
 
-DEFAULT_REGIME_DIMENSIONS: tuple[str, ...] = ("trend", "volatility", "dispersion", "liquidity")
+# 默认对全部维度做切片；只看部分维度（比如只看 trend 的研究线）时调用方显式传 `dimensions`。
+DEFAULT_REGIME_DIMENSIONS: tuple[str, ...] = REGIME_DIMENSIONS
 
 
 def regime_report(

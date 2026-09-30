@@ -27,17 +27,22 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
+import sys
+
+from sherpa.metrics.regime import REGIME_STATES
+
+# 流水线交接格式 handoff.py 在 research/_shared/。
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "_shared"))
+import handoff  # noqa: E402
+
 REQUIRED_COLUMNS = [
     "alpha", "dimension", "state", "samples",
     "ic_mean", "ic_std", "ic_ir", "win_rate",
 ]
 
-DEFAULT_STATE_ORDER = {
-    "trend": ["bear", "neutral", "bull"],
-    "volatility": ["low", "normal", "high"],
-    "dispersion": ["low", "normal", "high"],
-    "liquidity": ["starved", "normal", "high"],
-}
+# 维度/state 顺序统一取自 `sherpa.metrics.regime.REGIME_STATES`（由低到高）。profile 里出现这里没有的
+# 维度/state 也能跑，排在已知 state 之后按字母序（`state_order_for`）。
+DEFAULT_STATE_ORDER = REGIME_STATES
 
 NUMERIC_FIELDS = ["samples", "ic_mean", "ic_std", "ic_ir", "win_rate"]
 
@@ -775,6 +780,63 @@ def write_findings(
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def _matrix_row_to_candidates(row: Dict[str, Any], top_k: int, baselines: Baselines) -> "handoff.StateCandidates":
+    """One 04/05 matrix row -> the handoff's per-state candidate list (strongest first).
+
+    Each entry carries the signed conditional IC_IR / t-stat (the sign doubles as the factor's
+    direction in this state) and the full-history `baseline_ic_ir`, so a downstream stage that
+    skips gates 1/2 can still orient factors without re-estimating anything.
+    """
+    factors = []
+    for i in range(1, top_k + 1):
+        name = row.get(f"top{i}_alpha")
+        if not name:
+            continue
+        baseline = baselines.get(name) or {}
+        factors.append({
+            "name": name,
+            "ic_ir": row.get(f"top{i}_ic_ir"),
+            "t_stat": row.get(f"top{i}_t_stat"),
+            "baseline_ic_ir": baseline.get("ic_ir"),
+            "low_sample": bool(row.get(f"top{i}_low_sample")),
+        })
+    note = ""
+    if row.get("significant_count", 0) < top_k:
+        note = (
+            f"只有 {row.get('significant_count')}/{row.get('candidate_count')} 个因子通过显著性门槛 "
+            f"|t| >= {float(row.get('min_abs_t') or 0):g}"
+        )
+    return handoff.StateCandidates(factors=factors, low_sample=bool(row.get("low_sample")), note=note)
+
+
+def build_candidate_handoff(
+    matrix: List[Dict[str, Any]],
+    global_matrix: List[Dict[str, Any]],
+    baselines: Baselines,
+    *,
+    track: str,
+    top_k: int,
+    min_abs_t: float,
+    source: str,
+) -> "handoff.CandidateSet":
+    """04 matrix (per regime state) + 05 matrix (unconditional) -> the pipeline's standard candidate set.
+
+    Same selection rule as the matrices themselves (significance gate, then |IC_IR| top-K, no padding);
+    this is the report stage's output contract for the next stage (gate 1, or its passthrough).
+    """
+    regime_sets: Dict[str, Dict[str, handoff.StateCandidates]] = defaultdict(dict)
+    for row in matrix:
+        regime_sets[row["dimension"]][row["state"]] = _matrix_row_to_candidates(row, top_k, baselines)
+    global_row = next((r for r in global_matrix if r["dimension"] == UNCONDITIONAL_DIMENSION), None)
+    return handoff.CandidateSet(
+        track=track,
+        producer="report",
+        regime_sets=dict(regime_sets),
+        global_set=_matrix_row_to_candidates(global_row, top_k, baselines) if global_row else handoff.StateCandidates(),
+        meta={"source_profile": source, "matrix_top_k": top_k, "min_abs_t": min_abs_t},
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build human-readable regime alpha diagnostics.")
     parser.add_argument("input_csv", type=Path, help="Long-format regime alpha profile CSV")
@@ -785,14 +847,21 @@ def main() -> None:
         "--min-abs-t", type=float, default=DEFAULT_MIN_ABS_T,
         help="Significance gate for 04_regime_matrix.csv: only alphas with |t_stat| >= this are eligible (0 disables)",
     )
+    parser.add_argument(
+        "--handoff-out", type=Path, default=None,
+        help="Also write the pipeline candidate handoff (04/05 top-K as a CandidateSet JSON) to this path",
+    )
+    parser.add_argument("--track", default=None, help="Research track id recorded in the handoff (required with --handoff-out)")
     args = parser.parse_args()
+    if args.handoff_out is not None and not args.track:
+        parser.error("--handoff-out requires --track")
 
     rows, columns = load_rows(args.input_csv)
     missing_sig = [c for c in SIGNIFICANCE_COLUMNS if c not in columns]
     if args.min_abs_t > 0 and missing_sig:
         raise SystemExit(
             f"{args.input_csv} lacks significance columns {missing_sig}; it was produced before "
-            "the significance test existed. Re-run run_alpha_regime_profile.py, or pass --min-abs-t 0 "
+            "the significance test existed. Re-run stage 1 (alpha_research/_pipeline/run_profile.py), or pass --min-abs-t 0 "
             "to build the report without the significance gate."
         )
     validation = validate(rows)
@@ -812,7 +881,7 @@ def main() -> None:
     if not global_rows:
         raise SystemExit(
             f"{args.input_csv} has no dimension=unconditional rows (the per-alpha full-history baseline). "
-            "Re-run run_alpha_regime_profile.py."
+            "Re-run stage 1 (alpha_research/_pipeline/run_profile.py)."
         )
     baselines: Baselines = {r["alpha"]: r for r in global_rows}
 
@@ -853,6 +922,13 @@ def main() -> None:
     write_findings(output / "IMPORTANT_FINDINGS.md", rows, overview, diagnostics, leaderboard, validation, thresholds, regime_matrix=matrix)
 
     print(f"Generated report for {len(set(r['alpha'] for r in rows))} factors in: {output.resolve()}")
+    if args.handoff_out is not None:
+        candidates = build_candidate_handoff(
+            matrix, global_matrix, baselines,
+            track=args.track, top_k=args.matrix_top_k, min_abs_t=args.min_abs_t, source=str(args.input_csv),
+        )
+        handoff.write(args.handoff_out, candidates)
+        print(f"Candidate handoff written to: {args.handoff_out.resolve()}")
     if validation["warnings"]:
         print("Warnings:")
         for w in validation["warnings"]:

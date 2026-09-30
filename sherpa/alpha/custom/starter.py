@@ -1,7 +1,9 @@
-"""自定义因子写法示例（设计文档 §6.3）。
+"""自定义因子·starter 主题：两种写法的样例因子，同时是 custom 研究线的第一批因子。
 
-真实的用户自定义因子建议放在策略作者自己的仓库/脚本里，import sherpa.alpha.base 的
-CustomAlpha/custom_alpha 就够用，不需要依赖这个模块——这里只演示两种写法。
+`research/alpha_research/custom_starter/` 这条研究线（track）就是拿这个模块里的因子跑通
+"阶段一体检 → 汇总报告"链路的。以后按交易经验写的新因子，按主题在 `sherpa/alpha/custom/`
+下另开 `<主题>.py`，在 `custom/__init__.py` 里 import（下游关卡按 qualified_name 引用时
+要能注册到），再给它开一条对应的 track。
 """
 
 from __future__ import annotations

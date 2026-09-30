@@ -87,7 +87,7 @@ def load_universe_panel(
     universe 用 `Universe.as_of(end_time)`（point-in-time 口径），避免把区间内还没上线/
     已经退市的 symbol 也当成"从头到尾都在"，防止幸存者偏差。
 
-    `include_open_interest` 默认打开，行为跟 `alpha_research/worldquant_101/data.py`
+    `include_open_interest` 默认打开，行为跟 `alpha_research/_pipeline/data.py`
     里同名参数一致（见那边的注释）；interval="1m" 时无效。
     """
     ch_reader = ch_reader or connect_ch_reader()

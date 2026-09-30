@@ -604,7 +604,7 @@ volatility_high_top.csv
 2. 通过门槛的因子按 `|IC_IR|` 从高到低取前 K 个；
 3. 通过的不足 K 个就只取通过的，不拿不显著的因子凑数。
 
-输入 CSV 必须带 `t_stat`/`p_value` 两列（`run_alpha_regime_profile.py` 会自动产出）；旧版 CSV
+输入 CSV 必须带 `t_stat`/`p_value` 两列（阶段一 `alpha_research/_pipeline/run_profile.py` 会自动产出）；旧版 CSV
 没有这两列时脚本会直接报错，除非显式传 `--min-abs-t 0` 关掉门槛（退回"只按 |IC_IR| 排名"的旧行为）。
 
 表里自动标注了：
@@ -626,13 +626,13 @@ volatility_high_top.csv
 
 用途：**不分 regime 的全局候选（关卡2 全局对照组 G0 的来源）。**
 
-输入 profile 里 `dimension=unconditional, state=ALL` 的行（`run_alpha_regime_profile.py` 用完整 IC 序列算出，
+输入 profile 里 `dimension=unconditional, state=ALL` 的行（阶段一 `run_profile.py` 用完整 IC 序列算出，
 不做任何 regime 过滤）单独走这条旁路：不参与 regime 诊断、排行榜和 04 矩阵，只按**跟 04 矩阵完全相同的规则**
 （|t| ≥ `--min-abs-t` 做门槛、|IC_IR| 排序取 Top K、不凑数）产出一行，列与 04 矩阵一致。
 `leaderboards/unconditional_ALL_top.csv` 是它的完整排行榜。
 
-下游：`factor_orthogonalization/refresh_candidates.py` 把它写进关卡1 的 `UNCONDITIONAL_ALPHAS`，按全历史去冗余后，
-再由 `factor_synthesis/refresh_candidates.py` 读成关卡2 的 `GLOBAL_FACTORS`。
+下游：带 `--handoff-out` 运行时，04 矩阵（各 state）和这一行（全局）一起写成标准候选集交接文件
+（`research/_shared/handoff.py`），全局名单在关卡1 按全历史去冗余后，成为关卡2 全局对照组 G0 的候选。
 
 同一行 unconditional 数据身兼两职：既是这里 G0 的选因子来源，也是其它所有报告里每个因子的全历史基线。
 

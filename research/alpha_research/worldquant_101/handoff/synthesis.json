@@ -1,0 +1,264 @@
+{
+  "kind": "recipes",
+  "schema_version": 1,
+  "track": "worldquant_101",
+  "producer": "synthesis",
+  "created_at": "2026-09-30T14:04:19Z",
+  "meta": {
+    "input_producer": "orthogonalization"
+  },
+  "recipes": {
+    "L2-volatility 路由等权": {
+      "kind": "routed",
+      "dimension": "volatility",
+      "states": {
+        "low": {
+          "worldquant.alpha040": 1.0,
+          "worldquant.alpha094": 1.0,
+          "worldquant.alpha044": 1.0,
+          "worldquant.alpha016": 1.0,
+          "worldquant.alpha055": 1.0
+        },
+        "normal": {
+          "worldquant.alpha040": 1.0,
+          "worldquant.alpha025": 1.0,
+          "worldquant.alpha016": 1.0,
+          "worldquant.alpha094": 1.0,
+          "worldquant.alpha044": 1.0
+        },
+        "high": {
+          "worldquant.alpha040": 1.0,
+          "worldquant.alpha016": 1.0,
+          "worldquant.alpha094": 1.0,
+          "worldquant.alpha044": 1.0,
+          "worldquant.alpha029": 1.0
+        }
+      },
+      "fallback": {
+        "worldquant.alpha040": 1.0,
+        "worldquant.alpha044": 1.0,
+        "worldquant.alpha094": 1.0,
+        "worldquant.alpha016": 1.0,
+        "worldquant.alpha015": 1.0,
+        "worldquant.alpha050": 1.0,
+        "worldquant.alpha029": 1.0,
+        "worldquant.alpha073": 1.0,
+        "worldquant.alpha055": 1.0,
+        "worldquant.alpha025": 1.0,
+        "worldquant.alpha037": 1.0,
+        "worldquant.alpha036": 1.0,
+        "worldquant.alpha077": 1.0
+      },
+      "reference": {
+        "validation_ic_ir": 0.32580406548553037,
+        "selection_ic_ir": 0.2592951814259992,
+        "validation_score_autocorr": 0.764227851712183
+      }
+    },
+    "L2-trend 路由等权": {
+      "kind": "routed",
+      "dimension": "trend",
+      "states": {
+        "bear": {
+          "worldquant.alpha040": 1.0,
+          "worldquant.alpha044": 1.0,
+          "worldquant.alpha016": 1.0,
+          "worldquant.alpha094": 1.0,
+          "worldquant.alpha029": 1.0
+        },
+        "neutral": {
+          "worldquant.alpha040": 1.0,
+          "worldquant.alpha094": 1.0,
+          "worldquant.alpha016": 1.0,
+          "worldquant.alpha044": 1.0,
+          "worldquant.alpha025": 1.0
+        },
+        "bull": {
+          "worldquant.alpha040": 1.0,
+          "worldquant.alpha094": 1.0,
+          "worldquant.alpha036": 1.0,
+          "worldquant.alpha044": 1.0,
+          "worldquant.alpha077": 1.0
+        }
+      },
+      "fallback": {
+        "worldquant.alpha040": 1.0,
+        "worldquant.alpha044": 1.0,
+        "worldquant.alpha094": 1.0,
+        "worldquant.alpha016": 1.0,
+        "worldquant.alpha015": 1.0,
+        "worldquant.alpha050": 1.0,
+        "worldquant.alpha029": 1.0,
+        "worldquant.alpha073": 1.0,
+        "worldquant.alpha055": 1.0,
+        "worldquant.alpha025": 1.0,
+        "worldquant.alpha037": 1.0,
+        "worldquant.alpha036": 1.0,
+        "worldquant.alpha077": 1.0
+      },
+      "reference": {
+        "validation_ic_ir": 0.3211017663638451,
+        "selection_ic_ir": 0.2536561666761361,
+        "validation_score_autocorr": 0.7082696393648368
+      }
+    },
+    "L1 全局ICIR加权": {
+      "kind": "static",
+      "weights": {
+        "worldquant.alpha040": 0.22093365822270686,
+        "worldquant.alpha094": 0.17866834630029155,
+        "worldquant.alpha016": 0.17152506005511045,
+        "worldquant.alpha044": 0.16290592717771976,
+        "worldquant.alpha029": 0.13862469975857108
+      },
+      "reference": {
+        "validation_ic_ir": 0.3193769669161328,
+        "selection_ic_ir": 0.24825812457798105,
+        "validation_score_autocorr": 0.8076905498608126
+      }
+    },
+    "L2-liquidity 路由等权": {
+      "kind": "routed",
+      "dimension": "liquidity",
+      "states": {
+        "starved": {
+          "worldquant.alpha040": 1.0,
+          "worldquant.alpha094": 1.0,
+          "worldquant.alpha044": 1.0,
+          "worldquant.alpha016": 1.0,
+          "worldquant.alpha073": 1.0
+        },
+        "normal": {
+          "worldquant.alpha040": 1.0,
+          "worldquant.alpha016": 1.0,
+          "worldquant.alpha094": 1.0,
+          "worldquant.alpha044": 1.0,
+          "worldquant.alpha029": 1.0
+        },
+        "high": {
+          "worldquant.alpha040": 1.0,
+          "worldquant.alpha055": 1.0,
+          "worldquant.alpha025": 1.0,
+          "worldquant.alpha094": 1.0,
+          "worldquant.alpha037": 1.0
+        }
+      },
+      "fallback": {
+        "worldquant.alpha040": 1.0,
+        "worldquant.alpha044": 1.0,
+        "worldquant.alpha094": 1.0,
+        "worldquant.alpha016": 1.0,
+        "worldquant.alpha015": 1.0,
+        "worldquant.alpha050": 1.0,
+        "worldquant.alpha029": 1.0,
+        "worldquant.alpha073": 1.0,
+        "worldquant.alpha055": 1.0,
+        "worldquant.alpha025": 1.0,
+        "worldquant.alpha037": 1.0,
+        "worldquant.alpha036": 1.0,
+        "worldquant.alpha077": 1.0
+      },
+      "reference": {
+        "validation_ic_ir": 0.3154855360095602,
+        "selection_ic_ir": 0.25871833698869834,
+        "validation_score_autocorr": 0.6882602902861703
+      }
+    },
+    "L0 并集等权": {
+      "kind": "static",
+      "weights": {
+        "worldquant.alpha040": 1.0,
+        "worldquant.alpha044": 1.0,
+        "worldquant.alpha094": 1.0,
+        "worldquant.alpha016": 1.0,
+        "worldquant.alpha015": 1.0,
+        "worldquant.alpha050": 1.0,
+        "worldquant.alpha029": 1.0,
+        "worldquant.alpha073": 1.0,
+        "worldquant.alpha055": 1.0,
+        "worldquant.alpha025": 1.0,
+        "worldquant.alpha037": 1.0,
+        "worldquant.alpha036": 1.0,
+        "worldquant.alpha077": 1.0
+      },
+      "reference": {
+        "validation_ic_ir": 0.31423579732511014,
+        "selection_ic_ir": 0.2606025654825502,
+        "validation_score_autocorr": 0.7603751693192201
+      }
+    },
+    "L2-dispersion 路由等权": {
+      "kind": "routed",
+      "dimension": "dispersion",
+      "states": {
+        "low": {
+          "worldquant.alpha040": 1.0,
+          "worldquant.alpha044": 1.0,
+          "worldquant.alpha094": 1.0,
+          "worldquant.alpha016": 1.0,
+          "worldquant.alpha015": 1.0
+        },
+        "normal": {
+          "worldquant.alpha040": 1.0,
+          "worldquant.alpha094": 1.0,
+          "worldquant.alpha016": 1.0,
+          "worldquant.alpha044": 1.0,
+          "worldquant.alpha050": 1.0
+        },
+        "high": {
+          "worldquant.alpha040": 1.0,
+          "worldquant.alpha016": 1.0,
+          "worldquant.alpha094": 1.0,
+          "worldquant.alpha029": 1.0,
+          "worldquant.alpha044": 1.0
+        }
+      },
+      "fallback": {
+        "worldquant.alpha040": 1.0,
+        "worldquant.alpha044": 1.0,
+        "worldquant.alpha094": 1.0,
+        "worldquant.alpha016": 1.0,
+        "worldquant.alpha015": 1.0,
+        "worldquant.alpha050": 1.0,
+        "worldquant.alpha029": 1.0,
+        "worldquant.alpha073": 1.0,
+        "worldquant.alpha055": 1.0,
+        "worldquant.alpha025": 1.0,
+        "worldquant.alpha037": 1.0,
+        "worldquant.alpha036": 1.0,
+        "worldquant.alpha077": 1.0
+      },
+      "reference": {
+        "validation_ic_ir": 0.31303782375575195,
+        "selection_ic_ir": 0.2540172861537755,
+        "validation_score_autocorr": 0.7819487027462442
+      }
+    },
+    "G0 全局等权": {
+      "kind": "static",
+      "weights": {
+        "worldquant.alpha040": 1.0,
+        "worldquant.alpha094": 1.0,
+        "worldquant.alpha016": 1.0,
+        "worldquant.alpha044": 1.0,
+        "worldquant.alpha029": 1.0
+      },
+      "reference": {
+        "validation_ic_ir": 0.31171662722614907,
+        "selection_ic_ir": 0.24147053904464114,
+        "validation_score_autocorr": 0.7949486598986305
+      }
+    },
+    "single:worldquant.alpha040": {
+      "kind": "static",
+      "weights": {
+        "worldquant.alpha040": 1.0
+      },
+      "reference": {
+        "validation_ic_ir": 0.26032310142912807,
+        "selection_ic_ir": 0.22093365822270686,
+        "validation_score_autocorr": 0.8610016107272539
+      }
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "id": "custom_starter",
+  "description": "自定义因子 starter 主题（sherpa/alpha/custom/starter.py），只看 trend 维度；因子少，关卡1/2 透传，直接进关卡3",
+  "alphas": {
+    "modules": ["sherpa.alpha.custom.starter"],
+    "family": "custom"
+  },
+  "preprocess": {
+    "tradable_mask": true,
+    "neutralize": true
+  },
+  "regime": {
+    "dimensions": ["trend"]
+  },
+  "report": {
+    "matrix_top_k": 5,
+    "min_abs_t": 3.0
+  },
+  "stages": {
+    "orthogonalization": {"mode": "passthrough"},
+    "synthesis": {
+      "mode": "passthrough",
+      "passthrough": {"singles": true, "equal_weight": true, "routed": true}
+    }
+  }
+}

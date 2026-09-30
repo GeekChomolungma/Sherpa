@@ -1,7 +1,10 @@
+import numpy as np
 import pandas as pd
 import pytest
 
 from sherpa.metrics.regime import (
+    REGIME_DIMENSIONS,
+    REGIME_STATES,
     build_regime_report,
     compute_dispersion_regime,
     compute_liquidity_regime,
@@ -109,3 +112,26 @@ def test_build_regime_report_label_is_na_until_all_dims_known():
     for idx in report.index[known]:
         row = report.loc[idx]
         assert row["regime_label"] == "|".join([row["trend"], row["volatility"], row["dispersion"], row["liquidity"]])
+
+
+def test_regime_states_constant_covers_every_state_build_regime_report_emits():
+    """REGIME_STATES 是全仓库唯一的维度/state 定义：打标函数打出来的每个 state 都必须在里面。"""
+    rng = np.random.default_rng(0)
+    n, symbols = 600, ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT"]
+    index = pd.date_range("2026-01-01", periods=n, freq="4h", tz="UTC")
+    vol_scale = np.repeat([0.005, 0.03, 0.01, 0.05, 0.02, 0.008], n // 6)[:, None]
+    drift = np.repeat([0.004, -0.004, 0.0, 0.003, -0.003, 0.0], n // 6)[:, None]
+    returns = drift + vol_scale * rng.standard_normal((n, len(symbols)))
+    close = pd.DataFrame(100 * np.exp(np.cumsum(returns, axis=0)), index=index, columns=symbols)
+    quote_volume = pd.DataFrame(rng.lognormal(10, 1, (n, len(symbols))), index=index, columns=symbols)
+
+    report = build_regime_report(
+        close, quote_volume, quote_volume * 0.5,
+        benchmark_symbol="BTCUSDT", ma_period=20, vol_window=20, lookback=50,
+    )
+
+    assert tuple(report.columns[:-1]) == REGIME_DIMENSIONS
+    for dim in REGIME_DIMENSIONS:
+        emitted = set(report[dim].dropna())
+        assert emitted, f"{dim} 一个 state 都没打出来，测试数据没覆盖到"
+        assert emitted <= set(REGIME_STATES[dim]), f"{dim} 打出了 REGIME_STATES 里没有的 state: {emitted}"

@@ -119,7 +119,7 @@ flowchart TD
   2. **排序**：通过门槛的因子按 |IC_IR| 从高到低取 Top K（默认 5）；
   3. **不凑数**：通过门槛的不足 K 个，就只取通过的，不拿不显著的因子补位；`04_regime_matrix.csv` 的 `significant_count` 列记录每个 state 实际通过了几个。
 * **为什么是"显著性做门槛、|IC_IR| 做排序"，而不是按 t 值或 p 值排序**：同一个 state 里各因子的样本数几乎相同，t ≈ IC_IR × √n_eff，按 t 排序和按 IC_IR 排序基本等价，剩下的差别只来自 IC 自相关的差异，并不代表因子更强；而 p 值衡量的是"有多确定不是 0"，不是"效应有多大"，样本一大，微弱的效应也能拿到极小的 p 值。显著性回答"能不能用"，|IC_IR| 回答"有多强"，各管一件事。
-* **落地位置**：`t_stat`/`p_value` 由 `conditional_ic_summary` 随条件 IC 一起算出，写进 `regime_alpha_profile.csv`；门槛在 [`research/regime_factor_report/regime_factor_report.py`](file:///d:/code-repo/Chomo/Sherpa/research/regime_factor_report/regime_factor_report.py) 的 `build_regime_matrix` 执行（参数 `--min-abs-t`，`run_research.sh` 里的环境变量 `MIN_ABS_T`，默认 3.0）；`run_screening.py` 的全局排行榜也附带这两列，仅作参考，不改变其 `passed` 口径。
+* **落地位置**：`t_stat`/`p_value` 由 `conditional_ic_summary` 随条件 IC 一起算出，写进 `regime_alpha_profile.csv`；门槛在 [`research/regime_factor_report/regime_factor_report.py`](file:///d:/code-repo/Chomo/Sherpa/research/regime_factor_report/regime_factor_report.py) 的 `build_regime_matrix` 执行（参数 `--min-abs-t`，默认取研究线 `track.json` 的 `report.min_abs_t`（3.0），编排脚本的环境变量 `MIN_ABS_T` 可临时覆盖）；不看 regime 的全局排行（`05_global_matrix.csv`）走同一套门槛。
 * **局限**：|t| ≥ 3 只是对多重检验的粗粒度防护，不是严格校正；将来自动挖掘因子、检验次数上到成千上万时，需要配合候选记账与 Deflated Sharpe 等更严格的方法（见 [`research/factor_orthogonalization/INCREMENTAL_TODO.md`](research/factor_orthogonalization/INCREMENTAL_TODO.md) G7）。
 
 ### 3.2 中性化：截面风险与风格暴露残差化 (Neutralization)
@@ -141,7 +141,7 @@ flowchart TD
 3. **测评工作流 SOP**：[`research/REGIME_ALPHA_EVALUATION_WORKFLOW.md`](file:///d:/code-repo/Chomo/Sherpa/research/REGIME_ALPHA_EVALUATION_WORKFLOW.md)
    * **作用**：指导读者如何科学执行测评。阐明为什么绝不能物理切断数据（分析了冷启动缺失、后视镜前视泄露、状态切换盲区、小样本拟合四大暗礁），确立了“全时序连续计算 + 严格 Point-in-time 条件掩码打标”的工业级规范，并给出了决策分类矩阵。
 4. **实战工程项目**：[`research/alpha_research/worldquant_101/`](file:///d:/code-repo/Chomo/Sherpa/research/alpha_research/worldquant_101)
-   * **作用**：世坤 101 因子库在真实 ClickHouse 4h 数据上的筛选实战。包含取数脚本 `data.py`、批量筛选脚本 `run_screening.py` 以及各分类因子的执行模块。**待更新**：目前仍对原始分数体检，接入 §3.2 中性化残差化是下一步待同步的整合工作。
+   * **作用**：世坤 101 因子库在真实 ClickHouse 4h 数据上的研究线（全流程样板）：`track.json`（研究线配置）+ `run_track.sh`（阶段一 → 关卡1/2/3 的编排），产出归档在该目录下。阶段一的通用实现在 `research/alpha_research/_pipeline/`，已接入 §3.2 中性化残差化。研究线的组织方式见 `research/alpha_research/README.md`。
 
 ### 3.4 对应代码模块归属
 * **算子与因子表达**：[`sherpa.alpha`](file:///d:/code-repo/Chomo/Sherpa/sherpa/alpha/base.py)（`Alpha`、`ops.py`、`worldquant/`、`tradingview/`、`custom/`）。

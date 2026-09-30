@@ -122,7 +122,16 @@ def custom_alpha(name: str, *, min_lookback: int = 1):
         cls = type(
             fn.__name__,
             (CustomAlpha,),
-            {"name": name, "min_lookback": min_lookback, "compute": compute, "__doc__": fn.__doc__},
+            # __module__ 跟着被装饰的函数走：type() 默认会记成本模块（sherpa.alpha.base），研究线
+            # 按模块路径挑因子（track 配置的 alphas.modules）时就找不到它了。
+            {
+                "name": name,
+                "min_lookback": min_lookback,
+                "compute": compute,
+                "__doc__": fn.__doc__,
+                "__module__": fn.__module__,
+                "__qualname__": fn.__qualname__,
+            },
         )
         return register_alpha(cls)
 

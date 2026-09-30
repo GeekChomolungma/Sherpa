@@ -1,14 +1,14 @@
-"""世坤101研究项目共用的取数入口：接真实 ClickHouse，不是合成数据（对比 examples/ 下的
-教学示例，那些用 `FakeClickHouseClient` 站台）。
+"""alpha 研究线共用的取数入口（阶段一）：接真实 ClickHouse，不是合成数据。
 
-连接信息一律从环境变量读，不写进代码/仓库——跟 `scripts/smoke_test_data_layer.py` 同一套
-约定：
+给 `_pipeline/` 下各研究线共用的阶段一工具用（最初从世坤101 研究线的取数脚本演化而来）。取数区间是**选择段**
+（`research_start ~ validation_start`），阶段一体检只看这一段。
+
+连接信息一律从环境变量读，不写进代码/仓库：
 
     CH_HOST(必填) / CH_PORT(默认8123) / CH_USER(默认default) / CH_PASSWORD / CH_DATABASE(默认market)
 
-默认区间/周期（`INTERVAL`/`START_TIME`/`END_TIME`）统一读 `research/research_config.json`
-的研究段，不在这里单独维护；想整体换区间就改那份 JSON，只想临时换一次就调用
-`load_universe_panel()` 时显式传参覆盖。
+默认区间/周期/标签/大盘锚点统一读 `research/research_config.json`，研究线（track）不能覆盖——
+不同研究线的结论要能横向比较。
 """
 
 from __future__ import annotations

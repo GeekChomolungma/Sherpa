@@ -1,6 +1,6 @@
 """tradability_calibration 研究项目共用的取数入口：接真实 ClickHouse，不是合成数据。
 
-跟 `research/alpha_research/worldquant_101/data.py` 是同一套连接方式，特意原样复制一份、不共用——
+跟 `research/alpha_research/_pipeline/data.py` 是同一套连接方式，特意原样复制一份、不共用——
 `connect_ch_reader()` 是纯客户端代码（读环境变量、建连接），不含任何项目专属常量，让每个
 研究项目自己维护一份更简单。
 
@@ -72,7 +72,7 @@ def load_universe_panel(
     universe 用 `Universe.as_of(end_time)`（设计文档 §5.3 的 point-in-time 口径）——避免
     把区间内还没上线/已经退市的 symbol 也当成"从头到尾都在"，防止幸存者偏差。
 
-    `include_open_interest` 默认打开，行为跟 `alpha_research/worldquant_101/data.py`
+    `include_open_interest` 默认打开，行为跟 `alpha_research/_pipeline/data.py`
     里同名参数一致（见那边的注释）；interval="1m" 时无效。
     """
     ch_reader = ch_reader or connect_ch_reader()

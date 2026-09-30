@@ -17,18 +17,24 @@
 | 做什么 | 在多个 case × 权重映射 × 调仓频率 × 成本假设的组合里比较、挑选 | 冻结整份配方，只做验证，不调参 |
 | 结果不好时 | 回到关卡2 或关卡3 修改 | 如实记录 |
 
-## 2. 输入：关卡2 冻结下来的配方
+## 2. 输入：研究线的配方集交接文件
 
-`refresh_candidates.py` 读取关卡2 的两份结果，重写 `config.py` 里的 `CASES` 区块：
+关卡3 只读研究线的 `<研究线>/handoff/synthesis.json`（标准**配方集**，格式见 `research/_shared/handoff.py`），
+不关心它是谁产出的：
 
-- `factor_synthesis/results/01_scheme_comparison.csv`：决定收录哪些方案。默认收录**全部**合成方案，再加 1 个在**选择段**上 IC_IR 最高的单因子作参照；
-- `factor_synthesis/results/03_factor_weights.csv`：配方本身，包括每个方案 / 每个 state 用哪些因子、方向和权重。这些都是关卡2 在选择段上估出来的，关卡3 **不重新估计**。
+- **关卡2 真跑**（比如 `worldquant_101`）：关卡2 自己把比较过的方案冻结成配方——默认收录**全部**合成方案，再加
+  1 个在**选择段**上 IC_IR 最高的单因子作参照（`factor_synthesis/config.py` 的 `HANDOFF_*`）。方向、权重都是关卡2
+  在选择段上估出来的，关卡3 **不重新估计**。为什么不只收最优方案：几个方案的 IC_IR 往往只差零点零几，但分数稳定性
+  （换手）差得更多，扣完成本后排名可能翻过来。
+- **关卡2 透传**（比如 `custom_starter`）：候选集直接变成等权配方，名字带 `直通·` 前缀（`factor_synthesis/passthrough.py`）。
 
-为什么不只收关卡2 的最优方案：几个方案的 IC_IR 往往只差零点零几，但分数稳定性（换手）差得更多，扣完成本后排名可能翻过来。
+`run_friction.py` 会先按关卡2 的同一口径重算每个 case 在验证段上的 IC_IR，跟配方里带的 `reference`（关卡2 报告的
+数字）对照（`00_case_consistency.csv`）。对不上就说明配方重建或数据口径有偏差，后面的回测结论不可信。透传配方没有
+`reference`，这项检查不适用（`consistent` 为空）。
 
-`run_friction.py` 会先按关卡2 的同一口径重算每个 case 在验证段上的 IC_IR，跟关卡2 报告的数字对照（`00_case_consistency.csv`）。对不上就说明配方重建或数据口径有偏差，后面的回测结论不可信。
+想手动删减 / 调整配方：直接改那份交接文件，再从关卡3 这一步续跑。
 
-## 3. 测试网格（`config.py` 区块外，手动维护）
+## 3. 测试网格（`config.py`，所有研究线共用）
 
 每个 case 都跑满 `WEIGHTINGS × REBALANCE_EVERY`，每组回测再按 `COST_MODELS` 各扣一次费。
 
@@ -52,21 +58,20 @@
 ## 5. 运行
 
 ```bash
-# 关卡2 跑完之后：
-python refresh_candidates.py                  # 关卡2 results -> config.CASES
-CH_HOST=... CH_PASSWORD=... python run_friction.py
+# 研究线上游（关卡2 或它的透传）跑完之后：
+CH_HOST=... CH_PASSWORD=... python run_friction.py --track worldquant_101
 
-# 或者用一键脚本（步骤 10 刷新 case，步骤 11 回测）：
-bash run_research.sh --from-step 10 --refresh-friction-cases
+# 或者用研究线的编排脚本（关卡3 是步骤 5）：
+bash research/alpha_research/worldquant_101/run_track.sh --from-step 5
 ```
 
-`refresh_candidates.py --max-composites N` 只保留验证段 IC_IR 前 N 个合成方案；`--singles N` 设置单因子参照的个数。回测按 case 分到多个进程并行（`run_friction.MAX_WORKERS`）。
+收录多少合成方案 / 单因子参照，由关卡2 的 `config.HANDOFF_MAX_COMPOSITES` / `HANDOFF_SINGLES` 决定。回测按 case 分到多个进程并行（`run_friction.MAX_WORKERS`）。
 
-## 6. 产出（`results/`）
+## 6. 产出（`<研究线>/results/friction/`）
 
 | 文件 | 内容 |
 |---|---|
-| `00_case_consistency.csv` | 配方重建一致性：重算的验证段 IC_IR 对照关卡2 的报告值 |
+| `00_case_consistency.csv` | 配方重建一致性：重算的验证段 IC_IR 对照配方里带的关卡2 报告值（`reported_validation_ic_ir`；透传配方为空） |
 | `01_friction_summary.csv` | 完整长表：case × 映射 × 调仓频率 × 成本 × 数据段 |
 | `02_validation_base_cost.csv` | 验证段、全吃单成本下每个组合一行，附其他成本下的净 Sharpe 和红线判定，按净 Sharpe 排序 |
 | `03_validation_net_equity.csv` | 验证段、全吃单成本下净 Sharpe 前 30 名组合的净值曲线 |

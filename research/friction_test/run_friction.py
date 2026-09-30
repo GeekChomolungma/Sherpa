@@ -1,8 +1,12 @@
 """关卡3 · 换手摩擦与组合构建测试：把关卡2 的冻结配方变成仓位，扣费回测。
 
+**输入是流水线的标准配方集**（`research/_shared/handoff.py`）：读研究线的 `<研究线>/handoff/synthesis.json`
+——关卡2 真跑时是它比较过的方案，关卡2 透传时是候选集直接变成的等权配方（`直通·` 前缀）。关卡3 不关心配方
+是谁产出的，所有研究线都必须过这一关。明细产出写到 `<研究线>/results/friction/`。
+
 要回答的问题：**关卡2 的合成分数变成真实持仓、扣掉手续费和滑点之后，还剩多少？用什么组合构建方式最划算？**
 
-对每个 case（`config.CASES`，由 `refresh_candidates.py` 从关卡2 的 results 生成）× 每种权重映射
+对每个 case（配方集里的每个配方）× 每种权重映射
 （`config.WEIGHTINGS`，Top-K + 排名迟滞）× 每种调仓频率（`config.REBALANCE_EVERY`，全仓调仓）
 跑一遍 `run_vectorized_backtest`
 （零成本，得到逐 bar 毛收益和换手），再对每种成本假设（`config.COST_MODELS`）扣费：
@@ -24,9 +28,10 @@
 执行时点：IC 标签的执行延迟是 `execution_delay_bars` 根 bar（信号在 t 收盘算出，t+delay 收盘才成交），
 回测的 `shift = 1 + execution_delay_bars` 与之对齐，赚的正是 IC 标签衡量的那段收益。
 
-产出（`results/`）：
-- `00_case_consistency.csv`：重建出来的每个 case 的合成分数，按关卡2 同一口径重算的 RankIC_IR vs 关卡2 报告的
-  数字——两者应一致（浮点误差内），不一致说明配方重建或数据口径出了问题，后面的回测结论都不可信；
+产出（`<研究线>/results/friction/`）：
+- `00_case_consistency.csv`：重建出来的每个 case 的合成分数，按关卡2 同一口径重算的 RankIC_IR vs 配方里带的
+  `reference`（关卡2 报告的数字）——两者应一致（浮点误差内），不一致说明配方重建或数据口径出了问题，后面的
+  回测结论都不可信。透传产出的配方不带 `reference`，这一列是空的、`consistent` 也是空的（不适用，不是不一致）；
 - `01_friction_summary.csv`：case × 映射 × 调仓频率 × 成本假设 × 段 的完整绩效长表；
 - `02_validation_base_cost.csv`：验证段、`BASE_COST` 下每种 (case, 映射, 频率) 一行，附其它成本假设下的
   净 Sharpe（`net_sharpe[<成本名>]`）和验收红线判定，按净 Sharpe 从高到低排序——**先看这张**；
@@ -39,13 +44,14 @@
 
 回测按 case 分到多个进程并行（每个 case 的整套网格在一个进程里跑完），进程数见 `MAX_WORKERS`。
 
-运行前先跑关卡2，再跑 `refresh_candidates.py`（或 `run_research.sh --refresh-friction-cases`）：
+运行前先跑完研究线的上游阶段（关卡2 或它的透传），保证配方交接文件存在：
 
-    CH_HOST=... CH_PASSWORD=... python research/friction_test/run_friction.py
+    CH_HOST=... CH_PASSWORD=... python research/friction_test/run_friction.py --track <研究线>
 """
 
 from __future__ import annotations
 
+import argparse
 import os
 import re
 import sys
@@ -63,15 +69,12 @@ import pandas as pd
 import sherpa.alpha.custom  # noqa: F401  触发内置三大家族的 @register_alpha 注册
 import sherpa.alpha.tradingview  # noqa: F401
 import sherpa.alpha.worldquant  # noqa: F401
-from sherpa.alpha import registry
 from sherpa.backtest.cost_model import ZeroCostModel
 from sherpa.backtest.regime_screening import regime_report
-from sherpa.backtest.style_exposure import default_style_exposures
+from sherpa.backtest.residual import ScorePreprocessor, residual_scores
 from sherpa.backtest.vectorized import run_vectorized_backtest
 from sherpa.data.schema import BarPanel, interval_to_timedelta
 from sherpa.metrics.factor import ic_summary, rank_ic
-from sherpa.metrics.tradability import tradable_mask
-from sherpa.risk.neutralize import neutralize
 
 import config
 from data import (
@@ -89,19 +92,21 @@ from data import (
 from signals import (
     case_scores,
     cross_sectional_rank,
-    required_factors,
     segment_masks,
     segment_stats,
     target_path,
 )
 
-_RESULTS_DIR = Path(__file__).resolve().parent / "results"
-CONSISTENCY_PATH = _RESULTS_DIR / "00_case_consistency.csv"
-SUMMARY_PATH = _RESULTS_DIR / "01_friction_summary.csv"
-RANKING_PATH = _RESULTS_DIR / "02_validation_base_cost.csv"
-EQUITY_PATH = _RESULTS_DIR / "03_validation_net_equity.csv"
-CASE_GRIDS_DIR = _RESULTS_DIR / "case_grids"
-SYNTH_COMPARISON = Path(__file__).resolve().parent.parent / "factor_synthesis" / "results" / "01_scheme_comparison.csv"
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "_shared"))
+import handoff  # noqa: E402
+from track import load_track  # noqa: E402
+
+STAGE = "friction"
+CONSISTENCY_FILE = "00_case_consistency.csv"
+SUMMARY_FILE = "01_friction_summary.csv"
+RANKING_FILE = "02_validation_base_cost.csv"
+EQUITY_FILE = "03_validation_net_equity.csv"
+CASE_GRIDS_DIR = "case_grids"
 
 # 重算的验证段 IC_IR 跟关卡2 报告的差多少算"对不上"。同一份数据、同一套公式，理论上只有浮点误差；
 # 放宽到 1e-3 是为了容忍 ClickHouse 里最近几根 bar 被补写 / 修订之类的数据漂移。
@@ -126,53 +131,60 @@ class _PricePanel:
     interval: str
 
 
-def _check_config() -> None:
-    if not config.CASES:
+def _check_config(recipes: handoff.RecipeSet, path: Path) -> None:
+    if not recipes.recipes:
         raise SystemExit(
-            "friction_test/config.py 的 CASES 是空的：先跑关卡2，再跑 refresh_candidates.py"
-            "（或 run_research.sh --refresh-friction-cases）"
+            f"{path} 里一个配方都没有：上游没有候选因子可用（阶段一显著因子为 0？可以在 track.json 的 "
+            "report.min_abs_t 放宽门槛），或者关卡2 透传的 stages.synthesis.passthrough 全关了"
         )
     if config.BASE_COST not in config.COST_MODELS:
         raise SystemExit(f"BASE_COST={config.BASE_COST!r} 不在 COST_MODELS 里")
 
 
-def _residual_scores(names: list[str], panel, mask: pd.DataFrame, exposures: dict) -> dict[str, pd.DataFrame]:
-    """原始分数 → 可流通性掩码 → 剥离 Beta/Size 取残差，跟阶段一、关卡1、关卡2 的处理顺序一致。"""
-    histories: dict[str, pd.DataFrame] = {}
-    started = time.monotonic()
-    for i, name in enumerate(names, 1):
-        history = registry.get(name)().compute(panel)
-        histories[name] = neutralize(history.where(mask), exposures)
-        print(f"  [{i}/{len(names)}] {name}，已用时 {(time.monotonic() - started) / 60:.1f} 分钟", flush=True)
-    return histories
+def _print_progress(i: int, total: int, name: str, elapsed: float) -> None:
+    print(f"  [{i}/{total}] {name}，已用时 {elapsed / 60:.1f} 分钟", flush=True)
 
 
-def _consistency_rows(scores: dict[str, pd.DataFrame], forward_returns: pd.DataFrame, validation: pd.Series) -> list[dict]:
-    reported = {}
-    if SYNTH_COMPARISON.exists():
-        table = pd.read_csv(SYNTH_COMPARISON)
-        table = table[table["segment"].str.startswith("validation")]
-        reported = dict(zip(table["scheme"], table["ic_ir"]))
+def _consistency_rows(
+    scores: dict[str, pd.DataFrame], recipes: handoff.RecipeSet, forward_returns: pd.DataFrame, validation: pd.Series
+) -> list[dict]:
+    """重算每个配方的验证段 IC_IR，跟配方自带的 `reference.validation_ic_ir`（产出方报告的数字）比。
+
+    没有 `reference` 的配方（透传产出、或者手写的）不适用这项检查：`consistent` 留空，不算不一致。
+    `equivalent_to`：上游去重时合并进这个配方的其它配方名（它们的回测结果就是这个配方的结果）。
+    """
     rows = []
     for case, score in scores.items():
         ic = rank_ic(score, forward_returns)
         recomputed = ic_summary(ic[validation.reindex(ic.index, fill_value=False)]).ic_ir
-        expected = reported.get(case, float("nan"))
+        expected = recipes.recipes[case].get("reference", {}).get("validation_ic_ir", float("nan"))
+        has_reference = pd.notna(expected)
         rows.append({
             "case": case,
             "recomputed_validation_ic_ir": recomputed,
-            "gate2_validation_ic_ir": expected,
-            "abs_diff": abs(recomputed - expected) if pd.notna(expected) else float("nan"),
-            "consistent": bool(pd.notna(expected) and abs(recomputed - expected) <= CONSISTENCY_TOLERANCE),
+            "reported_validation_ic_ir": expected,
+            "abs_diff": abs(recomputed - expected) if has_reference else float("nan"),
+            "consistent": bool(abs(recomputed - expected) <= CONSISTENCY_TOLERANCE) if has_reference else None,
+            "equivalent_to": " | ".join(recipes.recipes[case].get("equivalent_to", [])),
         })
     return rows
 
 
-def main() -> None:
-    _check_config()
-    factor_names = required_factors(config.CASES)
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description="关卡3：配方 × 组合构建 × 成本的扣费回测")
+    parser.add_argument("--track", required=True, help="研究线 id（research/alpha_research/<id>/）或目录")
+    args = parser.parse_args(argv)
+    track = load_track(args.track)
+    input_path = track.handoff_path(handoff.INPUT_STAGE[STAGE])
+    recipes = handoff.read_recipes(input_path, expect_track=track.id)
+    print(f"研究线 {track.id} · 关卡3；输入配方集 {input_path}（producer={recipes.producer}）")
+    _check_config(recipes, input_path)
+    track.import_alpha_modules()
+    results_dir = track.stage_results_dir(STAGE)
+
+    factor_names = recipes.factor_names()
     grid = [(w, r) for w in config.WEIGHTINGS for r in config.REBALANCE_EVERY]
-    print(f"{len(config.CASES)} 个 case，共用到 {len(factor_names)} 个因子；组合构建网格 {len(grid)} 种 "
+    print(f"{len(recipes.recipes)} 个 case，共用到 {len(factor_names)} 个因子；组合构建网格 {len(grid)} 种 "
           f"（{len(config.WEIGHTINGS)} 种映射 × {len(config.REBALANCE_EVERY)} 种调仓频率），"
           f"成本假设 {len(config.COST_MODELS)} 种")
 
@@ -183,23 +195,26 @@ def main() -> None:
     print(f"执行时点：信号延迟 {EXECUTION_DELAY_BARS} 根 bar 成交 → 回测 shift={shift}（IC 标签持有 {HORIZON_BARS} 根 bar）")
     print(f"成本口径（research_config.json 的 costs）：{COST_VENUE}，" + "，".join(f"{n}={m}" for n, m in config.COST_MODELS.items()))
 
-    mask = tradable_mask(panel.quote_volume, panel.trades_count)
+    preprocessor = ScorePreprocessor.from_panel(
+        panel, benchmark_symbol=BENCHMARK_SYMBOL, tradable=track.tradable, neutralize=track.neutralize
+    )
     regime = regime_report(panel, benchmark_symbol=BENCHMARK_SYMBOL)
-    exposures = default_style_exposures(panel, benchmark_symbol=BENCHMARK_SYMBOL)
 
     print("\n正在计算因子的残差分数……")
-    residuals = _residual_scores(factor_names, panel, mask, exposures)
+    residuals, _ = residual_scores(factor_names, panel, preprocessor, progress=_print_progress)
     ranked = {name: cross_sectional_rank(score) for name, score in residuals.items()}
-    scores = {case: case_scores(recipe, ranked, regime) for case, recipe in config.CASES.items()}
+    scores = {case: case_scores(recipe, ranked, regime) for case, recipe in recipes.recipes.items()}
 
     validation_start = pd.Timestamp(VALIDATION_START, tz="UTC")
     segments = segment_masks(panel.index, validation_start)
-    consistency = pd.DataFrame(_consistency_rows(scores, label_forward_returns(panel).where(mask), segments["validation(方案比较)"]))
-    _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    consistency.to_csv(CONSISTENCY_PATH, index=False)
-    print("\n== 配方重建一致性（重算的验证段 IC_IR vs 关卡2 报告值） ==")
+    consistency = pd.DataFrame(_consistency_rows(
+        scores, recipes, preprocessor.mask_labels(label_forward_returns(panel)), segments["validation(方案比较)"]
+    ))
+    results_dir.mkdir(parents=True, exist_ok=True)
+    consistency.to_csv(results_dir / CONSISTENCY_FILE, index=False)
+    print("\n== 配方重建一致性（重算的验证段 IC_IR vs 配方里带的关卡2 报告值；透传配方不适用） ==")
     print(consistency.round(4).to_string(index=False))
-    if not consistency["consistent"].all():
+    if (consistency["consistent"] == False).any():  # noqa: E712  None（不适用）不算不一致
         print("\n[警告] 有 case 对不上关卡2 的结果：配方重建或数据口径有偏差，下面的回测结论要打折扣。"
               "常见原因：关卡2 的 results 是旧的（改了候选池没重跑）、或 research_config.json 改过。")
 
@@ -225,13 +240,13 @@ def main() -> None:
     summary_df = summary_df.sort_values(
         ["_segment_order", "cost_model", "net_sharpe"], ascending=[True, True, False], na_position="last"
     ).drop(columns=["_segment_order"])
-    summary_df.to_csv(SUMMARY_PATH, index=False)
+    summary_df.to_csv(results_dir / SUMMARY_FILE, index=False)
 
     ranking = _validation_ranking(summary_df)
-    ranking.to_csv(RANKING_PATH, index=False)
+    ranking.to_csv(results_dir / RANKING_FILE, index=False)
     top_labels = [_label(row) for row in ranking.head(EQUITY_TOP_N).to_dict("records")]
-    pd.DataFrame({label: equity[label] for label in top_labels}).to_csv(EQUITY_PATH)
-    write_case_grids(summary_df)
+    pd.DataFrame({label: equity[label] for label in top_labels}).to_csv(results_dir / EQUITY_FILE)
+    write_case_grids(summary_df, results_dir / CASE_GRIDS_DIR)
 
     other_costs = [f"net_sharpe[{name}]" for name in config.COST_MODELS if name not in (config.BASE_COST, "zero")]
     columns = [*KEYS, "gross_sharpe", "net_sharpe", *other_costs,
@@ -240,10 +255,10 @@ def main() -> None:
     print(ranking[columns].head(20).round(3).to_string(index=False))
     print(f"\n== 验证段 · 各 case 的最好组合（红线：净 Sharpe >= {config.MIN_NET_SHARPE}，换手衰减 < {config.MAX_TURNOVER_DECAY:.0%}） ==")
     print(ranking.drop_duplicates("case")[columns].round(3).to_string(index=False))
-    print(f"\n结果已写入：\n  {CONSISTENCY_PATH}\n  {SUMMARY_PATH}\n  {RANKING_PATH}\n  {EQUITY_PATH}\n  {CASE_GRIDS_DIR}\\")
+    print(f"\n结果已写入 {results_dir}：{CONSISTENCY_FILE} / {SUMMARY_FILE} / {RANKING_FILE} / {EQUITY_FILE} / {CASE_GRIDS_DIR}/")
 
 
-def write_case_grids(summary_df: pd.DataFrame, out_dir: Path = CASE_GRIDS_DIR) -> list[Path]:
+def write_case_grids(summary_df: pd.DataFrame, out_dir: Path) -> list[Path]:
     """每个 case 写一张验证段净 Sharpe 的二维截面：行 = 映射（`config.WEIGHTINGS` 的顺序），
     列 = `<成本假设>|every<N>`（成本按 `config.COST_MODELS` 的顺序、再按调仓频率）。
 
