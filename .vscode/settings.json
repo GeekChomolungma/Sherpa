@@ -1,0 +1,5 @@
+{
+  // research/ 下的脚本运行时用 sys.path.insert 把 research/_shared 加进搜索路径后再 import handoff / track，
+  // Pylance 静态分析看不到这一步，这里告诉它去哪找，Ctrl+点击才能跳转。
+  "python.analysis.extraPaths": ["research/_shared"]
+}

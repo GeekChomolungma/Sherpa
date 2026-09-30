@@ -11,6 +11,7 @@
 | [`../_shared/`](../_shared/) | 阶段一和各关卡都要用的两个模块：`track.py`（读研究线配置）、`handoff.py`（阶段之间的交接格式） |
 | [`worldquant_101/`](worldquant_101/) | 世坤101 全量因子，全流程样板：关卡1/2 真跑。编排 `run_track.sh`（根目录 `run_research.sh` 转发到这里） |
 | [`custom_starter/`](custom_starter/) | 自定义因子 starter 主题（`sherpa/alpha/custom/starter.py`），只看 trend；因子少，关卡1/2 透传，直接进关卡3 |
+| [`custom_quote_activity/`](custom_quote_activity/) | 成交活跃度排名单因子（`sherpa/alpha/custom/quote_activity.py`），只看 trend；关卡1/2 透传，直接进关卡3 |
 
 ## 流水线：各阶段只靠交接文件（handoff）连接
 

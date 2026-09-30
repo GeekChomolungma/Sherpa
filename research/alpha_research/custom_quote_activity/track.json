@@ -1,0 +1,26 @@
+{
+  "id": "custom_quote_activity",
+  "description": "成交活跃度排名单因子（sherpa/alpha/custom/quote_activity.py），只看 trend 维度；单因子，关卡1/2 透传，直接进关卡3",
+  "alphas": {
+    "modules": ["sherpa.alpha.custom.quote_activity"],
+    "family": "custom"
+  },
+  "preprocess": {
+    "tradable_mask": true,
+    "neutralize": false
+  },
+  "regime": {
+    "dimensions": ["trend"]
+  },
+  "report": {
+    "matrix_top_k": 5,
+    "min_abs_t": 3.0
+  },
+  "stages": {
+    "orthogonalization": {"mode": "passthrough"},
+    "synthesis": {
+      "mode": "passthrough",
+      "passthrough": {"singles": true, "equal_weight": true, "routed": true}
+    }
+  }
+}
