@@ -159,6 +159,7 @@ t 行的标签 = 从 `close[t + delay]` 持有到 `close[t + delay + horizon]` �
 | 子目录 | 生命周期阶段 | 角色 |
 |---|---|---|
 | [`alpha_research/`](alpha_research/) | 阶段一：单因子挖掘与体检 | 按**研究线（track）**分子目录：每条线一份 `track.json`（因子范围、处理链开关、regime 维度）+ 自己的编排脚本，产出归档在自己目录下；共用的阶段一工具在 `_pipeline/`。整条流水线（阶段一 → 关卡3）的产出和阶段之间的交接文件都归档在研究线目录下。目前有 `worldquant_101/`（全流程样板）和 `custom_starter/`（自定义因子，关卡1/2 透传直达关卡3）。说明见 [`alpha_research/README.md`](alpha_research/README.md)。 |
+| [`ml_training/`](ml_training/) | ML alpha 研究线的步骤 0：滚动训练 | 按固定节奏（每 20 天）训练 LightGBM 模型、冻结成文件写进模型清单；`sherpa/alpha/custom/ml/` 的 `MLAlpha` 读清单推断，之后跟普通 alpha 一样走阶段一 → 关卡3。见 [`README.md`](ml_training/README.md)。 |
 | [`tradability_calibration/`](tradability_calibration/) | 阶段一的支撑基建校准 | 不属于任何具体因子家族，是横切的超参数研究：给 `sherpa.metrics.tradability.tradable_mask` 的 `min_percentile`/`min_quote_volume`/`min_trades_count` 做数据驱动校准，供 `alpha_research/` 下所有家族的体检复用。 |
 | [`regime_factor_report/`](regime_factor_report/) | 阶段一产出的解读/汇总层 | 通用 CLI 工具，把任意家族产出的 regime 条件 IC 长表（比如 `alpha_research/worldquant_101/regime_alpha_profile.csv`）转成人类可读的分类报告、维度宽表、状态排行榜、`04_regime_matrix.csv` 这张 12-state 作战矩阵；`--handoff-out` 同时产出给关卡1 的候选集交接文件。 |
 | [`factor_orthogonalization/`](factor_orthogonalization/) | 桥梁关卡 · 关卡1：因子相关性分析与正交化 | 读研究线的候选集交接文件（同样先中性化残差化），在每个 regime state 自己的历史切片内做截面相关聚类，标记冗余因子、推荐每簇保留信噪比最高的代表因子，保留名单写成候选集交给关卡2；可按研究线透传。以后新因子的增量检验规划见 [`INCREMENTAL_TODO.md`](factor_orthogonalization/INCREMENTAL_TODO.md)。 |

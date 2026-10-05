@@ -1,6 +1,6 @@
 # 机器学习模型作为 alpha：设计方案
 
-状态：设计稿，待确认后分阶段实现（见 §9）。本文只讲 Sherpa 里怎么落地；通用的方法综述（特征预处理、
+状态：第一版（M0 + M1）已实现，§10 是确认过的决定和跟设计稿的差异。本文只讲 Sherpa 里怎么落地；通用的方法综述（特征预处理、
 标签工程、Purge/Embargo、深度学习架构谱系）见 [`docs/factor_mining_landscape.md`](../../../docs/factor_mining_landscape.md)
 §5、§6，这里不重复。
 
@@ -120,14 +120,17 @@ BarPanel ──> 特征构建（同一个函数）──> MLAlpha.compute(panel)
 sherpa/alpha/custom/ml/                 机器学习 alpha 主题（研究线按这个包路径挑因子）
     __init__.py
     features.py     FeatureSpec + build_features(panel, spec) -> 长表；训练和推断共用，只依赖 pandas/numpy
-    labels.py       build_labels(panel, ...) -> 长表；只在训练时用，放这里是为了和特征共用预处理函数
     manifest.py     模型清单的读写与"按时间取模型"（纯 JSON，不依赖 ML 库）
     alpha.py        MLAlpha(CustomAlpha)：读清单、按行选模型、推断；lightgbm/torch 在加载模型时才 import
     models.py       具体注册的模型 alpha，比如 @register_alpha class LgbmV1(MLAlpha)
 
 research/ml_training/                   离线训练（新的研究子目录，跟各关卡平级）
-    run_training.py   按研究线配置做滚动训练，写模型文件和清单
-    config.py         重训频率、训练窗口、超参数等
+    run_training.py   按研究线配置做滚动训练，写模型文件和清单，输出每个重训时点的样本外 RankIC
+    config.py         重训频率、训练窗口、损失、超参数等
+    dataset.py        标签 + 训练集构建（只在训练时用）+ 滚动时间表
+    objective.py      IC_IR 损失（LightGBM 自定义损失和早停指标）
+    trainer.py        单个重训时点的训练 / 评估
+    data.py           取数
 ```
 
 - `custom/__init__.py` 里 import `ml` 包，下游关卡才能按名字找到这些 alpha。
@@ -146,7 +149,8 @@ research/ml_training/                   离线训练（新的研究子目录，�
 
 1. 取 `τ` 之前的数据构建特征和标签（特征构建只用 `≤ t` 的数据，标签用 `t+delay … t+delay+horizon` 的收盘价）。
 2. **Purge**：训练样本只取 `t ≤ τ − (horizon + delay)` 的行，保证每个训练标签在 `τ` 时刻都已经实现。
-3. 训练窗口内部再切一个**内部验证段**（窗口最后 15%），两段之间同样留 `horizon + delay` 根 bar 的间隔。
+3. 训练窗口内部再切一个**内部验证段**（2026-10-05 起：窗口里最近 20 天；第一版是最后 15%），两段之间同样留
+   `horizon + delay` 根 bar 的间隔。早停得到轮数后，用整个窗口按这个轮数重训，保存重训的模型。
    只用它做早停和少量超参选择。
 4. 多种子训练，保存模型文件；在清单里追加一条：
 
@@ -248,10 +252,10 @@ research_start                    validation_start                 research_end 
                     模型1 服务 [τ1, τ2)，模型2 服务 [τ2, τ3) ……（每个模型只用 τ 之前 purge 过的数据训练）
 ```
 
-| 参数 | 第一版取值（待确认） | 说明 |
+| 参数 | 第一版取值 | 说明 |
 | --- | --- | --- |
-| 重训频率 | 每月（4h 周期约 180 根 bar） | 太频繁计算量大、模型抖动大；太稀疏跟不上市况变化 |
-| 训练窗口 | 扩展窗口（从 `research_start` 到 τ）；对照跑一版滚动 12 个月 | 扩展窗口样本多、稳定；滚动窗口适应快 |
+| 重训频率 | 每 20 天（4h 周期 120 根 bar） | 加密市场变化快；太频繁计算量大、模型抖动大 |
+| 训练窗口 | 2026-10-05 起滑动 60 天（第一版是扩展窗口）；`TRAIN_WINDOW_BARS` | 滑动窗口适应快、旧数据遗忘；扩展窗口样本多、稳定 |
 | 最短训练期 | 6 个月 | 第一个 τ 之前没有模型，打分为 NaN，相当于 alpha 的 warm-up |
 | Purge | `horizon + delay` 根 bar | 跟关卡2 选择段末尾的 purge 同一口径 |
 
@@ -335,15 +339,28 @@ latest(panel):  只用"valid_from <= 最后一根 bar 时间"的最新模型推�
 
 | 里程碑 | 内容 | 产出 |
 | --- | --- | --- |
-| M0 | `features.py` / `labels.py` / `manifest.py`；把 regime 的连续状态变量暴露出来；特征缓存；point-in-time 单测 | 可以构建 `(T, N, K)` 特征面板和标签 |
-| M1 | `research/ml_training/` 滚动训练（LightGBM 回归）+ `MLAlpha` 推断 + 研究线 + 编排脚本的训练步骤 | 第一个 ML alpha 跑完整条流水线 |
+| M0 ✅ | `features.py` / `manifest.py`；regime 连续状态变量作为特征；point-in-time 和"多几列 NaN 币"单测（特征缓存待做） | 可以构建 `(T, N, K)` 特征面板和标签 |
+| M1 ✅ | `research/ml_training/` 滚动训练（LightGBM + IC_IR 损失）+ `MLAlpha` 推断 + MLalpha 研究线 + 编排脚本的步骤 0 | 第一个 ML alpha 跑完整条流水线 |
 | M2 | 消融实验：状态变量、标签中性化、回归 vs LambdaRank、输出平滑 | 结论写进研究线的结果目录 |
 | M3 | 神经网络 + 可导 IC 损失 + 换手惩罚 | 跟 M1 基线对比 |
 | M4 | 实盘重训接入（暂缓） | — |
 
-## 10. 待确认
+## 10. 已确认的决定（2026-10-01）与第一版实现
 
-1. 重训频率和训练窗口：每月、扩展窗口，可以吗？
-2. 第一版特征清单：A、C 组全上，B 组先用全部世坤因子加现有 custom 因子？
-3. 标签默认做 Beta/Size 中性化？
-4. 依赖放进 `pyproject.toml` 的 `[ml]` 可选依赖，模型文件放研究线目录下、不进 git？
+| 问题 | 决定 | 落在哪 |
+| --- | --- | --- |
+| 重训频率 / 训练窗口 | 每 20 天重训；最短训练 180 天；2026-10-05 起滑动 60 天窗口，验证段固定最近 20 天，早停后整窗重训 | `research/ml_training/config.py` |
+| 特征 | A、C 组全上；B 组用 worldquant_101 研究线关卡1 后的候选并集（13 个，关卡2 L0 用的那套），不放 custom 因子 | `sherpa/alpha/custom/ml/models.py` 的 `WORLDQUANT_L0_UNION` |
+| 标签中性化 | 留开关，默认不做；研究线外层也不中性化（`neutralize: false`） | `config.NEUTRALIZE_LABEL`、`MLalpha/track.json` |
+| 依赖 / 模型文件 | `pip install -e .[ml]`（lightgbm）；模型文件在 `research/alpha_research/MLalpha/models/<模型名>/`，不进 git，`manifest.json` 进 | `pyproject.toml`、`.gitignore` |
+| 损失 | 只看 IC_IR，不加换手惩罚；首尾加权；**计算损失前先套截面掩码**，直接用研究线的 `tradable_mask`，MLalpha 研究线设成成交额截面前一半（`min_percentile: 0.5`），流动性差的币不参与 | `objective.py`、`MLalpha/track.json` |
+
+跟设计稿的差异：
+
+- **损失（§5.1、§5.3）**：第一版就用 IC_IR 作为 LightGBM 的自定义损失，不是先做回归。每期 IC 是预测值和"掩码内截面排名后的
+  标签"的加权 Pearson 相关（可导，接近 RankIC）；首尾权重按**标签**排名给（首尾各 20%，权重 3），训练中固定。梯度用解析式，
+  二阶导取常数、梯度按均方根归一。`OBJECTIVE = "l2_rank"` 保留为对照基线（排名标签上的加权 MSE）。
+- **特征**：截面特征用排名（平移到 [-0.5, 0.5]），没有做 rank-gauss（树模型不需要）；C 组只用本身是比例或滚动分位数的量。
+- **标签**放在 `research/ml_training/dataset.py`，不在 sherpa 层：只有训练用得到。
+- **特征缓存**还没做：目前训练和推断各算一遍特征，数据量下还能接受，慢了再加。
+- B 组名单是在世坤研究线的**选择段**上挑出来的，ML alpha 在选择段的样本外表现偏乐观，**比较以验证段为准**。

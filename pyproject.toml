@@ -14,6 +14,10 @@ dependencies = [
 dev = [
     "pytest>=7.4",
 ]
+# 机器学习 alpha（sherpa/alpha/custom/ml/）：推断和 research/ml_training/ 的训练都要。`pip install -e .[ml]`
+ml = [
+    "lightgbm>=4.0",
+]
 
 [build-system]
 requires = ["setuptools>=68"]

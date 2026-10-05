@@ -47,12 +47,13 @@ def tradable_mask(
     攒够数据、或者原始数据本来就是 `NaN`（还没上市）的位置，比较运算天然给出 `False`——
     保守默认：没能正面确认流通性之前不给参与资格。
     """
-    rolling_quote_volume = quote_volume.rolling(lookback).median()
+    rolling_quote_volume = quote_volume.rolling(lookback).median() # roll会按列独立处理 lookback， 只要 该行，其中某个列的回看窗口中存在一个 NaN，该行该列得到的中位数就是 NaN
     rolling_trades_count = trades_count.rolling(lookback).median()
 
+   # Nan 与任何比较都是 False 也即 "Nan > min_quote_volume" 判定为 False
     passes_floor = (rolling_quote_volume > min_quote_volume) & (rolling_trades_count > min_trades_count)
 
-    cross_sectional_percentile = rolling_quote_volume.rank(axis=1, pct=True)
+    cross_sectional_percentile = rolling_quote_volume.rank(axis=1, pct=True) # rank 计算同理，也会跳过nan进行排序，不影响实际标的截面广度，也即未上市的币不会挤压其他上线币
     passes_percentile = cross_sectional_percentile >= min_percentile
 
     seasoned = quote_volume.notna().cumsum() > seasoning_period

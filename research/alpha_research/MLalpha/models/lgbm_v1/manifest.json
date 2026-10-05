@@ -1,0 +1,1847 @@
+{
+  "schema_version": 1,
+  "model": "lgbm_v1",
+  "feature_fingerprint": "2a138fa54fc7eae9",
+  "feature_names": [
+    "ret_1",
+    "ret_6",
+    "ret_120",
+    "vol_42",
+    "dist_high_42",
+    "dist_low_42",
+    "quote_volume_42",
+    "quote_volume_surge_6_42",
+    "taker_buy_ratio_6",
+    "oi_change_6",
+    "oi_change_42",
+    "beta",
+    "alpha:worldquant.alpha040",
+    "alpha:worldquant.alpha044",
+    "alpha:worldquant.alpha094",
+    "alpha:worldquant.alpha016",
+    "alpha:worldquant.alpha015",
+    "alpha:worldquant.alpha050",
+    "alpha:worldquant.alpha029",
+    "alpha:worldquant.alpha073",
+    "alpha:worldquant.alpha055",
+    "alpha:worldquant.alpha025",
+    "alpha:worldquant.alpha037",
+    "alpha:worldquant.alpha003",
+    "alpha:worldquant.alpha036",
+    "market:market_breadth",
+    "market:benchmark_trend_up",
+    "market:benchmark_ma_gap",
+    "market:benchmark_ret_42",
+    "market:rv_quantile",
+    "market:dispersion_quantile",
+    "market:volume_quantile",
+    "market:market_taker_buy_ratio"
+  ],
+  "config_fingerprint": "c454c2d472862f24",
+  "config": {
+    "retrain_every_bars": 120,
+    "min_train_bars": 1080,
+    "train_window_bars": 360,
+    "inner_valid_bars": 120,
+    "refit_on_full_window": true,
+    "neutralize_label": false,
+    "objective": "ic_ir",
+    "tail_quantile": 0.2,
+    "tail_weight": 3.0,
+    "min_period_rows": 20,
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "num_boost_round": 500,
+    "early_stopping_rounds": 50,
+    "lgb_params": {
+      "learning_rate": 0.05,
+      "num_leaves": 31,
+      "min_data_in_leaf": 500,
+      "feature_fraction": 0.8,
+      "bagging_fraction": 0.8,
+      "bagging_freq": 1,
+      "lambda_l2": 10.0,
+      "max_bin": 63,
+      "num_threads": 0,
+      "verbose": -1
+    },
+    "interval": "4h",
+    "research_start": "2022-01-01",
+    "horizon_bars": 1,
+    "execution_delay_bars": 1,
+    "benchmark_symbol": "BTCUSDT"
+  },
+  "entries": [
+    {
+      "valid_from": "2022-06-30T00:00:00Z",
+      "valid_until": "2022-07-20T00:00:00Z",
+      "train_rows_until": "2022-06-29T16:00:00Z",
+      "files": [
+        "20220630T0000/seed0.txt",
+        "20220630T0000/seed1.txt",
+        "20220630T0000/seed2.txt"
+      ],
+      "n_train_rows": 18360,
+      "n_inner_valid_rows": 6171,
+      "best_iterations": [
+        35,
+        13,
+        30
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.27220011159878177,
+          0.18312503641211808,
+          0.26624907816375787
+        ],
+        "n_fit_rows": 12087,
+        "n_refit_rows": 18360
+      }
+    },
+    {
+      "valid_from": "2022-07-20T00:00:00Z",
+      "valid_until": "2022-08-09T00:00:00Z",
+      "train_rows_until": "2022-07-19T16:00:00Z",
+      "files": [
+        "20220720T0000/seed0.txt",
+        "20220720T0000/seed1.txt",
+        "20220720T0000/seed2.txt"
+      ],
+      "n_train_rows": 18480,
+      "n_inner_valid_rows": 6240,
+      "best_iterations": [
+        14,
+        7,
+        8
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.1829576416294193,
+          0.12495629075266426,
+          0.03852358476650591
+        ],
+        "n_fit_rows": 12136,
+        "n_refit_rows": 18480
+      }
+    },
+    {
+      "valid_from": "2022-08-09T00:00:00Z",
+      "valid_until": "2022-08-29T00:00:00Z",
+      "train_rows_until": "2022-08-08T16:00:00Z",
+      "files": [
+        "20220809T0000/seed0.txt",
+        "20220809T0000/seed1.txt",
+        "20220809T0000/seed2.txt"
+      ],
+      "n_train_rows": 18600,
+      "n_inner_valid_rows": 6240,
+      "best_iterations": [
+        1,
+        1,
+        1
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.25330437490089125,
+          0.20094058565707548,
+          0.37539587506779787
+        ],
+        "n_fit_rows": 12256,
+        "n_refit_rows": 18600
+      }
+    },
+    {
+      "valid_from": "2022-08-29T00:00:00Z",
+      "valid_until": "2022-09-18T00:00:00Z",
+      "train_rows_until": "2022-08-28T16:00:00Z",
+      "files": [
+        "20220829T0000/seed0.txt",
+        "20220829T0000/seed1.txt",
+        "20220829T0000/seed2.txt"
+      ],
+      "n_train_rows": 18668,
+      "n_inner_valid_rows": 6240,
+      "best_iterations": [
+        1,
+        11,
+        19
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.18505066076889407,
+          0.19639883688496765,
+          0.1986101707879
+        ],
+        "n_fit_rows": 12324,
+        "n_refit_rows": 18668
+      }
+    },
+    {
+      "valid_from": "2022-09-18T00:00:00Z",
+      "valid_until": "2022-10-08T00:00:00Z",
+      "train_rows_until": "2022-09-17T16:00:00Z",
+      "files": [
+        "20220918T0000/seed0.txt",
+        "20220918T0000/seed1.txt",
+        "20220918T0000/seed2.txt"
+      ],
+      "n_train_rows": 18639,
+      "n_inner_valid_rows": 6211,
+      "best_iterations": [
+        1,
+        11,
+        12
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.3116603111190236,
+          0.2899755108969011,
+          0.3272699766486569
+        ],
+        "n_fit_rows": 12324,
+        "n_refit_rows": 18639
+      }
+    },
+    {
+      "valid_from": "2022-10-08T00:00:00Z",
+      "valid_until": "2022-10-28T00:00:00Z",
+      "train_rows_until": "2022-10-07T16:00:00Z",
+      "files": [
+        "20221008T0000/seed0.txt",
+        "20221008T0000/seed1.txt",
+        "20221008T0000/seed2.txt"
+      ],
+      "n_train_rows": 18756,
+      "n_inner_valid_rows": 6357,
+      "best_iterations": [
+        5,
+        83,
+        95
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.2807753303584274,
+          0.29027109286434133,
+          0.2569637490533625
+        ],
+        "n_fit_rows": 12295,
+        "n_refit_rows": 18756
+      }
+    },
+    {
+      "valid_from": "2022-10-28T00:00:00Z",
+      "valid_until": "2022-11-17T00:00:00Z",
+      "train_rows_until": "2022-10-27T16:00:00Z",
+      "files": [
+        "20221028T0000/seed0.txt",
+        "20221028T0000/seed1.txt",
+        "20221028T0000/seed2.txt"
+      ],
+      "n_train_rows": 19089,
+      "n_inner_valid_rows": 6573,
+      "best_iterations": [
+        12,
+        28,
+        8
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.2778528150898049,
+          0.3674347671548602,
+          0.17687982837868624
+        ],
+        "n_fit_rows": 12408,
+        "n_refit_rows": 19089
+      }
+    },
+    {
+      "valid_from": "2022-11-17T00:00:00Z",
+      "valid_until": "2022-12-07T00:00:00Z",
+      "train_rows_until": "2022-11-16T16:00:00Z",
+      "files": [
+        "20221117T0000/seed0.txt",
+        "20221117T0000/seed1.txt",
+        "20221117T0000/seed2.txt"
+      ],
+      "n_train_rows": 19532,
+      "n_inner_valid_rows": 6654,
+      "best_iterations": [
+        5,
+        14,
+        6
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.2665832701525062,
+          0.20662967346724884,
+          0.3405640645512117
+        ],
+        "n_fit_rows": 12768,
+        "n_refit_rows": 19532
+      }
+    },
+    {
+      "valid_from": "2022-12-07T00:00:00Z",
+      "valid_until": "2022-12-27T00:00:00Z",
+      "train_rows_until": "2022-12-06T16:00:00Z",
+      "files": [
+        "20221207T0000/seed0.txt",
+        "20221207T0000/seed1.txt",
+        "20221207T0000/seed2.txt"
+      ],
+      "n_train_rows": 19893,
+      "n_inner_valid_rows": 6720,
+      "best_iterations": [
+        1,
+        59,
+        3
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.3585026477362649,
+          0.3472099673860954,
+          0.372722065088163
+        ],
+        "n_fit_rows": 13061,
+        "n_refit_rows": 19893
+      }
+    },
+    {
+      "valid_from": "2022-12-27T00:00:00Z",
+      "valid_until": "2023-01-16T00:00:00Z",
+      "train_rows_until": "2022-12-26T16:00:00Z",
+      "files": [
+        "20221227T0000/seed0.txt",
+        "20221227T0000/seed1.txt",
+        "20221227T0000/seed2.txt"
+      ],
+      "n_train_rows": 20039,
+      "n_inner_valid_rows": 6720,
+      "best_iterations": [
+        17,
+        27,
+        15
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.2967245516709141,
+          0.38755562640747515,
+          0.3418075682584775
+        ],
+        "n_fit_rows": 13207,
+        "n_refit_rows": 20039
+      }
+    },
+    {
+      "valid_from": "2023-01-16T00:00:00Z",
+      "valid_until": "2023-02-05T00:00:00Z",
+      "train_rows_until": "2023-01-15T16:00:00Z",
+      "files": [
+        "20230116T0000/seed0.txt",
+        "20230116T0000/seed1.txt",
+        "20230116T0000/seed2.txt"
+      ],
+      "n_train_rows": 20104,
+      "n_inner_valid_rows": 6720,
+      "best_iterations": [
+        1,
+        24,
+        5
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.3296795022867751,
+          0.2692133834348605,
+          0.2687035368989581
+        ],
+        "n_fit_rows": 13272,
+        "n_refit_rows": 20104
+      }
+    },
+    {
+      "valid_from": "2023-02-05T00:00:00Z",
+      "valid_until": "2023-02-25T00:00:00Z",
+      "train_rows_until": "2023-02-04T16:00:00Z",
+      "files": [
+        "20230205T0000/seed0.txt",
+        "20230205T0000/seed1.txt",
+        "20230205T0000/seed2.txt"
+      ],
+      "n_train_rows": 20104,
+      "n_inner_valid_rows": 6720,
+      "best_iterations": [
+        1,
+        145,
+        1
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.38141670508421793,
+          0.2689144143302092,
+          0.3778533930810462
+        ],
+        "n_fit_rows": 13272,
+        "n_refit_rows": 20104
+      }
+    },
+    {
+      "valid_from": "2023-02-25T00:00:00Z",
+      "valid_until": "2023-03-17T00:00:00Z",
+      "train_rows_until": "2023-02-24T16:00:00Z",
+      "files": [
+        "20230225T0000/seed0.txt",
+        "20230225T0000/seed1.txt",
+        "20230225T0000/seed2.txt"
+      ],
+      "n_train_rows": 20239,
+      "n_inner_valid_rows": 6855,
+      "best_iterations": [
+        81,
+        1,
+        3
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.3491434445771897,
+          0.32772834713683313,
+          0.2618612369380306
+        ],
+        "n_fit_rows": 13272,
+        "n_refit_rows": 20239
+      }
+    },
+    {
+      "valid_from": "2023-03-17T00:00:00Z",
+      "valid_until": "2023-04-06T00:00:00Z",
+      "train_rows_until": "2023-03-16T16:00:00Z",
+      "files": [
+        "20230317T0000/seed0.txt",
+        "20230317T0000/seed1.txt",
+        "20230317T0000/seed2.txt"
+      ],
+      "n_train_rows": 20548,
+      "n_inner_valid_rows": 7029,
+      "best_iterations": [
+        3,
+        7,
+        1
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.1695402856411917,
+          0.18220717040198386,
+          0.1421212429336322
+        ],
+        "n_fit_rows": 13403,
+        "n_refit_rows": 20548
+      }
+    },
+    {
+      "valid_from": "2023-04-06T00:00:00Z",
+      "valid_until": "2023-04-26T00:00:00Z",
+      "train_rows_until": "2023-04-05T16:00:00Z",
+      "files": [
+        "20230406T0000/seed0.txt",
+        "20230406T0000/seed1.txt",
+        "20230406T0000/seed2.txt"
+      ],
+      "n_train_rows": 21187,
+      "n_inner_valid_rows": 7359,
+      "best_iterations": [
+        11,
+        10,
+        3
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.2834948815618337,
+          0.32489126477747327,
+          0.255304098160529
+        ],
+        "n_fit_rows": 13706,
+        "n_refit_rows": 21187
+      }
+    },
+    {
+      "valid_from": "2023-04-26T00:00:00Z",
+      "valid_until": "2023-05-16T00:00:00Z",
+      "train_rows_until": "2023-04-25T16:00:00Z",
+      "files": [
+        "20230426T0000/seed0.txt",
+        "20230426T0000/seed1.txt",
+        "20230426T0000/seed2.txt"
+      ],
+      "n_train_rows": 21896,
+      "n_inner_valid_rows": 7566,
+      "best_iterations": [
+        113,
+        1,
+        21
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.3322916601984702,
+          0.3619787671576375,
+          0.37716787794560097
+        ],
+        "n_fit_rows": 14206,
+        "n_refit_rows": 21896
+      }
+    },
+    {
+      "valid_from": "2023-05-16T00:00:00Z",
+      "valid_until": "2023-06-05T00:00:00Z",
+      "train_rows_until": "2023-05-15T16:00:00Z",
+      "files": [
+        "20230516T0000/seed0.txt",
+        "20230516T0000/seed1.txt",
+        "20230516T0000/seed2.txt"
+      ],
+      "n_train_rows": 22622,
+      "n_inner_valid_rows": 7758,
+      "best_iterations": [
+        12,
+        22,
+        9
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.43051156995320233,
+          0.28102028168557286,
+          0.26845623498419213
+        ],
+        "n_fit_rows": 14736,
+        "n_refit_rows": 22622
+      }
+    },
+    {
+      "valid_from": "2023-06-05T00:00:00Z",
+      "valid_until": "2023-06-25T00:00:00Z",
+      "train_rows_until": "2023-06-04T16:00:00Z",
+      "files": [
+        "20230605T0000/seed0.txt",
+        "20230605T0000/seed1.txt",
+        "20230605T0000/seed2.txt"
+      ],
+      "n_train_rows": 23250,
+      "n_inner_valid_rows": 7988,
+      "best_iterations": [
+        9,
+        95,
+        1
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.41943475240400657,
+          0.4148430758215349,
+          0.4643719308572563
+        ],
+        "n_fit_rows": 15132,
+        "n_refit_rows": 23250
+      }
+    },
+    {
+      "valid_from": "2023-06-25T00:00:00Z",
+      "valid_until": "2023-07-15T00:00:00Z",
+      "train_rows_until": "2023-06-24T16:00:00Z",
+      "files": [
+        "20230625T0000/seed0.txt",
+        "20230625T0000/seed1.txt",
+        "20230625T0000/seed2.txt"
+      ],
+      "n_train_rows": 23842,
+      "n_inner_valid_rows": 8160,
+      "best_iterations": [
+        5,
+        5,
+        4
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.20155701420776143,
+          0.11837876959184412,
+          0.24544964993350374
+        ],
+        "n_fit_rows": 15546,
+        "n_refit_rows": 23842
+      }
+    },
+    {
+      "valid_from": "2023-07-15T00:00:00Z",
+      "valid_until": "2023-08-04T00:00:00Z",
+      "train_rows_until": "2023-07-14T16:00:00Z",
+      "files": [
+        "20230715T0000/seed0.txt",
+        "20230715T0000/seed1.txt",
+        "20230715T0000/seed2.txt"
+      ],
+      "n_train_rows": 24243,
+      "n_inner_valid_rows": 8160,
+      "best_iterations": [
+        2,
+        6,
+        1
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.2758866232333138,
+          0.3560398739499141,
+          0.24140316576211332
+        ],
+        "n_fit_rows": 15947,
+        "n_refit_rows": 24243
+      }
+    },
+    {
+      "valid_from": "2023-08-04T00:00:00Z",
+      "valid_until": "2023-08-24T00:00:00Z",
+      "train_rows_until": "2023-08-03T16:00:00Z",
+      "files": [
+        "20230804T0000/seed0.txt",
+        "20230804T0000/seed1.txt",
+        "20230804T0000/seed2.txt"
+      ],
+      "n_train_rows": 24505,
+      "n_inner_valid_rows": 8253,
+      "best_iterations": [
+        1,
+        1,
+        56
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.2873529508913199,
+          0.3946922616877875,
+          0.3491949852524933
+        ],
+        "n_fit_rows": 16116,
+        "n_refit_rows": 24505
+      }
+    },
+    {
+      "valid_from": "2023-08-24T00:00:00Z",
+      "valid_until": "2023-09-13T00:00:00Z",
+      "train_rows_until": "2023-08-23T16:00:00Z",
+      "files": [
+        "20230824T0000/seed0.txt",
+        "20230824T0000/seed1.txt",
+        "20230824T0000/seed2.txt"
+      ],
+      "n_train_rows": 24730,
+      "n_inner_valid_rows": 8385,
+      "best_iterations": [
+        1,
+        57,
+        40
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.061853761448585336,
+          0.2115393516969422,
+          0.21930888756913872
+        ],
+        "n_fit_rows": 16207,
+        "n_refit_rows": 24730
+      }
+    },
+    {
+      "valid_from": "2023-09-13T00:00:00Z",
+      "valid_until": "2023-10-03T00:00:00Z",
+      "train_rows_until": "2023-09-12T16:00:00Z",
+      "files": [
+        "20230913T0000/seed0.txt",
+        "20230913T0000/seed1.txt",
+        "20230913T0000/seed2.txt"
+      ],
+      "n_train_rows": 25300,
+      "n_inner_valid_rows": 8730,
+      "best_iterations": [
+        182,
+        1,
+        59
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.15165375784005072,
+          0.17581941189988157,
+          0.13761407463181466
+        ],
+        "n_fit_rows": 16428,
+        "n_refit_rows": 25300
+      }
+    },
+    {
+      "valid_from": "2023-10-03T00:00:00Z",
+      "valid_until": "2023-10-23T00:00:00Z",
+      "train_rows_until": "2023-10-02T16:00:00Z",
+      "files": [
+        "20231003T0000/seed0.txt",
+        "20231003T0000/seed1.txt",
+        "20231003T0000/seed2.txt"
+      ],
+      "n_train_rows": 25926,
+      "n_inner_valid_rows": 8880,
+      "best_iterations": [
+        3,
+        5,
+        3
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.17394390362307732,
+          0.11625336790264867,
+          0.21604111469928042
+        ],
+        "n_fit_rows": 16898,
+        "n_refit_rows": 25926
+      }
+    },
+    {
+      "valid_from": "2023-10-23T00:00:00Z",
+      "valid_until": "2023-11-12T00:00:00Z",
+      "train_rows_until": "2023-10-22T16:00:00Z",
+      "files": [
+        "20231023T0000/seed0.txt",
+        "20231023T0000/seed1.txt",
+        "20231023T0000/seed2.txt"
+      ],
+      "n_train_rows": 26446,
+      "n_inner_valid_rows": 8907,
+      "best_iterations": [
+        36,
+        25,
+        1
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.06658025353487979,
+          0.20075495166947316,
+          0.1543580770540255
+        ],
+        "n_fit_rows": 17391,
+        "n_refit_rows": 26446
+      }
+    },
+    {
+      "valid_from": "2023-11-12T00:00:00Z",
+      "valid_until": "2023-12-02T00:00:00Z",
+      "train_rows_until": "2023-11-11T16:00:00Z",
+      "files": [
+        "20231112T0000/seed0.txt",
+        "20231112T0000/seed1.txt",
+        "20231112T0000/seed2.txt"
+      ],
+      "n_train_rows": 26749,
+      "n_inner_valid_rows": 9036,
+      "best_iterations": [
+        9,
+        5,
+        1
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.3623360853484172,
+          0.2938666932029067,
+          0.3598387672777975
+        ],
+        "n_fit_rows": 17563,
+        "n_refit_rows": 26749
+      }
+    },
+    {
+      "valid_from": "2023-12-02T00:00:00Z",
+      "valid_until": "2023-12-22T00:00:00Z",
+      "train_rows_until": "2023-12-01T16:00:00Z",
+      "files": [
+        "20231202T0000/seed0.txt",
+        "20231202T0000/seed1.txt",
+        "20231202T0000/seed2.txt"
+      ],
+      "n_train_rows": 27415,
+      "n_inner_valid_rows": 9546,
+      "best_iterations": [
+        27,
+        1,
+        19
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.2698581115959063,
+          0.22820891419924935,
+          0.24421596254647454
+        ],
+        "n_fit_rows": 17715,
+        "n_refit_rows": 27415
+      }
+    },
+    {
+      "valid_from": "2023-12-22T00:00:00Z",
+      "valid_until": "2024-01-11T00:00:00Z",
+      "train_rows_until": "2023-12-21T16:00:00Z",
+      "files": [
+        "20231222T0000/seed0.txt",
+        "20231222T0000/seed1.txt",
+        "20231222T0000/seed2.txt"
+      ],
+      "n_train_rows": 28554,
+      "n_inner_valid_rows": 10047,
+      "best_iterations": [
+        13,
+        141,
+        3
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.20543818729059413,
+          0.43604346940321326,
+          0.2304312433700863
+        ],
+        "n_fit_rows": 18343,
+        "n_refit_rows": 28554
+      }
+    },
+    {
+      "valid_from": "2024-01-11T00:00:00Z",
+      "valid_until": "2024-01-31T00:00:00Z",
+      "train_rows_until": "2024-01-10T16:00:00Z",
+      "files": [
+        "20240111T0000/seed0.txt",
+        "20240111T0000/seed1.txt",
+        "20240111T0000/seed2.txt"
+      ],
+      "n_train_rows": 29979,
+      "n_inner_valid_rows": 10463,
+      "best_iterations": [
+        35,
+        7,
+        11
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.3944849347086818,
+          0.3854459864143928,
+          0.27780293344992385
+        ],
+        "n_fit_rows": 19344,
+        "n_refit_rows": 29979
+      }
+    },
+    {
+      "valid_from": "2024-01-31T00:00:00Z",
+      "valid_until": "2024-02-20T00:00:00Z",
+      "train_rows_until": "2024-01-30T16:00:00Z",
+      "files": [
+        "20240131T0000/seed0.txt",
+        "20240131T0000/seed1.txt",
+        "20240131T0000/seed2.txt"
+      ],
+      "n_train_rows": 31117,
+      "n_inner_valid_rows": 10689,
+      "best_iterations": [
+        1,
+        5,
+        1
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.43833019413275137,
+          0.5117946792319489,
+          0.2958175758128612
+        ],
+        "n_fit_rows": 20250,
+        "n_refit_rows": 31117
+      }
+    },
+    {
+      "valid_from": "2024-02-20T00:00:00Z",
+      "valid_until": "2024-03-11T00:00:00Z",
+      "train_rows_until": "2024-02-19T16:00:00Z",
+      "files": [
+        "20240220T0000/seed0.txt",
+        "20240220T0000/seed1.txt",
+        "20240220T0000/seed2.txt"
+      ],
+      "n_train_rows": 31974,
+      "n_inner_valid_rows": 10908,
+      "best_iterations": [
+        57,
+        1,
+        3
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.35373635257636726,
+          0.2608669695829035,
+          0.3723816372864211
+        ],
+        "n_fit_rows": 20886,
+        "n_refit_rows": 31974
+      }
+    },
+    {
+      "valid_from": "2024-03-11T00:00:00Z",
+      "valid_until": "2024-03-31T00:00:00Z",
+      "train_rows_until": "2024-03-10T16:00:00Z",
+      "files": [
+        "20240311T0000/seed0.txt",
+        "20240311T0000/seed1.txt",
+        "20240311T0000/seed2.txt"
+      ],
+      "n_train_rows": 32750,
+      "n_inner_valid_rows": 11242,
+      "best_iterations": [
+        121,
+        33,
+        57
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.31716178858055066,
+          0.22563767346396849,
+          0.21761212454597262
+        ],
+        "n_fit_rows": 21324,
+        "n_refit_rows": 32750
+      }
+    },
+    {
+      "valid_from": "2024-03-31T00:00:00Z",
+      "valid_until": "2024-04-20T00:00:00Z",
+      "train_rows_until": "2024-03-30T16:00:00Z",
+      "files": [
+        "20240331T0000/seed0.txt",
+        "20240331T0000/seed1.txt",
+        "20240331T0000/seed2.txt"
+      ],
+      "n_train_rows": 33635,
+      "n_inner_valid_rows": 11575,
+      "best_iterations": [
+        15,
+        1,
+        23
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.42588059991227956,
+          0.40599473209219505,
+          0.4129344885147694
+        ],
+        "n_fit_rows": 21870,
+        "n_refit_rows": 33635
+      }
+    },
+    {
+      "valid_from": "2024-04-20T00:00:00Z",
+      "valid_until": "2024-05-10T00:00:00Z",
+      "train_rows_until": "2024-04-19T16:00:00Z",
+      "files": [
+        "20240420T0000/seed0.txt",
+        "20240420T0000/seed1.txt",
+        "20240420T0000/seed2.txt"
+      ],
+      "n_train_rows": 34564,
+      "n_inner_valid_rows": 11839,
+      "best_iterations": [
+        81,
+        3,
+        7
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.43232356224815943,
+          0.344582734430885,
+          0.35298529349982316
+        ],
+        "n_fit_rows": 22531,
+        "n_refit_rows": 34564
+      }
+    },
+    {
+      "valid_from": "2024-05-10T00:00:00Z",
+      "valid_until": "2024-05-30T00:00:00Z",
+      "train_rows_until": "2024-05-09T16:00:00Z",
+      "files": [
+        "20240510T0000/seed0.txt",
+        "20240510T0000/seed1.txt",
+        "20240510T0000/seed2.txt"
+      ],
+      "n_train_rows": 35423,
+      "n_inner_valid_rows": 12104,
+      "best_iterations": [
+        21,
+        212,
+        53
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.14457285153341567,
+          0.2354561573995797,
+          0.19386371475311673
+        ],
+        "n_fit_rows": 23121,
+        "n_refit_rows": 35423
+      }
+    },
+    {
+      "valid_from": "2024-05-30T00:00:00Z",
+      "valid_until": "2024-06-19T00:00:00Z",
+      "train_rows_until": "2024-05-29T16:00:00Z",
+      "files": [
+        "20240530T0000/seed0.txt",
+        "20240530T0000/seed1.txt",
+        "20240530T0000/seed2.txt"
+      ],
+      "n_train_rows": 36086,
+      "n_inner_valid_rows": 12240,
+      "best_iterations": [
+        1,
+        8,
+        12
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.1964122132637055,
+          0.30562647199163767,
+          0.23483932433720464
+        ],
+        "n_fit_rows": 23642,
+        "n_refit_rows": 36086
+      }
+    },
+    {
+      "valid_from": "2024-06-19T00:00:00Z",
+      "valid_until": "2024-07-09T00:00:00Z",
+      "train_rows_until": "2024-06-18T16:00:00Z",
+      "files": [
+        "20240619T0000/seed0.txt",
+        "20240619T0000/seed1.txt",
+        "20240619T0000/seed2.txt"
+      ],
+      "n_train_rows": 36584,
+      "n_inner_valid_rows": 12339,
+      "best_iterations": [
+        21,
+        15,
+        1
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.275296555467602,
+          0.3201475199813881,
+          0.24061792827412762
+        ],
+        "n_fit_rows": 24041,
+        "n_refit_rows": 36584
+      }
+    },
+    {
+      "valid_from": "2024-07-09T00:00:00Z",
+      "valid_until": "2024-07-29T00:00:00Z",
+      "train_rows_until": "2024-07-08T16:00:00Z",
+      "files": [
+        "20240709T0000/seed0.txt",
+        "20240709T0000/seed1.txt",
+        "20240709T0000/seed2.txt"
+      ],
+      "n_train_rows": 36964,
+      "n_inner_valid_rows": 12487,
+      "best_iterations": [
+        61,
+        9,
+        9
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.18886186582624795,
+          0.20330402087636362,
+          0.22913789840032636
+        ],
+        "n_fit_rows": 24271,
+        "n_refit_rows": 36964
+      }
+    },
+    {
+      "valid_from": "2024-07-29T00:00:00Z",
+      "valid_until": "2024-08-18T00:00:00Z",
+      "train_rows_until": "2024-07-28T16:00:00Z",
+      "files": [
+        "20240729T0000/seed0.txt",
+        "20240729T0000/seed1.txt",
+        "20240729T0000/seed2.txt"
+      ],
+      "n_train_rows": 37435,
+      "n_inner_valid_rows": 12711,
+      "best_iterations": [
+        15,
+        68,
+        6
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.30844295648589726,
+          0.23617019440059803,
+          0.15289911666152675
+        ],
+        "n_fit_rows": 24514,
+        "n_refit_rows": 37435
+      }
+    },
+    {
+      "valid_from": "2024-08-18T00:00:00Z",
+      "valid_until": "2024-09-07T00:00:00Z",
+      "train_rows_until": "2024-08-17T16:00:00Z",
+      "files": [
+        "20240818T0000/seed0.txt",
+        "20240818T0000/seed1.txt",
+        "20240818T0000/seed2.txt"
+      ],
+      "n_train_rows": 37831,
+      "n_inner_valid_rows": 12736,
+      "best_iterations": [
+        37,
+        9,
+        7
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.3717560929336927,
+          0.26236456708834055,
+          0.2508749739574704
+        ],
+        "n_fit_rows": 24883,
+        "n_refit_rows": 37831
+      }
+    },
+    {
+      "valid_from": "2024-09-07T00:00:00Z",
+      "valid_until": "2024-09-27T00:00:00Z",
+      "train_rows_until": "2024-09-06T16:00:00Z",
+      "files": [
+        "20240907T0000/seed0.txt",
+        "20240907T0000/seed1.txt",
+        "20240907T0000/seed2.txt"
+      ],
+      "n_train_rows": 38206,
+      "n_inner_valid_rows": 12864,
+      "best_iterations": [
+        14,
+        1,
+        12
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.2771311603786588,
+          0.27919467241107043,
+          0.24234007751134815
+        ],
+        "n_fit_rows": 25128,
+        "n_refit_rows": 38206
+      }
+    },
+    {
+      "valid_from": "2024-09-27T00:00:00Z",
+      "valid_until": "2024-10-17T00:00:00Z",
+      "train_rows_until": "2024-09-26T16:00:00Z",
+      "files": [
+        "20240927T0000/seed0.txt",
+        "20240927T0000/seed1.txt",
+        "20240927T0000/seed2.txt"
+      ],
+      "n_train_rows": 38736,
+      "n_inner_valid_rows": 13242,
+      "best_iterations": [
+        2,
+        43,
+        1
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.05744239459716072,
+          0.13810225990137381,
+          0.19912296285745087
+        ],
+        "n_fit_rows": 25276,
+        "n_refit_rows": 38736
+      }
+    },
+    {
+      "valid_from": "2024-10-17T00:00:00Z",
+      "valid_until": "2024-11-06T00:00:00Z",
+      "train_rows_until": "2024-10-16T16:00:00Z",
+      "files": [
+        "20241017T0000/seed0.txt",
+        "20241017T0000/seed1.txt",
+        "20241017T0000/seed2.txt"
+      ],
+      "n_train_rows": 39536,
+      "n_inner_valid_rows": 13537,
+      "best_iterations": [
+        8,
+        9,
+        2
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.18389944574569056,
+          0.19773860947467964,
+          0.21084782186176598
+        ],
+        "n_fit_rows": 25777,
+        "n_refit_rows": 39536
+      }
+    },
+    {
+      "valid_from": "2024-11-06T00:00:00Z",
+      "valid_until": "2024-11-26T00:00:00Z",
+      "train_rows_until": "2024-11-05T16:00:00Z",
+      "files": [
+        "20241106T0000/seed0.txt",
+        "20241106T0000/seed1.txt",
+        "20241106T0000/seed2.txt"
+      ],
+      "n_train_rows": 40557,
+      "n_inner_valid_rows": 13887,
+      "best_iterations": [
+        5,
+        1,
+        3
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.4354716799641033,
+          0.4328274985703469,
+          0.246178729375728
+        ],
+        "n_fit_rows": 26440,
+        "n_refit_rows": 40557
+      }
+    },
+    {
+      "valid_from": "2024-11-26T00:00:00Z",
+      "valid_until": "2024-12-16T00:00:00Z",
+      "train_rows_until": "2024-11-25T16:00:00Z",
+      "files": [
+        "20241126T0000/seed0.txt",
+        "20241126T0000/seed1.txt",
+        "20241126T0000/seed2.txt"
+      ],
+      "n_train_rows": 41442,
+      "n_inner_valid_rows": 14129,
+      "best_iterations": [
+        3,
+        10,
+        14
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.23504276562398715,
+          0.3968256755823096,
+          0.2751839209707505
+        ],
+        "n_fit_rows": 27081,
+        "n_refit_rows": 41442
+      }
+    },
+    {
+      "valid_from": "2024-12-16T00:00:00Z",
+      "valid_until": "2025-01-05T00:00:00Z",
+      "train_rows_until": "2024-12-15T16:00:00Z",
+      "files": [
+        "20241216T0000/seed0.txt",
+        "20241216T0000/seed1.txt",
+        "20241216T0000/seed2.txt"
+      ],
+      "n_train_rows": 42540,
+      "n_inner_valid_rows": 14639,
+      "best_iterations": [
+        1,
+        9,
+        1
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.2890739603310605,
+          0.25058009556936656,
+          0.27908297477716093
+        ],
+        "n_fit_rows": 27663,
+        "n_refit_rows": 42540
+      }
+    },
+    {
+      "valid_from": "2025-01-05T00:00:00Z",
+      "valid_until": "2025-01-25T00:00:00Z",
+      "train_rows_until": "2025-01-04T16:00:00Z",
+      "files": [
+        "20250105T0000/seed0.txt",
+        "20250105T0000/seed1.txt",
+        "20250105T0000/seed2.txt"
+      ],
+      "n_train_rows": 43881,
+      "n_inner_valid_rows": 15229,
+      "best_iterations": [
+        2,
+        3,
+        2
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.31225080755560114,
+          0.44013655656692136,
+          0.34778080191655814
+        ],
+        "n_fit_rows": 28404,
+        "n_refit_rows": 43881
+      }
+    },
+    {
+      "valid_from": "2025-01-25T00:00:00Z",
+      "valid_until": "2025-02-14T00:00:00Z",
+      "train_rows_until": "2025-01-24T16:00:00Z",
+      "files": [
+        "20250125T0000/seed0.txt",
+        "20250125T0000/seed1.txt",
+        "20250125T0000/seed2.txt"
+      ],
+      "n_train_rows": 46001,
+      "n_inner_valid_rows": 16252,
+      "best_iterations": [
+        36,
+        56,
+        8
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.2546280042770036,
+          0.36525611875555786,
+          0.3875443596362272
+        ],
+        "n_fit_rows": 29487,
+        "n_refit_rows": 46001
+      }
+    },
+    {
+      "valid_from": "2025-02-14T00:00:00Z",
+      "valid_until": "2025-03-06T00:00:00Z",
+      "train_rows_until": "2025-02-13T16:00:00Z",
+      "files": [
+        "20250214T0000/seed0.txt",
+        "20250214T0000/seed1.txt",
+        "20250214T0000/seed2.txt"
+      ],
+      "n_train_rows": 48311,
+      "n_inner_valid_rows": 16954,
+      "best_iterations": [
+        1,
+        44,
+        1
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.2673395306309434,
+          0.3484190651165085,
+          0.29818903367190414
+        ],
+        "n_fit_rows": 31081,
+        "n_refit_rows": 48311
+      }
+    },
+    {
+      "valid_from": "2025-03-06T00:00:00Z",
+      "valid_until": "2025-03-26T00:00:00Z",
+      "train_rows_until": "2025-03-05T16:00:00Z",
+      "files": [
+        "20250306T0000/seed0.txt",
+        "20250306T0000/seed1.txt",
+        "20250306T0000/seed2.txt"
+      ],
+      "n_train_rows": 50600,
+      "n_inner_valid_rows": 17525,
+      "best_iterations": [
+        3,
+        68,
+        21
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.33772172585762245,
+          0.23470369983267433,
+          0.23307281126121024
+        ],
+        "n_fit_rows": 32785,
+        "n_refit_rows": 50600
+      }
+    },
+    {
+      "valid_from": "2025-03-26T00:00:00Z",
+      "valid_until": "2025-04-15T00:00:00Z",
+      "train_rows_until": "2025-03-25T16:00:00Z",
+      "files": [
+        "20250326T0000/seed0.txt",
+        "20250326T0000/seed1.txt",
+        "20250326T0000/seed2.txt"
+      ],
+      "n_train_rows": 52199,
+      "n_inner_valid_rows": 17858,
+      "best_iterations": [
+        1,
+        1,
+        1
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.2848129976857627,
+          0.3559083785551872,
+          0.26128419197198616
+        ],
+        "n_fit_rows": 34045,
+        "n_refit_rows": 52199
+      }
+    },
+    {
+      "valid_from": "2025-04-15T00:00:00Z",
+      "valid_until": "2025-05-05T00:00:00Z",
+      "train_rows_until": "2025-04-14T16:00:00Z",
+      "files": [
+        "20250415T0000/seed0.txt",
+        "20250415T0000/seed1.txt",
+        "20250415T0000/seed2.txt"
+      ],
+      "n_train_rows": 53359,
+      "n_inner_valid_rows": 18121,
+      "best_iterations": [
+        34,
+        5,
+        21
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.33748969048419614,
+          0.3245707381609642,
+          0.2845271737874763
+        ],
+        "n_fit_rows": 34940,
+        "n_refit_rows": 53359
+      }
+    },
+    {
+      "valid_from": "2025-05-05T00:00:00Z",
+      "valid_until": "2025-05-25T00:00:00Z",
+      "train_rows_until": "2025-05-04T16:00:00Z",
+      "files": [
+        "20250505T0000/seed0.txt",
+        "20250505T0000/seed1.txt",
+        "20250505T0000/seed2.txt"
+      ],
+      "n_train_rows": 54883,
+      "n_inner_valid_rows": 19052,
+      "best_iterations": [
+        1,
+        15,
+        15
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.23647432104716418,
+          0.35648630068567594,
+          0.19784076182879726
+        ],
+        "n_fit_rows": 35519,
+        "n_refit_rows": 54883
+      }
+    },
+    {
+      "valid_from": "2025-05-25T00:00:00Z",
+      "valid_until": "2025-06-14T00:00:00Z",
+      "train_rows_until": "2025-05-24T16:00:00Z",
+      "files": [
+        "20250525T0000/seed0.txt",
+        "20250525T0000/seed1.txt",
+        "20250525T0000/seed2.txt"
+      ],
+      "n_train_rows": 56701,
+      "n_inner_valid_rows": 19677,
+      "best_iterations": [
+        10,
+        1,
+        20
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.27511315288443877,
+          0.2893929747203117,
+          0.19701074412588673
+        ],
+        "n_fit_rows": 36702,
+        "n_refit_rows": 56701
+      }
+    },
+    {
+      "valid_from": "2025-06-14T00:00:00Z",
+      "valid_until": "2025-07-04T00:00:00Z",
+      "train_rows_until": "2025-06-13T16:00:00Z",
+      "files": [
+        "20250614T0000/seed0.txt",
+        "20250614T0000/seed1.txt",
+        "20250614T0000/seed2.txt"
+      ],
+      "n_train_rows": 59083,
+      "n_inner_valid_rows": 20510,
+      "best_iterations": [
+        9,
+        1,
+        3
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.26880677109428425,
+          0.2287677261820698,
+          0.3292899029149183
+        ],
+        "n_fit_rows": 38239,
+        "n_refit_rows": 59083
+      }
+    },
+    {
+      "valid_from": "2025-07-04T00:00:00Z",
+      "valid_until": "2025-07-24T00:00:00Z",
+      "train_rows_until": "2025-07-03T16:00:00Z",
+      "files": [
+        "20250704T0000/seed0.txt",
+        "20250704T0000/seed1.txt",
+        "20250704T0000/seed2.txt"
+      ],
+      "n_train_rows": 61193,
+      "n_inner_valid_rows": 21167,
+      "best_iterations": [
+        165,
+        5,
+        1
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.3523423580789854,
+          0.22589003055689336,
+          0.3154242779421528
+        ],
+        "n_fit_rows": 39678,
+        "n_refit_rows": 61193
+      }
+    },
+    {
+      "valid_from": "2025-07-24T00:00:00Z",
+      "valid_until": "2025-08-13T00:00:00Z",
+      "train_rows_until": "2025-07-23T16:00:00Z",
+      "files": [
+        "20250724T0000/seed0.txt",
+        "20250724T0000/seed1.txt",
+        "20250724T0000/seed2.txt"
+      ],
+      "n_train_rows": 63257,
+      "n_inner_valid_rows": 21747,
+      "best_iterations": [
+        1,
+        59,
+        4
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.2813154284383277,
+          0.3701927285750286,
+          0.22158572968778087
+        ],
+        "n_fit_rows": 41150,
+        "n_refit_rows": 63257
+      }
+    },
+    {
+      "valid_from": "2025-08-13T00:00:00Z",
+      "valid_until": "2025-09-02T00:00:00Z",
+      "train_rows_until": "2025-08-12T16:00:00Z",
+      "files": [
+        "20250813T0000/seed0.txt",
+        "20250813T0000/seed1.txt",
+        "20250813T0000/seed2.txt"
+      ],
+      "n_train_rows": 64958,
+      "n_inner_valid_rows": 22218,
+      "best_iterations": [
+        10,
+        6,
+        1
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.2308840714510064,
+          0.3001978152088142,
+          0.39004682326113077
+        ],
+        "n_fit_rows": 42376,
+        "n_refit_rows": 64958
+      }
+    },
+    {
+      "valid_from": "2025-09-02T00:00:00Z",
+      "valid_until": "2025-09-22T00:00:00Z",
+      "train_rows_until": "2025-09-01T16:00:00Z",
+      "files": [
+        "20250902T0000/seed0.txt",
+        "20250902T0000/seed1.txt",
+        "20250902T0000/seed2.txt"
+      ],
+      "n_train_rows": 66738,
+      "n_inner_valid_rows": 22953,
+      "best_iterations": [
+        113,
+        30,
+        27
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.39854818851532,
+          0.4394800798566127,
+          0.410441161736221
+        ],
+        "n_fit_rows": 43409,
+        "n_refit_rows": 66738
+      }
+    },
+    {
+      "valid_from": "2025-09-22T00:00:00Z",
+      "valid_until": "2025-10-12T00:00:00Z",
+      "train_rows_until": "2025-09-21T16:00:00Z",
+      "files": [
+        "20250922T0000/seed0.txt",
+        "20250922T0000/seed1.txt",
+        "20250922T0000/seed2.txt"
+      ],
+      "n_train_rows": 68588,
+      "n_inner_valid_rows": 23599,
+      "best_iterations": [
+        1,
+        1,
+        2
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.35684066989876645,
+          0.2168050651647993,
+          0.31505801398509375
+        ],
+        "n_fit_rows": 44601,
+        "n_refit_rows": 68588
+      }
+    },
+    {
+      "valid_from": "2025-10-12T00:00:00Z",
+      "valid_until": "2025-11-01T00:00:00Z",
+      "train_rows_until": "2025-10-11T16:00:00Z",
+      "files": [
+        "20251012T0000/seed0.txt",
+        "20251012T0000/seed1.txt",
+        "20251012T0000/seed2.txt"
+      ],
+      "n_train_rows": 70902,
+      "n_inner_valid_rows": 24538,
+      "best_iterations": [
+        1,
+        25,
+        22
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.5864350718119459,
+          0.5557683611278744,
+          0.4576222010080618
+        ],
+        "n_fit_rows": 45964,
+        "n_refit_rows": 70902
+      }
+    },
+    {
+      "valid_from": "2025-11-01T00:00:00Z",
+      "valid_until": "2025-11-21T00:00:00Z",
+      "train_rows_until": "2025-10-31T16:00:00Z",
+      "files": [
+        "20251101T0000/seed0.txt",
+        "20251101T0000/seed1.txt",
+        "20251101T0000/seed2.txt"
+      ],
+      "n_train_rows": 73735,
+      "n_inner_valid_rows": 25792,
+      "best_iterations": [
+        5,
+        1,
+        7
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.34392666963286794,
+          0.2525870167285387,
+          0.4197983344823184
+        ],
+        "n_fit_rows": 47525,
+        "n_refit_rows": 73735
+      }
+    },
+    {
+      "valid_from": "2025-11-21T00:00:00Z",
+      "valid_until": "2025-12-11T00:00:00Z",
+      "train_rows_until": "2025-11-20T16:00:00Z",
+      "files": [
+        "20251121T0000/seed0.txt",
+        "20251121T0000/seed1.txt",
+        "20251121T0000/seed2.txt"
+      ],
+      "n_train_rows": 77057,
+      "n_inner_valid_rows": 26927,
+      "best_iterations": [
+        32,
+        1,
+        7
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.6994451374213707,
+          0.5955328623552071,
+          0.5248909654865471
+        ],
+        "n_fit_rows": 49690,
+        "n_refit_rows": 77057
+      }
+    },
+    {
+      "valid_from": "2025-12-11T00:00:00Z",
+      "valid_until": "2025-12-31T00:00:00Z",
+      "train_rows_until": "2025-12-10T16:00:00Z",
+      "files": [
+        "20251211T0000/seed0.txt",
+        "20251211T0000/seed1.txt",
+        "20251211T0000/seed2.txt"
+      ],
+      "n_train_rows": 80206,
+      "n_inner_valid_rows": 27696,
+      "best_iterations": [
+        1,
+        1,
+        1
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.6587702525740998,
+          0.6118196121946695,
+          0.6143935601828078
+        ],
+        "n_fit_rows": 52054,
+        "n_refit_rows": 80206
+      }
+    },
+    {
+      "valid_from": "2025-12-31T00:00:00Z",
+      "valid_until": "2026-01-20T00:00:00Z",
+      "train_rows_until": "2025-12-30T16:00:00Z",
+      "files": [
+        "20251231T0000/seed0.txt",
+        "20251231T0000/seed1.txt",
+        "20251231T0000/seed2.txt"
+      ],
+      "n_train_rows": 82434,
+      "n_inner_valid_rows": 28031,
+      "best_iterations": [
+        4,
+        28,
+        9
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.4085436356233902,
+          0.38441355005977323,
+          0.3568255641960478
+        ],
+        "n_fit_rows": 53937,
+        "n_refit_rows": 82434
+      }
+    },
+    {
+      "valid_from": "2026-01-20T00:00:00Z",
+      "valid_until": "2026-02-09T00:00:00Z",
+      "train_rows_until": "2026-01-19T16:00:00Z",
+      "files": [
+        "20260120T0000/seed0.txt",
+        "20260120T0000/seed1.txt",
+        "20260120T0000/seed2.txt"
+      ],
+      "n_train_rows": 83913,
+      "n_inner_valid_rows": 28414,
+      "best_iterations": [
+        22,
+        7,
+        1
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.3898262246722725,
+          0.19062627078429487,
+          0.5165403441676522
+        ],
+        "n_fit_rows": 55029,
+        "n_refit_rows": 83913
+      }
+    },
+    {
+      "valid_from": "2026-02-09T00:00:00Z",
+      "valid_until": "2026-03-01T00:00:00Z",
+      "train_rows_until": "2026-02-08T16:00:00Z",
+      "files": [
+        "20260209T0000/seed0.txt",
+        "20260209T0000/seed1.txt",
+        "20260209T0000/seed2.txt"
+      ],
+      "n_train_rows": 84967,
+      "n_inner_valid_rows": 28755,
+      "best_iterations": [
+        6,
+        19,
+        1
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.3232699086528614,
+          0.37789911711725815,
+          0.31308497930266066
+        ],
+        "n_fit_rows": 55736,
+        "n_refit_rows": 84967
+      }
+    },
+    {
+      "valid_from": "2026-03-01T00:00:00Z",
+      "valid_until": "2026-03-21T00:00:00Z",
+      "train_rows_until": "2026-02-28T16:00:00Z",
+      "files": [
+        "20260301T0000/seed0.txt",
+        "20260301T0000/seed1.txt",
+        "20260301T0000/seed2.txt"
+      ],
+      "n_train_rows": 86309,
+      "n_inner_valid_rows": 29375,
+      "best_iterations": [
+        3,
+        6,
+        1
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.34040106457018426,
+          0.18078004339798415,
+          0.318711732827972
+        ],
+        "n_fit_rows": 56452,
+        "n_refit_rows": 86309
+      }
+    }
+  ]
+}

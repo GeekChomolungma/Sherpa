@@ -9,3 +9,6 @@ venv/
 # research/ 下脚本跑真实 ClickHouse 数据产出的报告——因为跑的是随时间变化的真实行情，
 # 每次重跑结果都不一样，不是可复现的源代码，不提交进仓库。
 research/**/*.csv
+
+# ML alpha 的模型文件（每个重训时点一个子目录）不进仓库；同目录的 manifest.json 进仓库，方便复现和审计。
+research/alpha_research/*/models/*/*/
