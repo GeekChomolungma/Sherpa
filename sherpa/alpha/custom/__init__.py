@@ -5,7 +5,7 @@
 """
 
 from ..base import CustomAlpha, custom_alpha
-from .ml import LgbmV1, MLAlpha
+from .ml import LgbmV1, LgbmV2, MLAlpha
 from .quote_activity import QuoteActivityRank
 from .starter import LiquidMomentumRank, VolumeSurge, close_momentum_20
 
@@ -18,4 +18,5 @@ __all__ = [
     "QuoteActivityRank",
     "MLAlpha",
     "LgbmV1",
+    "LgbmV2",
 ]

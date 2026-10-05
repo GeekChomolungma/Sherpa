@@ -267,3 +267,28 @@ def test_refit_trains_final_model_on_the_full_window_with_the_early_stopped_roun
     x = frame.features[valid]
     other = lgb.Booster(model_file=str(tmp_path / "stopped" / "seed0.txt"))
     assert not np.allclose(model.predict(x), other.predict(x))
+
+
+# ---------------------------------------------------------------------------
+# 按模型覆盖训练配置
+# ---------------------------------------------------------------------------
+
+def test_training_config_overrides_per_model():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "research_ml_training_config", Path(__file__).resolve().parents[2] / "research" / "ml_training" / "config.py"
+    )
+    cfg_module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = cfg_module  # 模块里有 dataclass，要先登记才能 exec
+    spec.loader.exec_module(cfg_module)
+
+    from sherpa.alpha.custom.ml import LgbmV1, LgbmV2
+
+    v1 = cfg_module.for_model(LgbmV1.training_overrides)
+    v2 = cfg_module.for_model(LgbmV2.training_overrides)
+    assert v1.label_transform == "rank" and v1.label_horizon_bars is None  # 没覆盖 = 默认值
+    assert (v2.label_transform, v2.label_horizon_bars, len(v2.seeds), v2.train_window_bars) == ("raw_clip", 6, 9, None)
+    assert v1.to_dict() != v2.to_dict()
+    with pytest.raises(ValueError, match="不认识的键"):
+        cfg_module.for_model({"seedz": [1]})

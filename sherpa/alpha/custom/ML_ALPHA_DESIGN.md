@@ -4,6 +4,8 @@
 标签工程、Purge/Embargo、深度学习架构谱系）见 [`docs/factor_mining_landscape.md`](../../../docs/factor_mining_landscape.md)
 §5、§6，这里不重复。
 
+**结果怎么读、新模型怎么跟基线比**（ML alpha 研究的主框架）：见 [`research/alpha_research/MLalpha/RESULT_READING.md`](../../../research/alpha_research/MLalpha/RESULT_READING.md)。
+
 ---
 
 ## 1. 现状：手工 alpha + regime 切片的研究方式

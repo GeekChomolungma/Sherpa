@@ -37,13 +37,15 @@
     "market:volume_quantile",
     "market:market_taker_buy_ratio"
   ],
-  "config_fingerprint": "c454c2d472862f24",
+  "config_fingerprint": "b8c59ae7b3440a5a",
   "config": {
     "retrain_every_bars": 120,
     "min_train_bars": 1080,
     "train_window_bars": 360,
     "inner_valid_bars": 120,
     "refit_on_full_window": true,
+    "label_horizon_bars": 1,
+    "label_transform": "rank",
     "neutralize_label": false,
     "objective": "ic_ir",
     "tail_quantile": 0.2,
@@ -69,1778 +71,1309 @@
       "verbose": -1
     },
     "interval": "4h",
-    "research_start": "2022-01-01",
-    "horizon_bars": 1,
+    "research_start": "2023-01-01",
     "execution_delay_bars": 1,
     "benchmark_symbol": "BTCUSDT"
   },
   "entries": [
     {
-      "valid_from": "2022-06-30T00:00:00Z",
-      "valid_until": "2022-07-20T00:00:00Z",
-      "train_rows_until": "2022-06-29T16:00:00Z",
+      "valid_from": "2023-06-30T00:00:00Z",
+      "valid_until": "2023-07-20T00:00:00Z",
+      "train_rows_until": "2023-06-29T16:00:00Z",
       "files": [
-        "20220630T0000/seed0.txt",
-        "20220630T0000/seed1.txt",
-        "20220630T0000/seed2.txt"
+        "20230630T0000/seed0.txt",
+        "20230630T0000/seed1.txt",
+        "20230630T0000/seed2.txt"
       ],
-      "n_train_rows": 18360,
-      "n_inner_valid_rows": 6171,
-      "best_iterations": [
-        35,
-        13,
-        30
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.27220011159878177,
-          0.18312503641211808,
-          0.26624907816375787
-        ],
-        "n_fit_rows": 12087,
-        "n_refit_rows": 18360
-      }
-    },
-    {
-      "valid_from": "2022-07-20T00:00:00Z",
-      "valid_until": "2022-08-09T00:00:00Z",
-      "train_rows_until": "2022-07-19T16:00:00Z",
-      "files": [
-        "20220720T0000/seed0.txt",
-        "20220720T0000/seed1.txt",
-        "20220720T0000/seed2.txt"
-      ],
-      "n_train_rows": 18480,
-      "n_inner_valid_rows": 6240,
-      "best_iterations": [
-        14,
-        7,
-        8
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.1829576416294193,
-          0.12495629075266426,
-          0.03852358476650591
-        ],
-        "n_fit_rows": 12136,
-        "n_refit_rows": 18480
-      }
-    },
-    {
-      "valid_from": "2022-08-09T00:00:00Z",
-      "valid_until": "2022-08-29T00:00:00Z",
-      "train_rows_until": "2022-08-08T16:00:00Z",
-      "files": [
-        "20220809T0000/seed0.txt",
-        "20220809T0000/seed1.txt",
-        "20220809T0000/seed2.txt"
-      ],
-      "n_train_rows": 18600,
-      "n_inner_valid_rows": 6240,
+      "n_train_rows": 23962,
+      "n_inner_valid_rows": 8160,
       "best_iterations": [
         1,
-        1,
+        28,
         1
       ],
       "metrics": {
         "inner_valid_ic_ir_by_seed": [
-          0.25330437490089125,
-          0.20094058565707548,
-          0.37539587506779787
+          0.19035703436075296,
+          0.11870255212552831,
+          0.16836222468855608
         ],
-        "n_fit_rows": 12256,
-        "n_refit_rows": 18600
+        "n_fit_rows": 15666,
+        "n_refit_rows": 23962
       }
     },
     {
-      "valid_from": "2022-08-29T00:00:00Z",
-      "valid_until": "2022-09-18T00:00:00Z",
-      "train_rows_until": "2022-08-28T16:00:00Z",
+      "valid_from": "2023-07-20T00:00:00Z",
+      "valid_until": "2023-08-09T00:00:00Z",
+      "train_rows_until": "2023-07-19T16:00:00Z",
       "files": [
-        "20220829T0000/seed0.txt",
-        "20220829T0000/seed1.txt",
-        "20220829T0000/seed2.txt"
+        "20230720T0000/seed0.txt",
+        "20230720T0000/seed1.txt",
+        "20230720T0000/seed2.txt"
       ],
-      "n_train_rows": 18668,
-      "n_inner_valid_rows": 6240,
+      "n_train_rows": 24332,
+      "n_inner_valid_rows": 8163,
       "best_iterations": [
-        1,
-        11,
-        19
+        33,
+        7,
+        2
       ],
       "metrics": {
         "inner_valid_ic_ir_by_seed": [
-          0.18505066076889407,
-          0.19639883688496765,
-          0.1986101707879
+          0.22212004732266827,
+          0.26454959018228263,
+          0.26169194929687617
         ],
-        "n_fit_rows": 12324,
-        "n_refit_rows": 18668
+        "n_fit_rows": 16033,
+        "n_refit_rows": 24332
       }
     },
     {
-      "valid_from": "2022-09-18T00:00:00Z",
-      "valid_until": "2022-10-08T00:00:00Z",
-      "train_rows_until": "2022-09-17T16:00:00Z",
+      "valid_from": "2023-08-09T00:00:00Z",
+      "valid_until": "2023-08-29T00:00:00Z",
+      "train_rows_until": "2023-08-08T16:00:00Z",
       "files": [
-        "20220918T0000/seed0.txt",
-        "20220918T0000/seed1.txt",
-        "20220918T0000/seed2.txt"
+        "20230809T0000/seed0.txt",
+        "20230809T0000/seed1.txt",
+        "20230809T0000/seed2.txt"
       ],
-      "n_train_rows": 18639,
-      "n_inner_valid_rows": 6211,
+      "n_train_rows": 24535,
+      "n_inner_valid_rows": 8280,
       "best_iterations": [
-        1,
-        11,
-        12
+        2,
+        22,
+        88
       ],
       "metrics": {
         "inner_valid_ic_ir_by_seed": [
-          0.3116603111190236,
-          0.2899755108969011,
-          0.3272699766486569
+          0.3069908592335719,
+          0.34112931414680736,
+          0.2798947271435767
         ],
-        "n_fit_rows": 12324,
-        "n_refit_rows": 18639
+        "n_fit_rows": 16117,
+        "n_refit_rows": 24535
       }
     },
     {
-      "valid_from": "2022-10-08T00:00:00Z",
-      "valid_until": "2022-10-28T00:00:00Z",
-      "train_rows_until": "2022-10-07T16:00:00Z",
+      "valid_from": "2023-08-29T00:00:00Z",
+      "valid_until": "2023-09-18T00:00:00Z",
+      "train_rows_until": "2023-08-28T16:00:00Z",
       "files": [
-        "20221008T0000/seed0.txt",
-        "20221008T0000/seed1.txt",
-        "20221008T0000/seed2.txt"
+        "20230829T0000/seed0.txt",
+        "20230829T0000/seed1.txt",
+        "20230829T0000/seed2.txt"
       ],
-      "n_train_rows": 18756,
-      "n_inner_valid_rows": 6357,
+      "n_train_rows": 24844,
+      "n_inner_valid_rows": 8469,
       "best_iterations": [
-        5,
-        83,
-        95
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.2807753303584274,
-          0.29027109286434133,
-          0.2569637490533625
-        ],
-        "n_fit_rows": 12295,
-        "n_refit_rows": 18756
-      }
-    },
-    {
-      "valid_from": "2022-10-28T00:00:00Z",
-      "valid_until": "2022-11-17T00:00:00Z",
-      "train_rows_until": "2022-10-27T16:00:00Z",
-      "files": [
-        "20221028T0000/seed0.txt",
-        "20221028T0000/seed1.txt",
-        "20221028T0000/seed2.txt"
-      ],
-      "n_train_rows": 19089,
-      "n_inner_valid_rows": 6573,
-      "best_iterations": [
-        12,
-        28,
-        8
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.2778528150898049,
-          0.3674347671548602,
-          0.17687982837868624
-        ],
-        "n_fit_rows": 12408,
-        "n_refit_rows": 19089
-      }
-    },
-    {
-      "valid_from": "2022-11-17T00:00:00Z",
-      "valid_until": "2022-12-07T00:00:00Z",
-      "train_rows_until": "2022-11-16T16:00:00Z",
-      "files": [
-        "20221117T0000/seed0.txt",
-        "20221117T0000/seed1.txt",
-        "20221117T0000/seed2.txt"
-      ],
-      "n_train_rows": 19532,
-      "n_inner_valid_rows": 6654,
-      "best_iterations": [
-        5,
-        14,
-        6
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.2665832701525062,
-          0.20662967346724884,
-          0.3405640645512117
-        ],
-        "n_fit_rows": 12768,
-        "n_refit_rows": 19532
-      }
-    },
-    {
-      "valid_from": "2022-12-07T00:00:00Z",
-      "valid_until": "2022-12-27T00:00:00Z",
-      "train_rows_until": "2022-12-06T16:00:00Z",
-      "files": [
-        "20221207T0000/seed0.txt",
-        "20221207T0000/seed1.txt",
-        "20221207T0000/seed2.txt"
-      ],
-      "n_train_rows": 19893,
-      "n_inner_valid_rows": 6720,
-      "best_iterations": [
-        1,
-        59,
-        3
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.3585026477362649,
-          0.3472099673860954,
-          0.372722065088163
-        ],
-        "n_fit_rows": 13061,
-        "n_refit_rows": 19893
-      }
-    },
-    {
-      "valid_from": "2022-12-27T00:00:00Z",
-      "valid_until": "2023-01-16T00:00:00Z",
-      "train_rows_until": "2022-12-26T16:00:00Z",
-      "files": [
-        "20221227T0000/seed0.txt",
-        "20221227T0000/seed1.txt",
-        "20221227T0000/seed2.txt"
-      ],
-      "n_train_rows": 20039,
-      "n_inner_valid_rows": 6720,
-      "best_iterations": [
-        17,
-        27,
-        15
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.2967245516709141,
-          0.38755562640747515,
-          0.3418075682584775
-        ],
-        "n_fit_rows": 13207,
-        "n_refit_rows": 20039
-      }
-    },
-    {
-      "valid_from": "2023-01-16T00:00:00Z",
-      "valid_until": "2023-02-05T00:00:00Z",
-      "train_rows_until": "2023-01-15T16:00:00Z",
-      "files": [
-        "20230116T0000/seed0.txt",
-        "20230116T0000/seed1.txt",
-        "20230116T0000/seed2.txt"
-      ],
-      "n_train_rows": 20104,
-      "n_inner_valid_rows": 6720,
-      "best_iterations": [
-        1,
-        24,
+        4,
+        57,
         5
       ],
       "metrics": {
         "inner_valid_ic_ir_by_seed": [
-          0.3296795022867751,
-          0.2692133834348605,
-          0.2687035368989581
+          0.17334549325176626,
+          0.16018660861730105,
+          0.2172571053084057
         ],
-        "n_fit_rows": 13272,
-        "n_refit_rows": 20104
+        "n_fit_rows": 16237,
+        "n_refit_rows": 24844
       }
     },
     {
-      "valid_from": "2023-02-05T00:00:00Z",
-      "valid_until": "2023-02-25T00:00:00Z",
-      "train_rows_until": "2023-02-04T16:00:00Z",
+      "valid_from": "2023-09-18T00:00:00Z",
+      "valid_until": "2023-10-08T00:00:00Z",
+      "train_rows_until": "2023-09-17T16:00:00Z",
       "files": [
-        "20230205T0000/seed0.txt",
-        "20230205T0000/seed1.txt",
-        "20230205T0000/seed2.txt"
+        "20230918T0000/seed0.txt",
+        "20230918T0000/seed1.txt",
+        "20230918T0000/seed2.txt"
       ],
-      "n_train_rows": 20104,
-      "n_inner_valid_rows": 6720,
+      "n_train_rows": 25476,
+      "n_inner_valid_rows": 8796,
       "best_iterations": [
-        1,
-        145,
-        1
+        42,
+        84,
+        45
       ],
       "metrics": {
         "inner_valid_ic_ir_by_seed": [
-          0.38141670508421793,
-          0.2689144143302092,
-          0.3778533930810462
+          0.17816779118386694,
+          0.19091219145132252,
+          0.23365605527750624
         ],
-        "n_fit_rows": 13272,
-        "n_refit_rows": 20104
+        "n_fit_rows": 16536,
+        "n_refit_rows": 25476
       }
     },
     {
-      "valid_from": "2023-02-25T00:00:00Z",
-      "valid_until": "2023-03-17T00:00:00Z",
-      "train_rows_until": "2023-02-24T16:00:00Z",
+      "valid_from": "2023-10-08T00:00:00Z",
+      "valid_until": "2023-10-28T00:00:00Z",
+      "train_rows_until": "2023-10-07T16:00:00Z",
       "files": [
-        "20230225T0000/seed0.txt",
-        "20230225T0000/seed1.txt",
-        "20230225T0000/seed2.txt"
+        "20231008T0000/seed0.txt",
+        "20231008T0000/seed1.txt",
+        "20231008T0000/seed2.txt"
       ],
-      "n_train_rows": 20239,
-      "n_inner_valid_rows": 6855,
-      "best_iterations": [
-        81,
-        1,
-        3
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.3491434445771897,
-          0.32772834713683313,
-          0.2618612369380306
-        ],
-        "n_fit_rows": 13272,
-        "n_refit_rows": 20239
-      }
-    },
-    {
-      "valid_from": "2023-03-17T00:00:00Z",
-      "valid_until": "2023-04-06T00:00:00Z",
-      "train_rows_until": "2023-03-16T16:00:00Z",
-      "files": [
-        "20230317T0000/seed0.txt",
-        "20230317T0000/seed1.txt",
-        "20230317T0000/seed2.txt"
-      ],
-      "n_train_rows": 20548,
-      "n_inner_valid_rows": 7029,
-      "best_iterations": [
-        3,
-        7,
-        1
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.1695402856411917,
-          0.18220717040198386,
-          0.1421212429336322
-        ],
-        "n_fit_rows": 13403,
-        "n_refit_rows": 20548
-      }
-    },
-    {
-      "valid_from": "2023-04-06T00:00:00Z",
-      "valid_until": "2023-04-26T00:00:00Z",
-      "train_rows_until": "2023-04-05T16:00:00Z",
-      "files": [
-        "20230406T0000/seed0.txt",
-        "20230406T0000/seed1.txt",
-        "20230406T0000/seed2.txt"
-      ],
-      "n_train_rows": 21187,
-      "n_inner_valid_rows": 7359,
-      "best_iterations": [
-        11,
-        10,
-        3
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.2834948815618337,
-          0.32489126477747327,
-          0.255304098160529
-        ],
-        "n_fit_rows": 13706,
-        "n_refit_rows": 21187
-      }
-    },
-    {
-      "valid_from": "2023-04-26T00:00:00Z",
-      "valid_until": "2023-05-16T00:00:00Z",
-      "train_rows_until": "2023-04-25T16:00:00Z",
-      "files": [
-        "20230426T0000/seed0.txt",
-        "20230426T0000/seed1.txt",
-        "20230426T0000/seed2.txt"
-      ],
-      "n_train_rows": 21896,
-      "n_inner_valid_rows": 7566,
-      "best_iterations": [
-        113,
-        1,
-        21
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.3322916601984702,
-          0.3619787671576375,
-          0.37716787794560097
-        ],
-        "n_fit_rows": 14206,
-        "n_refit_rows": 21896
-      }
-    },
-    {
-      "valid_from": "2023-05-16T00:00:00Z",
-      "valid_until": "2023-06-05T00:00:00Z",
-      "train_rows_until": "2023-05-15T16:00:00Z",
-      "files": [
-        "20230516T0000/seed0.txt",
-        "20230516T0000/seed1.txt",
-        "20230516T0000/seed2.txt"
-      ],
-      "n_train_rows": 22622,
-      "n_inner_valid_rows": 7758,
-      "best_iterations": [
-        12,
-        22,
-        9
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.43051156995320233,
-          0.28102028168557286,
-          0.26845623498419213
-        ],
-        "n_fit_rows": 14736,
-        "n_refit_rows": 22622
-      }
-    },
-    {
-      "valid_from": "2023-06-05T00:00:00Z",
-      "valid_until": "2023-06-25T00:00:00Z",
-      "train_rows_until": "2023-06-04T16:00:00Z",
-      "files": [
-        "20230605T0000/seed0.txt",
-        "20230605T0000/seed1.txt",
-        "20230605T0000/seed2.txt"
-      ],
-      "n_train_rows": 23250,
-      "n_inner_valid_rows": 7988,
-      "best_iterations": [
-        9,
-        95,
-        1
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.41943475240400657,
-          0.4148430758215349,
-          0.4643719308572563
-        ],
-        "n_fit_rows": 15132,
-        "n_refit_rows": 23250
-      }
-    },
-    {
-      "valid_from": "2023-06-25T00:00:00Z",
-      "valid_until": "2023-07-15T00:00:00Z",
-      "train_rows_until": "2023-06-24T16:00:00Z",
-      "files": [
-        "20230625T0000/seed0.txt",
-        "20230625T0000/seed1.txt",
-        "20230625T0000/seed2.txt"
-      ],
-      "n_train_rows": 23842,
-      "n_inner_valid_rows": 8160,
-      "best_iterations": [
-        5,
-        5,
-        4
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.20155701420776143,
-          0.11837876959184412,
-          0.24544964993350374
-        ],
-        "n_fit_rows": 15546,
-        "n_refit_rows": 23842
-      }
-    },
-    {
-      "valid_from": "2023-07-15T00:00:00Z",
-      "valid_until": "2023-08-04T00:00:00Z",
-      "train_rows_until": "2023-07-14T16:00:00Z",
-      "files": [
-        "20230715T0000/seed0.txt",
-        "20230715T0000/seed1.txt",
-        "20230715T0000/seed2.txt"
-      ],
-      "n_train_rows": 24243,
-      "n_inner_valid_rows": 8160,
-      "best_iterations": [
-        2,
-        6,
-        1
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.2758866232333138,
-          0.3560398739499141,
-          0.24140316576211332
-        ],
-        "n_fit_rows": 15947,
-        "n_refit_rows": 24243
-      }
-    },
-    {
-      "valid_from": "2023-08-04T00:00:00Z",
-      "valid_until": "2023-08-24T00:00:00Z",
-      "train_rows_until": "2023-08-03T16:00:00Z",
-      "files": [
-        "20230804T0000/seed0.txt",
-        "20230804T0000/seed1.txt",
-        "20230804T0000/seed2.txt"
-      ],
-      "n_train_rows": 24505,
-      "n_inner_valid_rows": 8253,
-      "best_iterations": [
-        1,
-        1,
-        56
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.2873529508913199,
-          0.3946922616877875,
-          0.3491949852524933
-        ],
-        "n_fit_rows": 16116,
-        "n_refit_rows": 24505
-      }
-    },
-    {
-      "valid_from": "2023-08-24T00:00:00Z",
-      "valid_until": "2023-09-13T00:00:00Z",
-      "train_rows_until": "2023-08-23T16:00:00Z",
-      "files": [
-        "20230824T0000/seed0.txt",
-        "20230824T0000/seed1.txt",
-        "20230824T0000/seed2.txt"
-      ],
-      "n_train_rows": 24730,
-      "n_inner_valid_rows": 8385,
-      "best_iterations": [
-        1,
-        57,
-        40
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.061853761448585336,
-          0.2115393516969422,
-          0.21930888756913872
-        ],
-        "n_fit_rows": 16207,
-        "n_refit_rows": 24730
-      }
-    },
-    {
-      "valid_from": "2023-09-13T00:00:00Z",
-      "valid_until": "2023-10-03T00:00:00Z",
-      "train_rows_until": "2023-09-12T16:00:00Z",
-      "files": [
-        "20230913T0000/seed0.txt",
-        "20230913T0000/seed1.txt",
-        "20230913T0000/seed2.txt"
-      ],
-      "n_train_rows": 25300,
-      "n_inner_valid_rows": 8730,
-      "best_iterations": [
-        182,
-        1,
-        59
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.15165375784005072,
-          0.17581941189988157,
-          0.13761407463181466
-        ],
-        "n_fit_rows": 16428,
-        "n_refit_rows": 25300
-      }
-    },
-    {
-      "valid_from": "2023-10-03T00:00:00Z",
-      "valid_until": "2023-10-23T00:00:00Z",
-      "train_rows_until": "2023-10-02T16:00:00Z",
-      "files": [
-        "20231003T0000/seed0.txt",
-        "20231003T0000/seed1.txt",
-        "20231003T0000/seed2.txt"
-      ],
-      "n_train_rows": 25926,
+      "n_train_rows": 26076,
       "n_inner_valid_rows": 8880,
       "best_iterations": [
-        3,
-        5,
-        3
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.17394390362307732,
-          0.11625336790264867,
-          0.21604111469928042
-        ],
-        "n_fit_rows": 16898,
-        "n_refit_rows": 25926
-      }
-    },
-    {
-      "valid_from": "2023-10-23T00:00:00Z",
-      "valid_until": "2023-11-12T00:00:00Z",
-      "train_rows_until": "2023-10-22T16:00:00Z",
-      "files": [
-        "20231023T0000/seed0.txt",
-        "20231023T0000/seed1.txt",
-        "20231023T0000/seed2.txt"
-      ],
-      "n_train_rows": 26446,
-      "n_inner_valid_rows": 8907,
-      "best_iterations": [
-        36,
-        25,
-        1
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.06658025353487979,
-          0.20075495166947316,
-          0.1543580770540255
-        ],
-        "n_fit_rows": 17391,
-        "n_refit_rows": 26446
-      }
-    },
-    {
-      "valid_from": "2023-11-12T00:00:00Z",
-      "valid_until": "2023-12-02T00:00:00Z",
-      "train_rows_until": "2023-11-11T16:00:00Z",
-      "files": [
-        "20231112T0000/seed0.txt",
-        "20231112T0000/seed1.txt",
-        "20231112T0000/seed2.txt"
-      ],
-      "n_train_rows": 26749,
-      "n_inner_valid_rows": 9036,
-      "best_iterations": [
-        9,
-        5,
-        1
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.3623360853484172,
-          0.2938666932029067,
-          0.3598387672777975
-        ],
-        "n_fit_rows": 17563,
-        "n_refit_rows": 26749
-      }
-    },
-    {
-      "valid_from": "2023-12-02T00:00:00Z",
-      "valid_until": "2023-12-22T00:00:00Z",
-      "train_rows_until": "2023-12-01T16:00:00Z",
-      "files": [
-        "20231202T0000/seed0.txt",
-        "20231202T0000/seed1.txt",
-        "20231202T0000/seed2.txt"
-      ],
-      "n_train_rows": 27415,
-      "n_inner_valid_rows": 9546,
-      "best_iterations": [
-        27,
-        1,
-        19
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.2698581115959063,
-          0.22820891419924935,
-          0.24421596254647454
-        ],
-        "n_fit_rows": 17715,
-        "n_refit_rows": 27415
-      }
-    },
-    {
-      "valid_from": "2023-12-22T00:00:00Z",
-      "valid_until": "2024-01-11T00:00:00Z",
-      "train_rows_until": "2023-12-21T16:00:00Z",
-      "files": [
-        "20231222T0000/seed0.txt",
-        "20231222T0000/seed1.txt",
-        "20231222T0000/seed2.txt"
-      ],
-      "n_train_rows": 28554,
-      "n_inner_valid_rows": 10047,
-      "best_iterations": [
-        13,
-        141,
-        3
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.20543818729059413,
-          0.43604346940321326,
-          0.2304312433700863
-        ],
-        "n_fit_rows": 18343,
-        "n_refit_rows": 28554
-      }
-    },
-    {
-      "valid_from": "2024-01-11T00:00:00Z",
-      "valid_until": "2024-01-31T00:00:00Z",
-      "train_rows_until": "2024-01-10T16:00:00Z",
-      "files": [
-        "20240111T0000/seed0.txt",
-        "20240111T0000/seed1.txt",
-        "20240111T0000/seed2.txt"
-      ],
-      "n_train_rows": 29979,
-      "n_inner_valid_rows": 10463,
-      "best_iterations": [
-        35,
+        94,
         7,
-        11
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.3944849347086818,
-          0.3854459864143928,
-          0.27780293344992385
-        ],
-        "n_fit_rows": 19344,
-        "n_refit_rows": 29979
-      }
-    },
-    {
-      "valid_from": "2024-01-31T00:00:00Z",
-      "valid_until": "2024-02-20T00:00:00Z",
-      "train_rows_until": "2024-01-30T16:00:00Z",
-      "files": [
-        "20240131T0000/seed0.txt",
-        "20240131T0000/seed1.txt",
-        "20240131T0000/seed2.txt"
-      ],
-      "n_train_rows": 31117,
-      "n_inner_valid_rows": 10689,
-      "best_iterations": [
-        1,
-        5,
         1
       ],
       "metrics": {
         "inner_valid_ic_ir_by_seed": [
-          0.43833019413275137,
-          0.5117946792319489,
-          0.2958175758128612
+          0.18854113140007792,
+          0.32551987923183084,
+          0.12100637836719524
         ],
-        "n_fit_rows": 20250,
-        "n_refit_rows": 31117
+        "n_fit_rows": 17048,
+        "n_refit_rows": 26076
       }
     },
     {
-      "valid_from": "2024-02-20T00:00:00Z",
-      "valid_until": "2024-03-11T00:00:00Z",
-      "train_rows_until": "2024-02-19T16:00:00Z",
+      "valid_from": "2023-10-28T00:00:00Z",
+      "valid_until": "2023-11-17T00:00:00Z",
+      "train_rows_until": "2023-10-27T16:00:00Z",
       "files": [
-        "20240220T0000/seed0.txt",
-        "20240220T0000/seed1.txt",
-        "20240220T0000/seed2.txt"
+        "20231028T0000/seed0.txt",
+        "20231028T0000/seed1.txt",
+        "20231028T0000/seed2.txt"
       ],
-      "n_train_rows": 31974,
-      "n_inner_valid_rows": 10908,
-      "best_iterations": [
-        57,
-        1,
-        3
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.35373635257636726,
-          0.2608669695829035,
-          0.3723816372864211
-        ],
-        "n_fit_rows": 20886,
-        "n_refit_rows": 31974
-      }
-    },
-    {
-      "valid_from": "2024-03-11T00:00:00Z",
-      "valid_until": "2024-03-31T00:00:00Z",
-      "train_rows_until": "2024-03-10T16:00:00Z",
-      "files": [
-        "20240311T0000/seed0.txt",
-        "20240311T0000/seed1.txt",
-        "20240311T0000/seed2.txt"
-      ],
-      "n_train_rows": 32750,
-      "n_inner_valid_rows": 11242,
-      "best_iterations": [
-        121,
-        33,
-        57
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.31716178858055066,
-          0.22563767346396849,
-          0.21761212454597262
-        ],
-        "n_fit_rows": 21324,
-        "n_refit_rows": 32750
-      }
-    },
-    {
-      "valid_from": "2024-03-31T00:00:00Z",
-      "valid_until": "2024-04-20T00:00:00Z",
-      "train_rows_until": "2024-03-30T16:00:00Z",
-      "files": [
-        "20240331T0000/seed0.txt",
-        "20240331T0000/seed1.txt",
-        "20240331T0000/seed2.txt"
-      ],
-      "n_train_rows": 33635,
-      "n_inner_valid_rows": 11575,
-      "best_iterations": [
-        15,
-        1,
-        23
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.42588059991227956,
-          0.40599473209219505,
-          0.4129344885147694
-        ],
-        "n_fit_rows": 21870,
-        "n_refit_rows": 33635
-      }
-    },
-    {
-      "valid_from": "2024-04-20T00:00:00Z",
-      "valid_until": "2024-05-10T00:00:00Z",
-      "train_rows_until": "2024-04-19T16:00:00Z",
-      "files": [
-        "20240420T0000/seed0.txt",
-        "20240420T0000/seed1.txt",
-        "20240420T0000/seed2.txt"
-      ],
-      "n_train_rows": 34564,
-      "n_inner_valid_rows": 11839,
-      "best_iterations": [
-        81,
-        3,
-        7
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.43232356224815943,
-          0.344582734430885,
-          0.35298529349982316
-        ],
-        "n_fit_rows": 22531,
-        "n_refit_rows": 34564
-      }
-    },
-    {
-      "valid_from": "2024-05-10T00:00:00Z",
-      "valid_until": "2024-05-30T00:00:00Z",
-      "train_rows_until": "2024-05-09T16:00:00Z",
-      "files": [
-        "20240510T0000/seed0.txt",
-        "20240510T0000/seed1.txt",
-        "20240510T0000/seed2.txt"
-      ],
-      "n_train_rows": 35423,
-      "n_inner_valid_rows": 12104,
-      "best_iterations": [
-        21,
-        212,
-        53
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.14457285153341567,
-          0.2354561573995797,
-          0.19386371475311673
-        ],
-        "n_fit_rows": 23121,
-        "n_refit_rows": 35423
-      }
-    },
-    {
-      "valid_from": "2024-05-30T00:00:00Z",
-      "valid_until": "2024-06-19T00:00:00Z",
-      "train_rows_until": "2024-05-29T16:00:00Z",
-      "files": [
-        "20240530T0000/seed0.txt",
-        "20240530T0000/seed1.txt",
-        "20240530T0000/seed2.txt"
-      ],
-      "n_train_rows": 36086,
-      "n_inner_valid_rows": 12240,
-      "best_iterations": [
-        1,
-        8,
-        12
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.1964122132637055,
-          0.30562647199163767,
-          0.23483932433720464
-        ],
-        "n_fit_rows": 23642,
-        "n_refit_rows": 36086
-      }
-    },
-    {
-      "valid_from": "2024-06-19T00:00:00Z",
-      "valid_until": "2024-07-09T00:00:00Z",
-      "train_rows_until": "2024-06-18T16:00:00Z",
-      "files": [
-        "20240619T0000/seed0.txt",
-        "20240619T0000/seed1.txt",
-        "20240619T0000/seed2.txt"
-      ],
-      "n_train_rows": 36584,
-      "n_inner_valid_rows": 12339,
-      "best_iterations": [
-        21,
-        15,
-        1
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.275296555467602,
-          0.3201475199813881,
-          0.24061792827412762
-        ],
-        "n_fit_rows": 24041,
-        "n_refit_rows": 36584
-      }
-    },
-    {
-      "valid_from": "2024-07-09T00:00:00Z",
-      "valid_until": "2024-07-29T00:00:00Z",
-      "train_rows_until": "2024-07-08T16:00:00Z",
-      "files": [
-        "20240709T0000/seed0.txt",
-        "20240709T0000/seed1.txt",
-        "20240709T0000/seed2.txt"
-      ],
-      "n_train_rows": 36964,
-      "n_inner_valid_rows": 12487,
-      "best_iterations": [
-        61,
-        9,
-        9
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.18886186582624795,
-          0.20330402087636362,
-          0.22913789840032636
-        ],
-        "n_fit_rows": 24271,
-        "n_refit_rows": 36964
-      }
-    },
-    {
-      "valid_from": "2024-07-29T00:00:00Z",
-      "valid_until": "2024-08-18T00:00:00Z",
-      "train_rows_until": "2024-07-28T16:00:00Z",
-      "files": [
-        "20240729T0000/seed0.txt",
-        "20240729T0000/seed1.txt",
-        "20240729T0000/seed2.txt"
-      ],
-      "n_train_rows": 37435,
-      "n_inner_valid_rows": 12711,
-      "best_iterations": [
-        15,
-        68,
-        6
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.30844295648589726,
-          0.23617019440059803,
-          0.15289911666152675
-        ],
-        "n_fit_rows": 24514,
-        "n_refit_rows": 37435
-      }
-    },
-    {
-      "valid_from": "2024-08-18T00:00:00Z",
-      "valid_until": "2024-09-07T00:00:00Z",
-      "train_rows_until": "2024-08-17T16:00:00Z",
-      "files": [
-        "20240818T0000/seed0.txt",
-        "20240818T0000/seed1.txt",
-        "20240818T0000/seed2.txt"
-      ],
-      "n_train_rows": 37831,
-      "n_inner_valid_rows": 12736,
-      "best_iterations": [
-        37,
-        9,
-        7
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.3717560929336927,
-          0.26236456708834055,
-          0.2508749739574704
-        ],
-        "n_fit_rows": 24883,
-        "n_refit_rows": 37831
-      }
-    },
-    {
-      "valid_from": "2024-09-07T00:00:00Z",
-      "valid_until": "2024-09-27T00:00:00Z",
-      "train_rows_until": "2024-09-06T16:00:00Z",
-      "files": [
-        "20240907T0000/seed0.txt",
-        "20240907T0000/seed1.txt",
-        "20240907T0000/seed2.txt"
-      ],
-      "n_train_rows": 38206,
-      "n_inner_valid_rows": 12864,
+      "n_train_rows": 26541,
+      "n_inner_valid_rows": 8937,
       "best_iterations": [
         14,
-        1,
-        12
+        13,
+        5
       ],
       "metrics": {
         "inner_valid_ic_ir_by_seed": [
-          0.2771311603786588,
-          0.27919467241107043,
-          0.24234007751134815
+          0.2566112363887754,
+          0.23562829720229075,
+          0.22341859005772158
         ],
-        "n_fit_rows": 25128,
-        "n_refit_rows": 38206
+        "n_fit_rows": 17456,
+        "n_refit_rows": 26541
       }
     },
     {
-      "valid_from": "2024-09-27T00:00:00Z",
-      "valid_until": "2024-10-17T00:00:00Z",
-      "train_rows_until": "2024-09-26T16:00:00Z",
+      "valid_from": "2023-11-17T00:00:00Z",
+      "valid_until": "2023-12-07T00:00:00Z",
+      "train_rows_until": "2023-11-16T16:00:00Z",
       "files": [
-        "20240927T0000/seed0.txt",
-        "20240927T0000/seed1.txt",
-        "20240927T0000/seed2.txt"
+        "20231117T0000/seed0.txt",
+        "20231117T0000/seed1.txt",
+        "20231117T0000/seed2.txt"
       ],
-      "n_train_rows": 38736,
-      "n_inner_valid_rows": 13242,
+      "n_train_rows": 26857,
+      "n_inner_valid_rows": 9114,
       "best_iterations": [
-        2,
-        43,
+        9,
+        1,
         1
       ],
       "metrics": {
         "inner_valid_ic_ir_by_seed": [
-          0.05744239459716072,
-          0.13810225990137381,
-          0.19912296285745087
+          0.22175161476478683,
+          0.24909213339856257,
+          0.2728849955338034
         ],
-        "n_fit_rows": 25276,
-        "n_refit_rows": 38736
+        "n_fit_rows": 17593,
+        "n_refit_rows": 26857
       }
     },
     {
-      "valid_from": "2024-10-17T00:00:00Z",
-      "valid_until": "2024-11-06T00:00:00Z",
-      "train_rows_until": "2024-10-16T16:00:00Z",
+      "valid_from": "2023-12-07T00:00:00Z",
+      "valid_until": "2023-12-27T00:00:00Z",
+      "train_rows_until": "2023-12-06T16:00:00Z",
       "files": [
-        "20241017T0000/seed0.txt",
-        "20241017T0000/seed1.txt",
-        "20241017T0000/seed2.txt"
+        "20231207T0000/seed0.txt",
+        "20231207T0000/seed1.txt",
+        "20231207T0000/seed2.txt"
       ],
-      "n_train_rows": 39536,
-      "n_inner_valid_rows": 13537,
+      "n_train_rows": 27655,
+      "n_inner_valid_rows": 9678,
       "best_iterations": [
-        8,
-        9,
+        63,
+        3,
         2
       ],
       "metrics": {
         "inner_valid_ic_ir_by_seed": [
-          0.18389944574569056,
-          0.19773860947467964,
-          0.21084782186176598
+          0.40905807268190203,
+          0.2241433905989796,
+          0.33270257054291846
         ],
-        "n_fit_rows": 25777,
-        "n_refit_rows": 39536
+        "n_fit_rows": 17821,
+        "n_refit_rows": 27655
       }
     },
     {
-      "valid_from": "2024-11-06T00:00:00Z",
-      "valid_until": "2024-11-26T00:00:00Z",
-      "train_rows_until": "2024-11-05T16:00:00Z",
+      "valid_from": "2023-12-27T00:00:00Z",
+      "valid_until": "2024-01-16T00:00:00Z",
+      "train_rows_until": "2023-12-26T16:00:00Z",
       "files": [
-        "20241106T0000/seed0.txt",
-        "20241106T0000/seed1.txt",
-        "20241106T0000/seed2.txt"
+        "20231227T0000/seed0.txt",
+        "20231227T0000/seed1.txt",
+        "20231227T0000/seed2.txt"
       ],
-      "n_train_rows": 40557,
-      "n_inner_valid_rows": 13887,
+      "n_train_rows": 28884,
+      "n_inner_valid_rows": 10167,
       "best_iterations": [
-        5,
         1,
+        14,
         3
       ],
       "metrics": {
         "inner_valid_ic_ir_by_seed": [
-          0.4354716799641033,
-          0.4328274985703469,
-          0.246178729375728
+          0.21370362551201058,
+          0.24501255532944327,
+          0.30721601542800936
         ],
-        "n_fit_rows": 26440,
-        "n_refit_rows": 40557
+        "n_fit_rows": 18553,
+        "n_refit_rows": 28884
       }
     },
     {
-      "valid_from": "2024-11-26T00:00:00Z",
-      "valid_until": "2024-12-16T00:00:00Z",
-      "train_rows_until": "2024-11-25T16:00:00Z",
+      "valid_from": "2024-01-16T00:00:00Z",
+      "valid_until": "2024-02-05T00:00:00Z",
+      "train_rows_until": "2024-01-15T16:00:00Z",
       "files": [
-        "20241126T0000/seed0.txt",
-        "20241126T0000/seed1.txt",
-        "20241126T0000/seed2.txt"
+        "20240116T0000/seed0.txt",
+        "20240116T0000/seed1.txt",
+        "20240116T0000/seed2.txt"
       ],
-      "n_train_rows": 41442,
-      "n_inner_valid_rows": 14129,
+      "n_train_rows": 30320,
+      "n_inner_valid_rows": 10553,
       "best_iterations": [
-        3,
-        10,
-        14
+        33,
+        13,
+        21
       ],
       "metrics": {
         "inner_valid_ic_ir_by_seed": [
-          0.23504276562398715,
-          0.3968256755823096,
-          0.2751839209707505
+          0.3003649728944459,
+          0.3296767319047153,
+          0.25427397444024913
         ],
-        "n_fit_rows": 27081,
-        "n_refit_rows": 41442
+        "n_fit_rows": 19595,
+        "n_refit_rows": 30320
       }
     },
     {
-      "valid_from": "2024-12-16T00:00:00Z",
-      "valid_until": "2025-01-05T00:00:00Z",
-      "train_rows_until": "2024-12-15T16:00:00Z",
+      "valid_from": "2024-02-05T00:00:00Z",
+      "valid_until": "2024-02-25T00:00:00Z",
+      "train_rows_until": "2024-02-04T16:00:00Z",
       "files": [
-        "20241216T0000/seed0.txt",
-        "20241216T0000/seed1.txt",
-        "20241216T0000/seed2.txt"
+        "20240205T0000/seed0.txt",
+        "20240205T0000/seed1.txt",
+        "20240205T0000/seed2.txt"
       ],
-      "n_train_rows": 42540,
-      "n_inner_valid_rows": 14639,
+      "n_train_rows": 31356,
+      "n_inner_valid_rows": 10719,
+      "best_iterations": [
+        13,
+        1,
+        5
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.33932810838714056,
+          0.4005036946935148,
+          0.2973913695879989
+        ],
+        "n_fit_rows": 20459,
+        "n_refit_rows": 31356
+      }
+    },
+    {
+      "valid_from": "2024-02-25T00:00:00Z",
+      "valid_until": "2024-03-16T00:00:00Z",
+      "train_rows_until": "2024-02-24T16:00:00Z",
+      "files": [
+        "20240225T0000/seed0.txt",
+        "20240225T0000/seed1.txt",
+        "20240225T0000/seed2.txt"
+      ],
+      "n_train_rows": 32180,
+      "n_inner_valid_rows": 10994,
       "best_iterations": [
         1,
-        9,
-        1
+        2,
+        16
       ],
       "metrics": {
         "inner_valid_ic_ir_by_seed": [
-          0.2890739603310605,
-          0.25058009556936656,
-          0.27908297477716093
+          0.1992392368791383,
+          0.13546255428466056,
+          0.3088546092497578
         ],
-        "n_fit_rows": 27663,
-        "n_refit_rows": 42540
+        "n_fit_rows": 21006,
+        "n_refit_rows": 32180
       }
     },
     {
-      "valid_from": "2025-01-05T00:00:00Z",
-      "valid_until": "2025-01-25T00:00:00Z",
-      "train_rows_until": "2025-01-04T16:00:00Z",
+      "valid_from": "2024-03-16T00:00:00Z",
+      "valid_until": "2024-04-05T00:00:00Z",
+      "train_rows_until": "2024-03-15T16:00:00Z",
       "files": [
-        "20250105T0000/seed0.txt",
-        "20250105T0000/seed1.txt",
-        "20250105T0000/seed2.txt"
+        "20240316T0000/seed0.txt",
+        "20240316T0000/seed1.txt",
+        "20240316T0000/seed2.txt"
       ],
-      "n_train_rows": 43881,
-      "n_inner_valid_rows": 15229,
+      "n_train_rows": 32952,
+      "n_inner_valid_rows": 11328,
+      "best_iterations": [
+        19,
+        1,
+        98
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.20401262278411156,
+          0.19221903616727148,
+          0.23721332522897412
+        ],
+        "n_fit_rows": 21438,
+        "n_refit_rows": 32952
+      }
+    },
+    {
+      "valid_from": "2024-04-05T00:00:00Z",
+      "valid_until": "2024-04-25T00:00:00Z",
+      "train_rows_until": "2024-04-04T16:00:00Z",
+      "files": [
+        "20240405T0000/seed0.txt",
+        "20240405T0000/seed1.txt",
+        "20240405T0000/seed2.txt"
+      ],
+      "n_train_rows": 33867,
+      "n_inner_valid_rows": 11635,
+      "best_iterations": [
+        1,
+        10,
+        13
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.23072067818329345,
+          0.34708667567371093,
+          0.43117836277270494
+        ],
+        "n_fit_rows": 22040,
+        "n_refit_rows": 33867
+      }
+    },
+    {
+      "valid_from": "2024-04-25T00:00:00Z",
+      "valid_until": "2024-05-15T00:00:00Z",
+      "train_rows_until": "2024-04-24T16:00:00Z",
+      "files": [
+        "20240425T0000/seed0.txt",
+        "20240425T0000/seed1.txt",
+        "20240425T0000/seed2.txt"
+      ],
+      "n_train_rows": 34762,
+      "n_inner_valid_rows": 11892,
       "best_iterations": [
         2,
         3,
-        2
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.31225080755560114,
-          0.44013655656692136,
-          0.34778080191655814
-        ],
-        "n_fit_rows": 28404,
-        "n_refit_rows": 43881
-      }
-    },
-    {
-      "valid_from": "2025-01-25T00:00:00Z",
-      "valid_until": "2025-02-14T00:00:00Z",
-      "train_rows_until": "2025-01-24T16:00:00Z",
-      "files": [
-        "20250125T0000/seed0.txt",
-        "20250125T0000/seed1.txt",
-        "20250125T0000/seed2.txt"
-      ],
-      "n_train_rows": 46001,
-      "n_inner_valid_rows": 16252,
-      "best_iterations": [
-        36,
-        56,
-        8
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.2546280042770036,
-          0.36525611875555786,
-          0.3875443596362272
-        ],
-        "n_fit_rows": 29487,
-        "n_refit_rows": 46001
-      }
-    },
-    {
-      "valid_from": "2025-02-14T00:00:00Z",
-      "valid_until": "2025-03-06T00:00:00Z",
-      "train_rows_until": "2025-02-13T16:00:00Z",
-      "files": [
-        "20250214T0000/seed0.txt",
-        "20250214T0000/seed1.txt",
-        "20250214T0000/seed2.txt"
-      ],
-      "n_train_rows": 48311,
-      "n_inner_valid_rows": 16954,
-      "best_iterations": [
-        1,
-        44,
         1
       ],
       "metrics": {
         "inner_valid_ic_ir_by_seed": [
-          0.2673395306309434,
-          0.3484190651165085,
-          0.29818903367190414
+          0.37948892449224975,
+          0.3629550996593415,
+          0.39734485419881566
         ],
-        "n_fit_rows": 31081,
-        "n_refit_rows": 48311
+        "n_fit_rows": 22674,
+        "n_refit_rows": 34762
       }
     },
     {
-      "valid_from": "2025-03-06T00:00:00Z",
-      "valid_until": "2025-03-26T00:00:00Z",
-      "train_rows_until": "2025-03-05T16:00:00Z",
+      "valid_from": "2024-05-15T00:00:00Z",
+      "valid_until": "2024-06-04T00:00:00Z",
+      "train_rows_until": "2024-05-14T16:00:00Z",
       "files": [
-        "20250306T0000/seed0.txt",
-        "20250306T0000/seed1.txt",
-        "20250306T0000/seed2.txt"
+        "20240515T0000/seed0.txt",
+        "20240515T0000/seed1.txt",
+        "20240515T0000/seed2.txt"
       ],
-      "n_train_rows": 50600,
-      "n_inner_valid_rows": 17525,
+      "n_train_rows": 35610,
+      "n_inner_valid_rows": 12179,
       "best_iterations": [
-        3,
-        68,
-        21
+        11,
+        9,
+        71
       ],
       "metrics": {
         "inner_valid_ic_ir_by_seed": [
-          0.33772172585762245,
-          0.23470369983267433,
-          0.23307281126121024
+          0.23474844292609004,
+          0.3136920084585177,
+          0.25192740227701305
         ],
-        "n_fit_rows": 32785,
-        "n_refit_rows": 50600
+        "n_fit_rows": 23231,
+        "n_refit_rows": 35610
       }
     },
     {
-      "valid_from": "2025-03-26T00:00:00Z",
-      "valid_until": "2025-04-15T00:00:00Z",
-      "train_rows_until": "2025-03-25T16:00:00Z",
+      "valid_from": "2024-06-04T00:00:00Z",
+      "valid_until": "2024-06-24T00:00:00Z",
+      "train_rows_until": "2024-06-03T16:00:00Z",
       "files": [
-        "20250326T0000/seed0.txt",
-        "20250326T0000/seed1.txt",
-        "20250326T0000/seed2.txt"
+        "20240604T0000/seed0.txt",
+        "20240604T0000/seed1.txt",
+        "20240604T0000/seed2.txt"
       ],
-      "n_train_rows": 52199,
-      "n_inner_valid_rows": 17858,
+      "n_train_rows": 36222,
+      "n_inner_valid_rows": 12249,
       "best_iterations": [
-        1,
-        1,
-        1
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.2848129976857627,
-          0.3559083785551872,
-          0.26128419197198616
-        ],
-        "n_fit_rows": 34045,
-        "n_refit_rows": 52199
-      }
-    },
-    {
-      "valid_from": "2025-04-15T00:00:00Z",
-      "valid_until": "2025-05-05T00:00:00Z",
-      "train_rows_until": "2025-04-14T16:00:00Z",
-      "files": [
-        "20250415T0000/seed0.txt",
-        "20250415T0000/seed1.txt",
-        "20250415T0000/seed2.txt"
-      ],
-      "n_train_rows": 53359,
-      "n_inner_valid_rows": 18121,
-      "best_iterations": [
-        34,
         5,
-        21
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.33748969048419614,
-          0.3245707381609642,
-          0.2845271737874763
-        ],
-        "n_fit_rows": 34940,
-        "n_refit_rows": 53359
-      }
-    },
-    {
-      "valid_from": "2025-05-05T00:00:00Z",
-      "valid_until": "2025-05-25T00:00:00Z",
-      "train_rows_until": "2025-05-04T16:00:00Z",
-      "files": [
-        "20250505T0000/seed0.txt",
-        "20250505T0000/seed1.txt",
-        "20250505T0000/seed2.txt"
-      ],
-      "n_train_rows": 54883,
-      "n_inner_valid_rows": 19052,
-      "best_iterations": [
-        1,
-        15,
-        15
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.23647432104716418,
-          0.35648630068567594,
-          0.19784076182879726
-        ],
-        "n_fit_rows": 35519,
-        "n_refit_rows": 54883
-      }
-    },
-    {
-      "valid_from": "2025-05-25T00:00:00Z",
-      "valid_until": "2025-06-14T00:00:00Z",
-      "train_rows_until": "2025-05-24T16:00:00Z",
-      "files": [
-        "20250525T0000/seed0.txt",
-        "20250525T0000/seed1.txt",
-        "20250525T0000/seed2.txt"
-      ],
-      "n_train_rows": 56701,
-      "n_inner_valid_rows": 19677,
-      "best_iterations": [
-        10,
-        1,
+        42,
         20
       ],
       "metrics": {
         "inner_valid_ic_ir_by_seed": [
-          0.27511315288443877,
-          0.2893929747203117,
-          0.19701074412588673
+          -0.026342627501660727,
+          0.159160739978086,
+          0.05523174793267262
         ],
-        "n_fit_rows": 36702,
-        "n_refit_rows": 56701
+        "n_fit_rows": 23769,
+        "n_refit_rows": 36222
       }
     },
     {
-      "valid_from": "2025-06-14T00:00:00Z",
-      "valid_until": "2025-07-04T00:00:00Z",
-      "train_rows_until": "2025-06-13T16:00:00Z",
+      "valid_from": "2024-06-24T00:00:00Z",
+      "valid_until": "2024-07-14T00:00:00Z",
+      "train_rows_until": "2024-06-23T16:00:00Z",
       "files": [
-        "20250614T0000/seed0.txt",
-        "20250614T0000/seed1.txt",
-        "20250614T0000/seed2.txt"
+        "20240624T0000/seed0.txt",
+        "20240624T0000/seed1.txt",
+        "20240624T0000/seed2.txt"
       ],
-      "n_train_rows": 59083,
-      "n_inner_valid_rows": 20510,
+      "n_train_rows": 36715,
+      "n_inner_valid_rows": 12387,
       "best_iterations": [
         9,
+        5,
+        96
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.2946565750311601,
+          0.24323372962500092,
+          0.32878266354023683
+        ],
+        "n_fit_rows": 24122,
+        "n_refit_rows": 36715
+      }
+    },
+    {
+      "valid_from": "2024-07-14T00:00:00Z",
+      "valid_until": "2024-08-03T00:00:00Z",
+      "train_rows_until": "2024-07-13T16:00:00Z",
+      "files": [
+        "20240714T0000/seed0.txt",
+        "20240714T0000/seed1.txt",
+        "20240714T0000/seed2.txt"
+      ],
+      "n_train_rows": 37075,
+      "n_inner_valid_rows": 12541,
+      "best_iterations": [
+        40,
+        17,
+        5
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.32487802013301187,
+          0.25066045874625315,
+          0.23823628906659763
+        ],
+        "n_fit_rows": 24326,
+        "n_refit_rows": 37075
+      }
+    },
+    {
+      "valid_from": "2024-08-03T00:00:00Z",
+      "valid_until": "2024-08-23T00:00:00Z",
+      "train_rows_until": "2024-08-02T16:00:00Z",
+      "files": [
+        "20240803T0000/seed0.txt",
+        "20240803T0000/seed1.txt",
+        "20240803T0000/seed2.txt"
+      ],
+      "n_train_rows": 37545,
+      "n_inner_valid_rows": 12720,
+      "best_iterations": [
+        75,
+        2,
+        41
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.3314963491829766,
+          0.24403659036793074,
+          0.24275648289510052
+        ],
+        "n_fit_rows": 24613,
+        "n_refit_rows": 37545
+      }
+    },
+    {
+      "valid_from": "2024-08-23T00:00:00Z",
+      "valid_until": "2024-09-12T00:00:00Z",
+      "train_rows_until": "2024-08-22T16:00:00Z",
+      "files": [
+        "20240823T0000/seed0.txt",
+        "20240823T0000/seed1.txt",
+        "20240823T0000/seed2.txt"
+      ],
+      "n_train_rows": 37923,
+      "n_inner_valid_rows": 12766,
+      "best_iterations": [
+        33,
+        25,
+        5
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.24879074359951603,
+          0.3010562698362561,
+          0.2196796002503207
+        ],
+        "n_fit_rows": 24945,
+        "n_refit_rows": 37923
+      }
+    },
+    {
+      "valid_from": "2024-09-12T00:00:00Z",
+      "valid_until": "2024-10-02T00:00:00Z",
+      "train_rows_until": "2024-09-11T16:00:00Z",
+      "files": [
+        "20240912T0000/seed0.txt",
+        "20240912T0000/seed1.txt",
+        "20240912T0000/seed2.txt"
+      ],
+      "n_train_rows": 38307,
+      "n_inner_valid_rows": 12927,
+      "best_iterations": [
+        96,
+        5,
+        22
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.19111052113977894,
+          0.31443293713165077,
+          0.15573687165088138
+        ],
+        "n_fit_rows": 25166,
+        "n_refit_rows": 38307
+      }
+    },
+    {
+      "valid_from": "2024-10-02T00:00:00Z",
+      "valid_until": "2024-10-22T00:00:00Z",
+      "train_rows_until": "2024-10-01T16:00:00Z",
+      "files": [
+        "20241002T0000/seed0.txt",
+        "20241002T0000/seed1.txt",
+        "20241002T0000/seed2.txt"
+      ],
+      "n_train_rows": 38901,
+      "n_inner_valid_rows": 13314,
+      "best_iterations": [
+        1,
+        2,
+        3
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.2357015008302624,
+          0.19107052405258024,
+          0.08724551763556332
+        ],
+        "n_fit_rows": 25367,
+        "n_refit_rows": 38901
+      }
+    },
+    {
+      "valid_from": "2024-10-22T00:00:00Z",
+      "valid_until": "2024-11-11T00:00:00Z",
+      "train_rows_until": "2024-10-21T16:00:00Z",
+      "files": [
+        "20241022T0000/seed0.txt",
+        "20241022T0000/seed1.txt",
+        "20241022T0000/seed2.txt"
+      ],
+      "n_train_rows": 39776,
+      "n_inner_valid_rows": 13642,
+      "best_iterations": [
+        18,
         1,
         3
       ],
       "metrics": {
         "inner_valid_ic_ir_by_seed": [
-          0.26880677109428425,
-          0.2287677261820698,
-          0.3292899029149183
+          0.21777459017646103,
+          0.1674215166404901,
+          0.152675996192539
         ],
-        "n_fit_rows": 38239,
-        "n_refit_rows": 59083
+        "n_fit_rows": 25910,
+        "n_refit_rows": 39776
       }
     },
     {
-      "valid_from": "2025-07-04T00:00:00Z",
-      "valid_until": "2025-07-24T00:00:00Z",
-      "train_rows_until": "2025-07-03T16:00:00Z",
+      "valid_from": "2024-11-11T00:00:00Z",
+      "valid_until": "2024-12-01T00:00:00Z",
+      "train_rows_until": "2024-11-10T16:00:00Z",
       "files": [
-        "20250704T0000/seed0.txt",
-        "20250704T0000/seed1.txt",
-        "20250704T0000/seed2.txt"
+        "20241111T0000/seed0.txt",
+        "20241111T0000/seed1.txt",
+        "20241111T0000/seed2.txt"
       ],
-      "n_train_rows": 61193,
-      "n_inner_valid_rows": 21167,
+      "n_train_rows": 40763,
+      "n_inner_valid_rows": 13917,
       "best_iterations": [
-        165,
-        5,
-        1
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.3523423580789854,
-          0.22589003055689336,
-          0.3154242779421528
-        ],
-        "n_fit_rows": 39678,
-        "n_refit_rows": 61193
-      }
-    },
-    {
-      "valid_from": "2025-07-24T00:00:00Z",
-      "valid_until": "2025-08-13T00:00:00Z",
-      "train_rows_until": "2025-07-23T16:00:00Z",
-      "files": [
-        "20250724T0000/seed0.txt",
-        "20250724T0000/seed1.txt",
-        "20250724T0000/seed2.txt"
-      ],
-      "n_train_rows": 63257,
-      "n_inner_valid_rows": 21747,
-      "best_iterations": [
-        1,
-        59,
-        4
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.2813154284383277,
-          0.3701927285750286,
-          0.22158572968778087
-        ],
-        "n_fit_rows": 41150,
-        "n_refit_rows": 63257
-      }
-    },
-    {
-      "valid_from": "2025-08-13T00:00:00Z",
-      "valid_until": "2025-09-02T00:00:00Z",
-      "train_rows_until": "2025-08-12T16:00:00Z",
-      "files": [
-        "20250813T0000/seed0.txt",
-        "20250813T0000/seed1.txt",
-        "20250813T0000/seed2.txt"
-      ],
-      "n_train_rows": 64958,
-      "n_inner_valid_rows": 22218,
-      "best_iterations": [
-        10,
-        6,
-        1
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.2308840714510064,
-          0.3001978152088142,
-          0.39004682326113077
-        ],
-        "n_fit_rows": 42376,
-        "n_refit_rows": 64958
-      }
-    },
-    {
-      "valid_from": "2025-09-02T00:00:00Z",
-      "valid_until": "2025-09-22T00:00:00Z",
-      "train_rows_until": "2025-09-01T16:00:00Z",
-      "files": [
-        "20250902T0000/seed0.txt",
-        "20250902T0000/seed1.txt",
-        "20250902T0000/seed2.txt"
-      ],
-      "n_train_rows": 66738,
-      "n_inner_valid_rows": 22953,
-      "best_iterations": [
-        113,
-        30,
-        27
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.39854818851532,
-          0.4394800798566127,
-          0.410441161736221
-        ],
-        "n_fit_rows": 43409,
-        "n_refit_rows": 66738
-      }
-    },
-    {
-      "valid_from": "2025-09-22T00:00:00Z",
-      "valid_until": "2025-10-12T00:00:00Z",
-      "train_rows_until": "2025-09-21T16:00:00Z",
-      "files": [
-        "20250922T0000/seed0.txt",
-        "20250922T0000/seed1.txt",
-        "20250922T0000/seed2.txt"
-      ],
-      "n_train_rows": 68588,
-      "n_inner_valid_rows": 23599,
-      "best_iterations": [
-        1,
-        1,
-        2
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.35684066989876645,
-          0.2168050651647993,
-          0.31505801398509375
-        ],
-        "n_fit_rows": 44601,
-        "n_refit_rows": 68588
-      }
-    },
-    {
-      "valid_from": "2025-10-12T00:00:00Z",
-      "valid_until": "2025-11-01T00:00:00Z",
-      "train_rows_until": "2025-10-11T16:00:00Z",
-      "files": [
-        "20251012T0000/seed0.txt",
-        "20251012T0000/seed1.txt",
-        "20251012T0000/seed2.txt"
-      ],
-      "n_train_rows": 70902,
-      "n_inner_valid_rows": 24538,
-      "best_iterations": [
-        1,
-        25,
-        22
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.5864350718119459,
-          0.5557683611278744,
-          0.4576222010080618
-        ],
-        "n_fit_rows": 45964,
-        "n_refit_rows": 70902
-      }
-    },
-    {
-      "valid_from": "2025-11-01T00:00:00Z",
-      "valid_until": "2025-11-21T00:00:00Z",
-      "train_rows_until": "2025-10-31T16:00:00Z",
-      "files": [
-        "20251101T0000/seed0.txt",
-        "20251101T0000/seed1.txt",
-        "20251101T0000/seed2.txt"
-      ],
-      "n_train_rows": 73735,
-      "n_inner_valid_rows": 25792,
-      "best_iterations": [
-        5,
-        1,
-        7
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.34392666963286794,
-          0.2525870167285387,
-          0.4197983344823184
-        ],
-        "n_fit_rows": 47525,
-        "n_refit_rows": 73735
-      }
-    },
-    {
-      "valid_from": "2025-11-21T00:00:00Z",
-      "valid_until": "2025-12-11T00:00:00Z",
-      "train_rows_until": "2025-11-20T16:00:00Z",
-      "files": [
-        "20251121T0000/seed0.txt",
-        "20251121T0000/seed1.txt",
-        "20251121T0000/seed2.txt"
-      ],
-      "n_train_rows": 77057,
-      "n_inner_valid_rows": 26927,
-      "best_iterations": [
-        32,
-        1,
-        7
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.6994451374213707,
-          0.5955328623552071,
-          0.5248909654865471
-        ],
-        "n_fit_rows": 49690,
-        "n_refit_rows": 77057
-      }
-    },
-    {
-      "valid_from": "2025-12-11T00:00:00Z",
-      "valid_until": "2025-12-31T00:00:00Z",
-      "train_rows_until": "2025-12-10T16:00:00Z",
-      "files": [
-        "20251211T0000/seed0.txt",
-        "20251211T0000/seed1.txt",
-        "20251211T0000/seed2.txt"
-      ],
-      "n_train_rows": 80206,
-      "n_inner_valid_rows": 27696,
-      "best_iterations": [
-        1,
-        1,
-        1
-      ],
-      "metrics": {
-        "inner_valid_ic_ir_by_seed": [
-          0.6587702525740998,
-          0.6118196121946695,
-          0.6143935601828078
-        ],
-        "n_fit_rows": 52054,
-        "n_refit_rows": 80206
-      }
-    },
-    {
-      "valid_from": "2025-12-31T00:00:00Z",
-      "valid_until": "2026-01-20T00:00:00Z",
-      "train_rows_until": "2025-12-30T16:00:00Z",
-      "files": [
-        "20251231T0000/seed0.txt",
-        "20251231T0000/seed1.txt",
-        "20251231T0000/seed2.txt"
-      ],
-      "n_train_rows": 82434,
-      "n_inner_valid_rows": 28031,
-      "best_iterations": [
-        4,
-        28,
+        54,
+        58,
         9
       ],
       "metrics": {
         "inner_valid_ic_ir_by_seed": [
-          0.4085436356233902,
-          0.38441355005977323,
-          0.3568255641960478
+          0.4621515852678708,
+          0.4115347494140491,
+          0.33286008407672335
         ],
-        "n_fit_rows": 53937,
-        "n_refit_rows": 82434
+        "n_fit_rows": 26616,
+        "n_refit_rows": 40763
       }
     },
     {
-      "valid_from": "2026-01-20T00:00:00Z",
-      "valid_until": "2026-02-09T00:00:00Z",
-      "train_rows_until": "2026-01-19T16:00:00Z",
+      "valid_from": "2024-12-01T00:00:00Z",
+      "valid_until": "2024-12-21T00:00:00Z",
+      "train_rows_until": "2024-11-30T16:00:00Z",
       "files": [
-        "20260120T0000/seed0.txt",
-        "20260120T0000/seed1.txt",
-        "20260120T0000/seed2.txt"
+        "20241201T0000/seed0.txt",
+        "20241201T0000/seed1.txt",
+        "20241201T0000/seed2.txt"
       ],
-      "n_train_rows": 83913,
-      "n_inner_valid_rows": 28414,
+      "n_train_rows": 41708,
+      "n_inner_valid_rows": 14261,
       "best_iterations": [
-        22,
-        7,
-        1
+        51,
+        9,
+        4
       ],
       "metrics": {
         "inner_valid_ic_ir_by_seed": [
-          0.3898262246722725,
-          0.19062627078429487,
-          0.5165403441676522
+          0.2871991724660531,
+          0.19062041065211538,
+          0.22022173840119016
         ],
-        "n_fit_rows": 55029,
-        "n_refit_rows": 83913
+        "n_fit_rows": 27215,
+        "n_refit_rows": 41708
       }
     },
     {
-      "valid_from": "2026-02-09T00:00:00Z",
-      "valid_until": "2026-03-01T00:00:00Z",
-      "train_rows_until": "2026-02-08T16:00:00Z",
+      "valid_from": "2024-12-21T00:00:00Z",
+      "valid_until": "2025-01-10T00:00:00Z",
+      "train_rows_until": "2024-12-20T16:00:00Z",
       "files": [
-        "20260209T0000/seed0.txt",
-        "20260209T0000/seed1.txt",
-        "20260209T0000/seed2.txt"
+        "20241221T0000/seed0.txt",
+        "20241221T0000/seed1.txt",
+        "20241221T0000/seed2.txt"
       ],
-      "n_train_rows": 84967,
-      "n_inner_valid_rows": 28755,
+      "n_train_rows": 42831,
+      "n_inner_valid_rows": 14768,
       "best_iterations": [
-        6,
+        1,
         19,
+        21
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.3536331324695528,
+          0.35681460055916087,
+          0.3940142005272083
+        ],
+        "n_fit_rows": 27821,
+        "n_refit_rows": 42831
+      }
+    },
+    {
+      "valid_from": "2025-01-10T00:00:00Z",
+      "valid_until": "2025-01-30T00:00:00Z",
+      "train_rows_until": "2025-01-09T16:00:00Z",
+      "files": [
+        "20250110T0000/seed0.txt",
+        "20250110T0000/seed1.txt",
+        "20250110T0000/seed2.txt"
+      ],
+      "n_train_rows": 44378,
+      "n_inner_valid_rows": 15465,
+      "best_iterations": [
+        1,
+        74,
         1
       ],
       "metrics": {
         "inner_valid_ic_ir_by_seed": [
-          0.3232699086528614,
-          0.37789911711725815,
-          0.31308497930266066
+          0.3907807084340235,
+          0.32564693267582584,
+          0.44398559102042173
         ],
-        "n_fit_rows": 55736,
-        "n_refit_rows": 84967
+        "n_fit_rows": 28663,
+        "n_refit_rows": 44378
       }
     },
     {
-      "valid_from": "2026-03-01T00:00:00Z",
-      "valid_until": "2026-03-21T00:00:00Z",
-      "train_rows_until": "2026-02-28T16:00:00Z",
+      "valid_from": "2025-01-30T00:00:00Z",
+      "valid_until": "2025-02-19T00:00:00Z",
+      "train_rows_until": "2025-01-29T16:00:00Z",
       "files": [
-        "20260301T0000/seed0.txt",
-        "20260301T0000/seed1.txt",
-        "20260301T0000/seed2.txt"
+        "20250130T0000/seed0.txt",
+        "20250130T0000/seed1.txt",
+        "20250130T0000/seed2.txt"
       ],
-      "n_train_rows": 86309,
-      "n_inner_valid_rows": 29375,
+      "n_train_rows": 46558,
+      "n_inner_valid_rows": 16446,
+      "best_iterations": [
+        1,
+        6,
+        1
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.35184143665548895,
+          0.2465173774160745,
+          0.36077292760374907
+        ],
+        "n_fit_rows": 29842,
+        "n_refit_rows": 46558
+      }
+    },
+    {
+      "valid_from": "2025-02-19T00:00:00Z",
+      "valid_until": "2025-03-11T00:00:00Z",
+      "train_rows_until": "2025-02-18T16:00:00Z",
+      "files": [
+        "20250219T0000/seed0.txt",
+        "20250219T0000/seed1.txt",
+        "20250219T0000/seed2.txt"
+      ],
+      "n_train_rows": 48923,
+      "n_inner_valid_rows": 17137,
+      "best_iterations": [
+        47,
+        31,
+        1
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.26725884010601964,
+          0.35050668752969455,
+          0.28333084908078043
+        ],
+        "n_fit_rows": 31506,
+        "n_refit_rows": 48923
+      }
+    },
+    {
+      "valid_from": "2025-03-11T00:00:00Z",
+      "valid_until": "2025-03-31T00:00:00Z",
+      "train_rows_until": "2025-03-10T16:00:00Z",
+      "files": [
+        "20250311T0000/seed0.txt",
+        "20250311T0000/seed1.txt",
+        "20250311T0000/seed2.txt"
+      ],
+      "n_train_rows": 51067,
+      "n_inner_valid_rows": 17619,
+      "best_iterations": [
+        25,
+        103,
+        1
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.22962869805259206,
+          0.18943022025440626,
+          0.1973341935332679
+        ],
+        "n_fit_rows": 33156,
+        "n_refit_rows": 51067
+      }
+    },
+    {
+      "valid_from": "2025-03-31T00:00:00Z",
+      "valid_until": "2025-04-20T00:00:00Z",
+      "train_rows_until": "2025-03-30T16:00:00Z",
+      "files": [
+        "20250331T0000/seed0.txt",
+        "20250331T0000/seed1.txt",
+        "20250331T0000/seed2.txt"
+      ],
+      "n_train_rows": 52496,
+      "n_inner_valid_rows": 17880,
+      "best_iterations": [
+        72,
+        17,
+        1
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.3860142717483417,
+          0.33657675619273064,
+          0.2776944046546949
+        ],
+        "n_fit_rows": 34318,
+        "n_refit_rows": 52496
+      }
+    },
+    {
+      "valid_from": "2025-04-20T00:00:00Z",
+      "valid_until": "2025-05-10T00:00:00Z",
+      "train_rows_until": "2025-04-19T16:00:00Z",
+      "files": [
+        "20250420T0000/seed0.txt",
+        "20250420T0000/seed1.txt",
+        "20250420T0000/seed2.txt"
+      ],
+      "n_train_rows": 53731,
+      "n_inner_valid_rows": 18378,
       "best_iterations": [
         3,
-        6,
+        33,
+        42
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.2858484174982382,
+          0.31421798306389037,
+          0.25318464572565
+        ],
+        "n_fit_rows": 35055,
+        "n_refit_rows": 53731
+      }
+    },
+    {
+      "valid_from": "2025-05-10T00:00:00Z",
+      "valid_until": "2025-05-30T00:00:00Z",
+      "train_rows_until": "2025-05-09T16:00:00Z",
+      "files": [
+        "20250510T0000/seed0.txt",
+        "20250510T0000/seed1.txt",
+        "20250510T0000/seed2.txt"
+      ],
+      "n_train_rows": 55300,
+      "n_inner_valid_rows": 19191,
+      "best_iterations": [
+        7,
+        3,
+        9
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.3573428848589275,
+          0.3359019205847278,
+          0.5370662174911419
+        ],
+        "n_fit_rows": 35793,
+        "n_refit_rows": 55300
+      }
+    },
+    {
+      "valid_from": "2025-05-30T00:00:00Z",
+      "valid_until": "2025-06-19T00:00:00Z",
+      "train_rows_until": "2025-05-29T16:00:00Z",
+      "files": [
+        "20250530T0000/seed0.txt",
+        "20250530T0000/seed1.txt",
+        "20250530T0000/seed2.txt"
+      ],
+      "n_train_rows": 57287,
+      "n_inner_valid_rows": 19867,
+      "best_iterations": [
+        1,
+        4,
+        6
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.33918721063839957,
+          0.2218556545978058,
+          0.07957614942779373
+        ],
+        "n_fit_rows": 37094,
+        "n_refit_rows": 57287
+      }
+    },
+    {
+      "valid_from": "2025-06-19T00:00:00Z",
+      "valid_until": "2025-07-09T00:00:00Z",
+      "train_rows_until": "2025-06-18T16:00:00Z",
+      "files": [
+        "20250619T0000/seed0.txt",
+        "20250619T0000/seed1.txt",
+        "20250619T0000/seed2.txt"
+      ],
+      "n_train_rows": 59588,
+      "n_inner_valid_rows": 20688,
+      "best_iterations": [
+        1,
+        25,
+        5
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.2426858165031228,
+          0.2738114290860839,
+          0.277296556975874
+        ],
+        "n_fit_rows": 38560,
+        "n_refit_rows": 59588
+      }
+    },
+    {
+      "valid_from": "2025-07-09T00:00:00Z",
+      "valid_until": "2025-07-29T00:00:00Z",
+      "train_rows_until": "2025-07-08T16:00:00Z",
+      "files": [
+        "20250709T0000/seed0.txt",
+        "20250709T0000/seed1.txt",
+        "20250709T0000/seed2.txt"
+      ],
+      "n_train_rows": 61728,
+      "n_inner_valid_rows": 21336,
+      "best_iterations": [
+        9,
+        5,
+        2
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.17267434497184633,
+          0.241826951755233,
+          0.35708761731612854
+        ],
+        "n_fit_rows": 40040,
+        "n_refit_rows": 61728
+      }
+    },
+    {
+      "valid_from": "2025-07-29T00:00:00Z",
+      "valid_until": "2025-08-18T00:00:00Z",
+      "train_rows_until": "2025-07-28T16:00:00Z",
+      "files": [
+        "20250729T0000/seed0.txt",
+        "20250729T0000/seed1.txt",
+        "20250729T0000/seed2.txt"
+      ],
+      "n_train_rows": 63686,
+      "n_inner_valid_rows": 21832,
+      "best_iterations": [
+        1,
+        18,
+        62
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.33598017225648585,
+          0.26942559436267094,
+          0.41148544628286354
+        ],
+        "n_fit_rows": 41492,
+        "n_refit_rows": 63686
+      }
+    },
+    {
+      "valid_from": "2025-08-18T00:00:00Z",
+      "valid_until": "2025-09-07T00:00:00Z",
+      "train_rows_until": "2025-08-17T16:00:00Z",
+      "files": [
+        "20250818T0000/seed0.txt",
+        "20250818T0000/seed1.txt",
+        "20250818T0000/seed2.txt"
+      ],
+      "n_train_rows": 65384,
+      "n_inner_valid_rows": 22392,
+      "best_iterations": [
+        54,
+        22,
+        4
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.21243832357129494,
+          0.4119765355264303,
+          0.2337058455361849
+        ],
+        "n_fit_rows": 42626,
+        "n_refit_rows": 65384
+      }
+    },
+    {
+      "valid_from": "2025-09-07T00:00:00Z",
+      "valid_until": "2025-09-27T00:00:00Z",
+      "train_rows_until": "2025-09-06T16:00:00Z",
+      "files": [
+        "20250907T0000/seed0.txt",
+        "20250907T0000/seed1.txt",
+        "20250907T0000/seed2.txt"
+      ],
+      "n_train_rows": 67182,
+      "n_inner_valid_rows": 23139,
+      "best_iterations": [
+        92,
+        1,
+        74
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.3891424652177128,
+          0.2394534314108472,
+          0.3960396452767938
+        ],
+        "n_fit_rows": 43665,
+        "n_refit_rows": 67182
+      }
+    },
+    {
+      "valid_from": "2025-09-27T00:00:00Z",
+      "valid_until": "2025-10-17T00:00:00Z",
+      "train_rows_until": "2025-09-26T16:00:00Z",
+      "files": [
+        "20250927T0000/seed0.txt",
+        "20250927T0000/seed1.txt",
+        "20250927T0000/seed2.txt"
+      ],
+      "n_train_rows": 69142,
+      "n_inner_valid_rows": 23794,
+      "best_iterations": [
+        62,
+        23,
         1
       ],
       "metrics": {
         "inner_valid_ic_ir_by_seed": [
-          0.34040106457018426,
-          0.18078004339798415,
-          0.318711732827972
+          0.29647478341633127,
+          0.31998440005777906,
+          0.3035842009544392
         ],
-        "n_fit_rows": 56452,
-        "n_refit_rows": 86309
+        "n_fit_rows": 44958,
+        "n_refit_rows": 69142
+      }
+    },
+    {
+      "valid_from": "2025-10-17T00:00:00Z",
+      "valid_until": "2025-11-06T00:00:00Z",
+      "train_rows_until": "2025-10-16T16:00:00Z",
+      "files": [
+        "20251017T0000/seed0.txt",
+        "20251017T0000/seed1.txt",
+        "20251017T0000/seed2.txt"
+      ],
+      "n_train_rows": 71548,
+      "n_inner_valid_rows": 24804,
+      "best_iterations": [
+        1,
+        23,
+        26
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.42405295728948295,
+          0.5211187727825969,
+          0.4831503555273272
+        ],
+        "n_fit_rows": 46340,
+        "n_refit_rows": 71548
+      }
+    },
+    {
+      "valid_from": "2025-11-06T00:00:00Z",
+      "valid_until": "2025-11-26T00:00:00Z",
+      "train_rows_until": "2025-11-05T16:00:00Z",
+      "files": [
+        "20251106T0000/seed0.txt",
+        "20251106T0000/seed1.txt",
+        "20251106T0000/seed2.txt"
+      ],
+      "n_train_rows": 74523,
+      "n_inner_valid_rows": 26120,
+      "best_iterations": [
+        1,
+        33,
+        1
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.40530647509155376,
+          0.3893354741265551,
+          0.43697969644639245
+        ],
+        "n_fit_rows": 47977,
+        "n_refit_rows": 74523
+      }
+    },
+    {
+      "valid_from": "2025-11-26T00:00:00Z",
+      "valid_until": "2025-12-16T00:00:00Z",
+      "train_rows_until": "2025-11-25T16:00:00Z",
+      "files": [
+        "20251126T0000/seed0.txt",
+        "20251126T0000/seed1.txt",
+        "20251126T0000/seed2.txt"
+      ],
+      "n_train_rows": 77856,
+      "n_inner_valid_rows": 27134,
+      "best_iterations": [
+        1,
+        1,
+        1
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.5837488040393667,
+          0.8113210430328639,
+          0.5877754432774819
+        ],
+        "n_fit_rows": 50278,
+        "n_refit_rows": 77856
+      }
+    },
+    {
+      "valid_from": "2025-12-16T00:00:00Z",
+      "valid_until": "2026-01-05T00:00:00Z",
+      "train_rows_until": "2025-12-15T16:00:00Z",
+      "files": [
+        "20251216T0000/seed0.txt",
+        "20251216T0000/seed1.txt",
+        "20251216T0000/seed2.txt"
+      ],
+      "n_train_rows": 80883,
+      "n_inner_valid_rows": 27842,
+      "best_iterations": [
+        1,
+        1,
+        3
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.5910058246787626,
+          0.4913297854119001,
+          0.509620821104323
+        ],
+        "n_fit_rows": 52583,
+        "n_refit_rows": 80883
+      }
+    },
+    {
+      "valid_from": "2026-01-05T00:00:00Z",
+      "valid_until": "2026-01-25T00:00:00Z",
+      "train_rows_until": "2026-01-04T16:00:00Z",
+      "files": [
+        "20260105T0000/seed0.txt",
+        "20260105T0000/seed1.txt",
+        "20260105T0000/seed2.txt"
+      ],
+      "n_train_rows": 82867,
+      "n_inner_valid_rows": 28113,
+      "best_iterations": [
+        1,
+        7,
+        26
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.36591785117938824,
+          0.250216792399849,
+          0.3407195262025688
+        ],
+        "n_fit_rows": 54288,
+        "n_refit_rows": 82867
+      }
+    },
+    {
+      "valid_from": "2026-01-25T00:00:00Z",
+      "valid_until": "2026-02-14T00:00:00Z",
+      "train_rows_until": "2026-01-24T16:00:00Z",
+      "files": [
+        "20260125T0000/seed0.txt",
+        "20260125T0000/seed1.txt",
+        "20260125T0000/seed2.txt"
+      ],
+      "n_train_rows": 84235,
+      "n_inner_valid_rows": 28509,
+      "best_iterations": [
+        1,
+        1,
+        1
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.291991715791049,
+          0.28638423390661505,
+          0.344641304389885
+        ],
+        "n_fit_rows": 55254,
+        "n_refit_rows": 84235
+      }
+    },
+    {
+      "valid_from": "2026-02-14T00:00:00Z",
+      "valid_until": "2026-03-06T00:00:00Z",
+      "train_rows_until": "2026-02-13T16:00:00Z",
+      "files": [
+        "20260214T0000/seed0.txt",
+        "20260214T0000/seed1.txt",
+        "20260214T0000/seed2.txt"
+      ],
+      "n_train_rows": 85255,
+      "n_inner_valid_rows": 28866,
+      "best_iterations": [
+        3,
+        32,
+        2
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.07011525320258925,
+          0.2976968617179012,
+          0.33292261449770666
+        ],
+        "n_fit_rows": 55911,
+        "n_refit_rows": 85255
+      }
+    },
+    {
+      "valid_from": "2026-03-06T00:00:00Z",
+      "valid_until": "2026-03-26T00:00:00Z",
+      "train_rows_until": "2026-03-05T16:00:00Z",
+      "files": [
+        "20260306T0000/seed0.txt",
+        "20260306T0000/seed1.txt",
+        "20260306T0000/seed2.txt"
+      ],
+      "n_train_rows": 86663,
+      "n_inner_valid_rows": 29524,
+      "best_iterations": [
+        1,
+        1,
+        6
+      ],
+      "metrics": {
+        "inner_valid_ic_ir_by_seed": [
+          0.4420087380536024,
+          0.33609010949383383,
+          0.37718808288709993
+        ],
+        "n_fit_rows": 56651,
+        "n_refit_rows": 86663
       }
     }
   ]

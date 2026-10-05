@@ -10,8 +10,8 @@ This file is generated automatically from the input CSV. It highlights where a h
 
 ## Data-derived thresholds
 
-- |IC_IR| median: **0.1181**; upper quartile: **0.1357**.
-- IR-spread upper quartile: **0.0768**. This is used as the primary 'regime-sensitive' cutoff.
+- |IC_IR| median: **0.1060**; upper quartile: **0.1411**.
+- IR-spread upper quartile: **0.1064**. This is used as the primary 'regime-sensitive' cutoff.
 - Material sign reversal requires meaningful IC_IR on both sides of zero; tiny sign changes near zero are not promoted to `Regime-Reversal`.
 
 ## Factor-level classification counts
@@ -38,23 +38,23 @@ Only alphas with |t_stat| >= 3 are eligible; eligible alphas are ranked by |IC_I
 
 | Dimension | State | Samples | Low sample? | Significant | Top 1 Alpha | Top 2 Alpha | Top 3 Alpha |
 |---|---|---:|:---:|---:|---|---|---|
-| trend | bear | 1152 | False | 1/1 | `+custom.quote_activity_rank` (IR=0.1181, t=4.04) | - | - |
-| trend | neutral | 3050 | False | 1/1 | `+custom.quote_activity_rank` (IR=0.0766, t=4.27) | - | - |
-| trend | bull | 1144 | False | 1/1 | `+custom.quote_activity_rank` (IR=0.1533, t=5.49) | - | - |
+| trend | bear | 569 | False | 0/1 | - | - | - |
+| trend | neutral | 1818 | False | 0/1 | - | - | - |
+| trend | bull | 769 | False | 1/1 | `+custom.quote_activity_rank` (IR=0.1762, t=5.08) | - | - |
 
 ## Most regime-sensitive factor/dimension pairs
 
 | Rank | Factor | Dimension | Class | IR spread | Best state | Best IC_IR | Best samples | Low sample? |
 |---:|---|---|---|---:|---|---:|---:|---|
-| 1 | custom.quote_activity_rank | trend | Conditional | 0.0768 | bull | 0.1533 | 1144 | False |
+| 1 | custom.quote_activity_rank | trend | Conditional | 0.1064 | bull | 0.1762 | 769 | False |
 
 ## Strongest regime observations after excluding low-sample states
 
 | Rank | Factor | Dimension | State | IC_IR | |IC_IR| | Direction | Samples | Win rate |
 |---:|---|---|---|---:|---:|---|---:|---:|
-| 1 | custom.quote_activity_rank | trend | bull | 0.1533 | 0.1533 | original | 1144 | 0.5673 |
-| 2 | custom.quote_activity_rank | trend | bear | 0.1181 | 0.1181 | original | 1152 | 0.5451 |
-| 3 | custom.quote_activity_rank | trend | neutral | 0.0766 | 0.0766 | original | 3050 | 0.5315 |
+| 1 | custom.quote_activity_rank | trend | bull | 0.1762 | 0.1762 | original | 769 | 0.5904 |
+| 2 | custom.quote_activity_rank | trend | bear | 0.1060 | 0.1060 | original | 569 | 0.5378 |
+| 3 | custom.quote_activity_rank | trend | neutral | 0.0698 | 0.0698 | original | 1818 | 0.5380 |
 
 ## Reading order
 

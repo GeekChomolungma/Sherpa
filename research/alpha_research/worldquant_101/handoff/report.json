@@ -3,7 +3,7 @@
   "schema_version": 1,
   "track": "worldquant_101",
   "producer": "report",
-  "created_at": "2026-09-30T22:26:45Z",
+  "created_at": "2026-10-05T12:55:52Z",
   "meta": {
     "source_profile": "D:\\code-repo\\Chomo\\Sherpa\\research\\alpha_research\\worldquant_101\\regime_alpha_profile.csv",
     "matrix_top_k": 5,
@@ -17,37 +17,37 @@
         "factors": [
           {
             "name": "worldquant.alpha040",
-            "ic_ir": 0.2199900058204945,
-            "t_stat": 8.639001447130509,
-            "baseline_ic_ir": 0.22095202824167007,
-            "low_sample": false
-          },
-          {
-            "name": "worldquant.alpha044",
-            "ic_ir": 0.18003428417163186,
-            "t_stat": 7.482389751753576,
-            "baseline_ic_ir": 0.16304093986954837,
-            "low_sample": false
-          },
-          {
-            "name": "worldquant.alpha094",
-            "ic_ir": 0.17792642323079574,
-            "t_stat": 7.156663094993968,
-            "baseline_ic_ir": 0.17869308758645347,
+            "ic_ir": 0.25297316840507544,
+            "t_stat": 7.949954841429352,
+            "baseline_ic_ir": 0.22527753585991914,
             "low_sample": false
           },
           {
             "name": "worldquant.alpha016",
-            "ic_ir": 0.1746944777528846,
-            "t_stat": 6.882438655256499,
-            "baseline_ic_ir": 0.17144370823292737,
+            "ic_ir": 0.2456915031447948,
+            "t_stat": 7.3284542804359205,
+            "baseline_ic_ir": 0.2053442708003265,
             "low_sample": false
           },
           {
-            "name": "worldquant.alpha015",
-            "ic_ir": 0.15400169001914918,
-            "t_stat": 6.13717502352922,
-            "baseline_ic_ir": 0.10856497504864199,
+            "name": "worldquant.alpha094",
+            "ic_ir": 0.2310601626907484,
+            "t_stat": 6.803065996030433,
+            "baseline_ic_ir": 0.19801327130481208,
+            "low_sample": false
+          },
+          {
+            "name": "worldquant.alpha036",
+            "ic_ir": 0.20191469933734796,
+            "t_stat": 6.244379526336831,
+            "baseline_ic_ir": 0.16544524125975285,
+            "low_sample": false
+          },
+          {
+            "name": "worldquant.alpha044",
+            "ic_ir": 0.20034748091210247,
+            "t_stat": 5.7804285209906,
+            "baseline_ic_ir": 0.17025894603286368,
             "low_sample": false
           }
         ]
@@ -58,37 +58,37 @@
         "factors": [
           {
             "name": "worldquant.alpha040",
-            "ic_ir": 0.22056525177948338,
-            "t_stat": 10.513674171679122,
-            "baseline_ic_ir": 0.22095202824167007,
+            "ic_ir": 0.2111405825715622,
+            "t_stat": 7.615258609872117,
+            "baseline_ic_ir": 0.22527753585991914,
             "low_sample": false
           },
           {
             "name": "worldquant.alpha094",
-            "ic_ir": 0.18337303287948276,
-            "t_stat": 8.611844214495246,
-            "baseline_ic_ir": 0.17869308758645347,
+            "ic_ir": 0.20463297825058785,
+            "t_stat": 7.161413042686625,
+            "baseline_ic_ir": 0.19801327130481208,
             "low_sample": false
           },
           {
             "name": "worldquant.alpha016",
-            "ic_ir": 0.1535391064298085,
-            "t_stat": 7.205819965072639,
-            "baseline_ic_ir": 0.17144370823292737,
+            "ic_ir": 0.17915882754309453,
+            "t_stat": 6.177746989813972,
+            "baseline_ic_ir": 0.2053442708003265,
             "low_sample": false
           },
           {
             "name": "worldquant.alpha044",
-            "ic_ir": 0.14902411849965044,
-            "t_stat": 7.099997091359221,
-            "baseline_ic_ir": 0.16304093986954837,
+            "ic_ir": 0.16080011910019323,
+            "t_stat": 5.802307428090725,
+            "baseline_ic_ir": 0.17025894603286368,
             "low_sample": false
           },
           {
-            "name": "worldquant.alpha050",
-            "ic_ir": 0.13088616510122228,
-            "t_stat": 6.082545861655326,
-            "baseline_ic_ir": 0.11882486206791437,
+            "name": "worldquant.alpha073",
+            "ic_ir": 0.13065172906043584,
+            "t_stat": 4.6209907912392865,
+            "baseline_ic_ir": 0.11611430379596023,
             "low_sample": false
           }
         ]
@@ -99,37 +99,37 @@
         "factors": [
           {
             "name": "worldquant.alpha040",
-            "ic_ir": 0.222442400575321,
-            "t_stat": 9.215170015842068,
-            "baseline_ic_ir": 0.22095202824167007,
+            "ic_ir": 0.21657212195928044,
+            "t_stat": 6.781459880286113,
+            "baseline_ic_ir": 0.22527753585991914,
             "low_sample": false
           },
           {
             "name": "worldquant.alpha016",
-            "ic_ir": 0.1909640948655786,
-            "t_stat": 7.814188677756894,
-            "baseline_ic_ir": 0.17144370823292737,
+            "ic_ir": 0.2003090277510549,
+            "t_stat": 6.224142189089965,
+            "baseline_ic_ir": 0.2053442708003265,
+            "low_sample": false
+          },
+          {
+            "name": "worldquant.alpha036",
+            "ic_ir": 0.1834235764710853,
+            "t_stat": 5.198377356354984,
+            "baseline_ic_ir": 0.16544524125975285,
+            "low_sample": false
+          },
+          {
+            "name": "worldquant.alpha055",
+            "ic_ir": 0.15984356893119273,
+            "t_stat": 4.788050594035259,
+            "baseline_ic_ir": 0.10114640387710933,
             "low_sample": false
           },
           {
             "name": "worldquant.alpha094",
-            "ic_ir": 0.17388344089467225,
-            "t_stat": 7.450897019370026,
-            "baseline_ic_ir": 0.17869308758645347,
-            "low_sample": false
-          },
-          {
-            "name": "worldquant.alpha029",
-            "ic_ir": 0.16745798836820483,
-            "t_stat": 6.76127542908778,
-            "baseline_ic_ir": 0.1388145567868171,
-            "low_sample": false
-          },
-          {
-            "name": "worldquant.alpha044",
-            "ic_ir": 0.16324853920492813,
-            "t_stat": 6.608219897478624,
-            "baseline_ic_ir": 0.16304093986954837,
+            "ic_ir": 0.15783292992552178,
+            "t_stat": 5.030968728238653,
+            "baseline_ic_ir": 0.19801327130481208,
             "low_sample": false
           }
         ]
@@ -141,38 +141,38 @@
         "note": "",
         "factors": [
           {
-            "name": "worldquant.alpha040",
-            "ic_ir": 0.24743784989323514,
-            "t_stat": 9.311018546801455,
-            "baseline_ic_ir": 0.22095202824167007,
-            "low_sample": false
-          },
-          {
             "name": "worldquant.alpha094",
-            "ic_ir": 0.20030092863805712,
-            "t_stat": 7.310760830657933,
-            "baseline_ic_ir": 0.17869308758645347,
-            "low_sample": false
-          },
-          {
-            "name": "worldquant.alpha044",
-            "ic_ir": 0.17582385404467005,
-            "t_stat": 6.532074638544625,
-            "baseline_ic_ir": 0.16304093986954837,
+            "ic_ir": 0.24078667995105957,
+            "t_stat": 6.96074011702747,
+            "baseline_ic_ir": 0.19801327130481208,
             "low_sample": false
           },
           {
             "name": "worldquant.alpha016",
-            "ic_ir": 0.1754807779625089,
-            "t_stat": 5.861591648961469,
-            "baseline_ic_ir": 0.17144370823292737,
+            "ic_ir": 0.2407396436759444,
+            "t_stat": 6.266124762407232,
+            "baseline_ic_ir": 0.2053442708003265,
+            "low_sample": false
+          },
+          {
+            "name": "worldquant.alpha040",
+            "ic_ir": 0.2295327562426775,
+            "t_stat": 6.797084998955519,
+            "baseline_ic_ir": 0.22527753585991914,
             "low_sample": false
           },
           {
             "name": "worldquant.alpha073",
-            "ic_ir": 0.16865766893427464,
-            "t_stat": 6.228523559753161,
-            "baseline_ic_ir": 0.11474232425851084,
+            "ic_ir": 0.19730981688877958,
+            "t_stat": 5.657988091844986,
+            "baseline_ic_ir": 0.11611430379596023,
+            "low_sample": false
+          },
+          {
+            "name": "worldquant.alpha050",
+            "ic_ir": 0.19122497385193218,
+            "t_stat": 5.792146631565719,
+            "baseline_ic_ir": 0.12781792311785642,
             "low_sample": false
           }
         ]
@@ -183,37 +183,37 @@
         "factors": [
           {
             "name": "worldquant.alpha040",
-            "ic_ir": 0.22808405289730746,
-            "t_stat": 11.82428869468233,
-            "baseline_ic_ir": 0.22095202824167007,
+            "ic_ir": 0.23929255401520244,
+            "t_stat": 10.074512479201145,
+            "baseline_ic_ir": 0.22527753585991914,
             "low_sample": false
           },
           {
             "name": "worldquant.alpha016",
-            "ic_ir": 0.18717322202062547,
-            "t_stat": 9.797986902992529,
-            "baseline_ic_ir": 0.17144370823292737,
+            "ic_ir": 0.2027692473605599,
+            "t_stat": 7.952243353174058,
+            "baseline_ic_ir": 0.2053442708003265,
             "low_sample": false
           },
           {
             "name": "worldquant.alpha094",
-            "ic_ir": 0.1854307383479428,
-            "t_stat": 9.955495836143683,
-            "baseline_ic_ir": 0.17869308758645347,
+            "ic_ir": 0.20193965337372366,
+            "t_stat": 8.097141268888327,
+            "baseline_ic_ir": 0.19801327130481208,
             "low_sample": false
           },
           {
             "name": "worldquant.alpha044",
-            "ic_ir": 0.17233846028055652,
-            "t_stat": 8.970437671891197,
-            "baseline_ic_ir": 0.16304093986954837,
+            "ic_ir": 0.17821767429628213,
+            "t_stat": 6.9297428270698855,
+            "baseline_ic_ir": 0.17025894603286368,
             "low_sample": false
           },
           {
-            "name": "worldquant.alpha029",
-            "ic_ir": 0.14209498448480984,
-            "t_stat": 7.146344095401308,
-            "baseline_ic_ir": 0.1388145567868171,
+            "name": "worldquant.alpha036",
+            "ic_ir": 0.16544420075347294,
+            "t_stat": 6.589068017075045,
+            "baseline_ic_ir": 0.16544524125975285,
             "low_sample": false
           }
         ]
@@ -224,37 +224,37 @@
         "factors": [
           {
             "name": "worldquant.alpha040",
-            "ic_ir": 0.18298388641876828,
-            "t_stat": 6.659241250615008,
-            "baseline_ic_ir": 0.22095202824167007,
+            "ic_ir": 0.1940823595853565,
+            "t_stat": 5.541776722838022,
+            "baseline_ic_ir": 0.22527753585991914,
             "low_sample": false
           },
           {
-            "name": "worldquant.alpha055",
-            "ic_ir": 0.15653332161830968,
-            "t_stat": 5.648300016819921,
-            "baseline_ic_ir": 0.12496196304747907,
+            "name": "worldquant.alpha036",
+            "ic_ir": 0.18520566656471743,
+            "t_stat": 5.197714139975953,
+            "baseline_ic_ir": 0.16544524125975285,
+            "low_sample": false
+          },
+          {
+            "name": "worldquant.alpha016",
+            "ic_ir": 0.17690810963280587,
+            "t_stat": 5.422116944762211,
+            "baseline_ic_ir": 0.2053442708003265,
             "low_sample": false
           },
           {
             "name": "worldquant.alpha025",
-            "ic_ir": 0.15614526961461284,
-            "t_stat": 5.786214051171718,
-            "baseline_ic_ir": 0.11329320567203231,
+            "ic_ir": 0.17476986289182941,
+            "t_stat": 5.2784837935204845,
+            "baseline_ic_ir": 0.10816693046014167,
             "low_sample": false
           },
           {
-            "name": "worldquant.alpha094",
-            "ic_ir": 0.14620375833379107,
-            "t_stat": 5.608936866570248,
-            "baseline_ic_ir": 0.17869308758645347,
-            "low_sample": false
-          },
-          {
-            "name": "worldquant.alpha037",
-            "ic_ir": 0.14410786645657803,
-            "t_stat": 5.186645603963244,
-            "baseline_ic_ir": 0.1121734247311454,
+            "name": "worldquant.alpha044",
+            "ic_ir": 0.1577203039781403,
+            "t_stat": 4.626995835250672,
+            "baseline_ic_ir": 0.17025894603286368,
             "low_sample": false
           }
         ]
@@ -266,38 +266,38 @@
         "note": "",
         "factors": [
           {
+            "name": "worldquant.alpha016",
+            "ic_ir": 0.2500868896582323,
+            "t_stat": 5.940120443952337,
+            "baseline_ic_ir": 0.2053442708003265,
+            "low_sample": false
+          },
+          {
+            "name": "worldquant.alpha094",
+            "ic_ir": 0.22056830792986595,
+            "t_stat": 5.335452451564065,
+            "baseline_ic_ir": 0.19801327130481208,
+            "low_sample": false
+          },
+          {
             "name": "worldquant.alpha040",
-            "ic_ir": 0.16792579964198212,
-            "t_stat": 5.606393278070875,
-            "baseline_ic_ir": 0.22095202824167007,
+            "ic_ir": 0.2150839470424641,
+            "t_stat": 4.78678754291944,
+            "baseline_ic_ir": 0.22527753585991914,
+            "low_sample": false
+          },
+          {
+            "name": "worldquant.alpha029",
+            "ic_ir": 0.21199358591278739,
+            "t_stat": 4.798644421260859,
+            "baseline_ic_ir": 0.13767240717416387,
             "low_sample": false
           },
           {
             "name": "worldquant.alpha044",
-            "ic_ir": 0.15983111168223627,
-            "t_stat": 5.239133483681308,
-            "baseline_ic_ir": 0.16304093986954837,
-            "low_sample": false
-          },
-          {
-            "name": "worldquant.alpha016",
-            "ic_ir": 0.1505294216991912,
-            "t_stat": 5.198526133709377,
-            "baseline_ic_ir": 0.17144370823292737,
-            "low_sample": false
-          },
-          {
-            "name": "worldquant.alpha003",
-            "ic_ir": 0.14232661756434267,
-            "t_stat": 4.81793556575683,
-            "baseline_ic_ir": 0.09979826277180778,
-            "low_sample": false
-          },
-          {
-            "name": "worldquant.alpha055",
-            "ic_ir": 0.1330550945911406,
-            "t_stat": 4.628305161542587,
-            "baseline_ic_ir": 0.12496196304747907,
+            "ic_ir": 0.20939162786756987,
+            "t_stat": 4.770144436647941,
+            "baseline_ic_ir": 0.17025894603286368,
             "low_sample": false
           }
         ]
@@ -308,37 +308,37 @@
         "factors": [
           {
             "name": "worldquant.alpha040",
-            "ic_ir": 0.2208628163273659,
-            "t_stat": 11.881780613624903,
-            "baseline_ic_ir": 0.22095202824167007,
-            "low_sample": false
-          },
-          {
-            "name": "worldquant.alpha044",
-            "ic_ir": 0.17774948312556366,
-            "t_stat": 9.926841468499008,
-            "baseline_ic_ir": 0.16304093986954837,
-            "low_sample": false
-          },
-          {
-            "name": "worldquant.alpha094",
-            "ic_ir": 0.17347887075115312,
-            "t_stat": 9.748039105383109,
-            "baseline_ic_ir": 0.17869308758645347,
+            "ic_ir": 0.21388147984109068,
+            "t_stat": 8.830786243385836,
+            "baseline_ic_ir": 0.22527753585991914,
             "low_sample": false
           },
           {
             "name": "worldquant.alpha016",
-            "ic_ir": 0.17105161523213583,
-            "t_stat": 9.540031502058168,
-            "baseline_ic_ir": 0.17144370823292737,
+            "ic_ir": 0.19941590812744692,
+            "t_stat": 8.49926467381497,
+            "baseline_ic_ir": 0.2053442708003265,
+            "low_sample": false
+          },
+          {
+            "name": "worldquant.alpha044",
+            "ic_ir": 0.1781312016807916,
+            "t_stat": 7.672427029217185,
+            "baseline_ic_ir": 0.17025894603286368,
+            "low_sample": false
+          },
+          {
+            "name": "worldquant.alpha094",
+            "ic_ir": 0.17714112731246143,
+            "t_stat": 7.9933129795928455,
+            "baseline_ic_ir": 0.19801327130481208,
             "low_sample": false
           },
           {
             "name": "worldquant.alpha036",
-            "ic_ir": 0.14652294693793458,
-            "t_stat": 7.802877564905705,
-            "baseline_ic_ir": 0.12510462762664476,
+            "ic_ir": 0.16375861918997098,
+            "t_stat": 6.796550001325969,
+            "baseline_ic_ir": 0.16544524125975285,
             "low_sample": false
           }
         ]
@@ -349,37 +349,37 @@
         "factors": [
           {
             "name": "worldquant.alpha040",
-            "ic_ir": 0.2754107897816226,
-            "t_stat": 9.782664733952561,
-            "baseline_ic_ir": 0.22095202824167007,
+            "ic_ir": 0.2593639304270926,
+            "t_stat": 7.418187888857492,
+            "baseline_ic_ir": 0.22527753585991914,
             "low_sample": false
           },
           {
             "name": "worldquant.alpha094",
-            "ic_ir": 0.23934425657120345,
-            "t_stat": 8.395027221460532,
-            "baseline_ic_ir": 0.17869308758645347,
+            "ic_ir": 0.23123801452450876,
+            "t_stat": 6.753209868186136,
+            "baseline_ic_ir": 0.19801327130481208,
             "low_sample": false
           },
           {
             "name": "worldquant.alpha016",
-            "ic_ir": 0.19370137468902926,
-            "t_stat": 7.202852758415137,
-            "baseline_ic_ir": 0.17144370823292737,
+            "ic_ir": 0.1884792021379232,
+            "t_stat": 5.6586932289248235,
+            "baseline_ic_ir": 0.2053442708003265,
             "low_sample": false
           },
           {
-            "name": "worldquant.alpha029",
-            "ic_ir": 0.18219286660898967,
-            "t_stat": 5.68956428149308,
-            "baseline_ic_ir": 0.1388145567868171,
+            "name": "worldquant.alpha036",
+            "ic_ir": 0.18176801643854204,
+            "t_stat": 4.927468611624141,
+            "baseline_ic_ir": 0.16544524125975285,
             "low_sample": false
           },
           {
             "name": "worldquant.alpha025",
-            "ic_ir": 0.17089521206254893,
-            "t_stat": 5.860535225486626,
-            "baseline_ic_ir": 0.11329320567203231,
+            "ic_ir": 0.17089462306655892,
+            "t_stat": 4.852854625013163,
+            "baseline_ic_ir": 0.10816693046014167,
             "low_sample": false
           }
         ]
@@ -392,37 +392,37 @@
         "factors": [
           {
             "name": "worldquant.alpha040",
-            "ic_ir": 0.2417268264558735,
-            "t_stat": 11.991070839030092,
-            "baseline_ic_ir": 0.22095202824167007,
+            "ic_ir": 0.25747134450107734,
+            "t_stat": 9.846140163727245,
+            "baseline_ic_ir": 0.22527753585991914,
             "low_sample": false
           },
           {
             "name": "worldquant.alpha094",
-            "ic_ir": 0.17462030694306105,
-            "t_stat": 8.425418142000986,
-            "baseline_ic_ir": 0.17869308758645347,
-            "low_sample": false
-          },
-          {
-            "name": "worldquant.alpha044",
-            "ic_ir": 0.15443030373557243,
-            "t_stat": 7.6547625273890265,
-            "baseline_ic_ir": 0.16304093986954837,
+            "ic_ir": 0.21358225101234685,
+            "t_stat": 7.7871690633807304,
+            "baseline_ic_ir": 0.19801327130481208,
             "low_sample": false
           },
           {
             "name": "worldquant.alpha016",
-            "ic_ir": 0.15332912294972,
-            "t_stat": 7.811807959390241,
-            "baseline_ic_ir": 0.17144370823292737,
+            "ic_ir": 0.195403862202319,
+            "t_stat": 7.571704506097228,
+            "baseline_ic_ir": 0.2053442708003265,
             "low_sample": false
           },
           {
-            "name": "worldquant.alpha055",
-            "ic_ir": 0.13842502421763933,
-            "t_stat": 6.840393852588891,
-            "baseline_ic_ir": 0.12496196304747907,
+            "name": "worldquant.alpha050",
+            "ic_ir": 0.1649742168015609,
+            "t_stat": 5.89987111216472,
+            "baseline_ic_ir": 0.12781792311785642,
+            "low_sample": false
+          },
+          {
+            "name": "worldquant.alpha044",
+            "ic_ir": 0.15672993387601056,
+            "t_stat": 5.858353359539832,
+            "baseline_ic_ir": 0.17025894603286368,
             "low_sample": false
           }
         ]
@@ -432,38 +432,38 @@
         "note": "",
         "factors": [
           {
-            "name": "worldquant.alpha040",
-            "ic_ir": 0.22289427374528714,
-            "t_stat": 7.607439182025488,
-            "baseline_ic_ir": 0.22095202824167007,
-            "low_sample": false
-          },
-          {
             "name": "worldquant.alpha025",
-            "ic_ir": 0.19344068391658478,
-            "t_stat": 6.655103578274036,
-            "baseline_ic_ir": 0.11329320567203231,
+            "ic_ir": 0.2271143868111013,
+            "t_stat": 5.457381485784743,
+            "baseline_ic_ir": 0.10816693046014167,
             "low_sample": false
           },
           {
             "name": "worldquant.alpha016",
-            "ic_ir": 0.16878879521821613,
-            "t_stat": 6.055308910391861,
-            "baseline_ic_ir": 0.17144370823292737,
+            "ic_ir": 0.22104783488321253,
+            "t_stat": 5.626248674902963,
+            "baseline_ic_ir": 0.2053442708003265,
+            "low_sample": false
+          },
+          {
+            "name": "worldquant.alpha040",
+            "ic_ir": 0.21457445238069509,
+            "t_stat": 5.733765835539831,
+            "baseline_ic_ir": 0.22527753585991914,
+            "low_sample": false
+          },
+          {
+            "name": "worldquant.alpha036",
+            "ic_ir": 0.19899275769055752,
+            "t_stat": 5.1303273100153985,
+            "baseline_ic_ir": 0.16544524125975285,
             "low_sample": false
           },
           {
             "name": "worldquant.alpha094",
-            "ic_ir": 0.16309782577727527,
-            "t_stat": 6.0560973060767385,
-            "baseline_ic_ir": 0.17869308758645347,
-            "low_sample": false
-          },
-          {
-            "name": "worldquant.alpha044",
-            "ic_ir": 0.15125049930508874,
-            "t_stat": 5.251445007988501,
-            "baseline_ic_ir": 0.16304093986954837,
+            "ic_ir": 0.1868968116258154,
+            "t_stat": 4.909667975498824,
+            "baseline_ic_ir": 0.19801327130481208,
             "low_sample": false
           }
         ]
@@ -473,38 +473,38 @@
         "note": "",
         "factors": [
           {
-            "name": "worldquant.alpha040",
-            "ic_ir": 0.2054171503486547,
-            "t_stat": 9.189957166838697,
-            "baseline_ic_ir": 0.22095202824167007,
-            "low_sample": false
-          },
-          {
             "name": "worldquant.alpha016",
-            "ic_ir": 0.19873102428637582,
-            "t_stat": 8.55864539076573,
-            "baseline_ic_ir": 0.17144370823292737,
+            "ic_ir": 0.2043263575748827,
+            "t_stat": 6.705510944745462,
+            "baseline_ic_ir": 0.2053442708003265,
             "low_sample": false
           },
           {
-            "name": "worldquant.alpha094",
-            "ic_ir": 0.1928782574326778,
-            "t_stat": 8.965932682682835,
-            "baseline_ic_ir": 0.17869308758645347,
+            "name": "worldquant.alpha036",
+            "ic_ir": 0.18748830344346365,
+            "t_stat": 6.089675503616562,
+            "baseline_ic_ir": 0.16544524125975285,
+            "low_sample": false
+          },
+          {
+            "name": "worldquant.alpha040",
+            "ic_ir": 0.18378681723860213,
+            "t_stat": 6.474996538870787,
+            "baseline_ic_ir": 0.22527753585991914,
             "low_sample": false
           },
           {
             "name": "worldquant.alpha044",
-            "ic_ir": 0.18118836326296858,
-            "t_stat": 7.972885645134487,
-            "baseline_ic_ir": 0.16304093986954837,
+            "ic_ir": 0.17682347925189215,
+            "t_stat": 5.729551113552248,
+            "baseline_ic_ir": 0.17025894603286368,
             "low_sample": false
           },
           {
-            "name": "worldquant.alpha029",
-            "ic_ir": 0.1516049215925157,
-            "t_stat": 6.450448909416433,
-            "baseline_ic_ir": 0.1388145567868171,
+            "name": "worldquant.alpha094",
+            "ic_ir": 0.17321438528236943,
+            "t_stat": 6.43972303846298,
+            "baseline_ic_ir": 0.19801327130481208,
             "low_sample": false
           }
         ]
@@ -517,37 +517,37 @@
     "factors": [
       {
         "name": "worldquant.alpha040",
-        "ic_ir": 0.22095202824167007,
-        "t_stat": 16.369711842201696,
-        "baseline_ic_ir": 0.22095202824167007,
-        "low_sample": false
-      },
-      {
-        "name": "worldquant.alpha094",
-        "ic_ir": 0.17869308758645347,
-        "t_stat": 13.951703377958541,
-        "baseline_ic_ir": 0.17869308758645347,
+        "ic_ir": 0.22527753585991914,
+        "t_stat": 13.317513838212523,
+        "baseline_ic_ir": 0.22527753585991914,
         "low_sample": false
       },
       {
         "name": "worldquant.alpha016",
-        "ic_ir": 0.17144370823292737,
-        "t_stat": 12.938452203403843,
-        "baseline_ic_ir": 0.17144370823292737,
+        "ic_ir": 0.2053442708003265,
+        "t_stat": 11.772482329419798,
+        "baseline_ic_ir": 0.2053442708003265,
+        "low_sample": false
+      },
+      {
+        "name": "worldquant.alpha094",
+        "ic_ir": 0.19801327130481208,
+        "t_stat": 11.767579545969491,
+        "baseline_ic_ir": 0.19801327130481208,
         "low_sample": false
       },
       {
         "name": "worldquant.alpha044",
-        "ic_ir": 0.16304093986954837,
-        "t_stat": 12.289211361029599,
-        "baseline_ic_ir": 0.16304093986954837,
+        "ic_ir": 0.17025894603286368,
+        "t_stat": 9.51701920244306,
+        "baseline_ic_ir": 0.17025894603286368,
         "low_sample": false
       },
       {
-        "name": "worldquant.alpha029",
-        "ic_ir": 0.1388145567868171,
-        "t_stat": 10.013006210842924,
-        "baseline_ic_ir": 0.1388145567868171,
+        "name": "worldquant.alpha036",
+        "ic_ir": 0.16544524125975285,
+        "t_stat": 9.260226222281881,
+        "baseline_ic_ir": 0.16544524125975285,
         "low_sample": false
       }
     ]

@@ -38,9 +38,18 @@ _COSTS = json.loads((Path(__file__).resolve().parents[1] / "research_config.json
 # 关卡3 原网格 + 探索时补的更宽迟滞（top20_exit80 / top30_exit90 / top30_exit150），看稳健区域的边界
 TOP_K_EXITS: dict[int, tuple[int, ...]] = {10: (10, 20, 30, 50), 20: (20, 40, 60, 80, 100), 30: (90, 150)}
 WEIGHTINGS: dict[str, dict[str, Any]] = {
-    (f"top{k}" if exit_k == k else f"top{k}_exit{exit_k}"): {"method": "top_k", "k": k, "exit_k": exit_k}
-    for k, exits in TOP_K_EXITS.items()
-    for exit_k in exits
+    **{
+        (f"top{k}" if exit_k == k else f"top{k}_exit{exit_k}"): {"method": "top_k", "k": k, "exit_k": exit_k}
+        for k, exits in TOP_K_EXITS.items()
+        for exit_k in exits
+    },
+    # 相对分位迟滞（k / exit_k 按当期有效 symbol 数的比例算），跟关卡3 的 q* 档位同口径，这里多给几档
+    **{
+        (f"q{round(q * 100)}" if exit_q == q else f"q{round(q * 100)}_exit{round(exit_q * 100)}"):
+            {"method": "top_quantile", "q": q, "exit_q": exit_q}
+        for q, exits in {0.1: (0.1, 0.2, 0.3, 0.4), 0.2: (0.2, 0.4, 0.6)}.items()
+        for exit_q in exits
+    },
 }
 REBALANCE_EVERY: tuple[int, ...] = (1, 3, 6)
 COST_MODELS = {

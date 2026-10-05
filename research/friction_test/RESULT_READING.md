@@ -97,6 +97,14 @@ sel.pivot_table(index="weighting", columns="rebalance_every", values="net_sharpe
 
 验证段、全吃单成本下，净 Sharpe 前 30 名组合的净值曲线（宽表，一列一个组合）。用来看收益是不是集中在某一小段时间、回撤出现在什么时候。
 
+### `04_robustness.csv` / `05_style_attribution.csv` / `06_quarterly.csv`：标准报告（2026-10-05 起）
+
+- `04`：每个 case × 成本，全部组合（映射 × 调仓频率）在两段的净 Sharpe 中位数、为正占比、两段都为正的占比——**先看这张**；
+- `05`：每个组合 × 段，吃单净收益对 BTC / 全市场 / 低波动 / 小市值 / 反转 / 动量的时间序列回归，`alpha_sharpe` 是剥离风格后的 Sharpe；
+- `06`：每个组合按季度的净 Sharpe / 收益，`positive_quarter_frac` 是赚钱季度占比。
+
+三张表的详细读法、判断门槛和当前基线数字集中写在 [`research/alpha_research/MLalpha/RESULT_READING.md`](../alpha_research/MLalpha/RESULT_READING.md)（对所有研究线都适用）。
+
 ---
 
 ## 3. 阅读顺序

@@ -10,16 +10,16 @@ This file is generated automatically from the input CSV. It highlights where a h
 
 ## Data-derived thresholds
 
-- |IC_IR| median: **0.1075**; upper quartile: **0.1249**.
-- IR-spread upper quartile: **0.0945**. This is used as the primary 'regime-sensitive' cutoff.
+- |IC_IR| median: **0.1149**; upper quartile: **0.1815**.
+- IR-spread upper quartile: **0.0809**. This is used as the primary 'regime-sensitive' cutoff.
 - Material sign reversal requires meaningful IC_IR on both sides of zero; tiny sign changes near zero are not promoted to `Regime-Reversal`.
 
 ## Factor-level classification counts
 
 - Regime-Reversal: **0**
 - Conditional: **1**
-- Stable: **0**
-- Mixed / Moderate: **1**
+- Stable: **1**
+- Mixed / Moderate: **0**
 - Weak / Noise: **1**
 - Data Quality Issue: **0**
 
@@ -27,8 +27,8 @@ This file is generated automatically from the input CSV. It highlights where a h
 
 - Regime-Reversal: **0**
 - Conditional: **1**
-- Stable: **0**
-- Mixed / Moderate: **1**
+- Stable: **1**
+- Mixed / Moderate: **0**
 - Weak / Noise: **1**
 - Data Quality Issue: **0**
 
@@ -38,31 +38,31 @@ Only alphas with |t_stat| >= 3 are eligible; eligible alphas are ranked by |IC_I
 
 | Dimension | State | Samples | Low sample? | Significant | Top 1 Alpha | Top 2 Alpha | Top 3 Alpha |
 |---|---|---:|:---:|---:|---|---|---|
-| trend | bear | 1151 | False | 2/3 | `-custom.close_momentum_20` (IR=-0.1249, t=-4.31) | `-custom.liquid_momentum_rank` (IR=-0.1075, t=-3.57) | - |
-| trend | neutral | 3050 | False | 2/3 | `-custom.close_momentum_20` (IR=-0.1137, t=-6.30) | `-custom.liquid_momentum_rank` (IR=-0.1060, t=-5.86) | - |
-| trend | bull | 1144 | False | 2/3 | `-custom.liquid_momentum_rank` (IR=-0.2161, t=-7.29) | `-custom.close_momentum_20` (IR=-0.1926, t=-6.55) | - |
+| trend | bear | 569 | False | 2/3 | `-custom.liquid_momentum_rank` (IR=-0.2045, t=-4.64) | `-custom.close_momentum_20` (IR=-0.1815, t=-4.25) | - |
+| trend | neutral | 1818 | False | 2/3 | `-custom.close_momentum_20` (IR=-0.1149, t=-4.91) | `-custom.liquid_momentum_rank` (IR=-0.1106, t=-4.86) | - |
+| trend | bull | 768 | False | 2/3 | `-custom.liquid_momentum_rank` (IR=-0.2048, t=-5.70) | `-custom.close_momentum_20` (IR=-0.1711, t=-4.64) | - |
 
 ## Most regime-sensitive factor/dimension pairs
 
 | Rank | Factor | Dimension | Class | IR spread | Best state | Best IC_IR | Best samples | Low sample? |
 |---:|---|---|---|---:|---|---:|---:|---|
-| 1 | custom.liquid_momentum_rank | trend | Conditional | 0.1101 | bull | -0.2161 | 1144 | False |
-| 2 | custom.close_momentum_20 | trend | Mixed / Moderate | 0.0789 | bull | -0.1926 | 1144 | False |
-| 3 | custom.volume_surge | trend | Weak / Noise | 0.0263 | bear | 0.0200 | 1151 | False |
+| 1 | custom.liquid_momentum_rank | trend | Conditional | 0.0942 | bull | -0.2048 | 768 | False |
+| 2 | custom.volume_surge | trend | Weak / Noise | 0.0676 | bull | 0.0345 | 768 | False |
+| 3 | custom.close_momentum_20 | trend | Stable | 0.0666 | bear | -0.1815 | 569 | False |
 
 ## Strongest regime observations after excluding low-sample states
 
 | Rank | Factor | Dimension | State | IC_IR | |IC_IR| | Direction | Samples | Win rate |
 |---:|---|---|---|---:|---:|---|---:|---:|
-| 1 | custom.liquid_momentum_rank | trend | bull | -0.2161 | 0.2161 | invert | 1144 | 0.4012 |
-| 2 | custom.close_momentum_20 | trend | bull | -0.1926 | 0.1926 | invert | 1144 | 0.4196 |
-| 3 | custom.close_momentum_20 | trend | bear | -0.1249 | 0.1249 | invert | 1151 | 0.4405 |
-| 4 | custom.close_momentum_20 | trend | neutral | -0.1137 | 0.1137 | invert | 3050 | 0.4459 |
-| 5 | custom.liquid_momentum_rank | trend | bear | -0.1075 | 0.1075 | invert | 1151 | 0.4414 |
-| 6 | custom.liquid_momentum_rank | trend | neutral | -0.1060 | 0.1060 | invert | 3050 | 0.4554 |
-| 7 | custom.volume_surge | trend | bear | 0.0200 | 0.0200 | original | 1151 | 0.5222 |
-| 8 | custom.volume_surge | trend | neutral | -0.0062 | 0.0062 | invert | 3050 | 0.5020 |
-| 9 | custom.volume_surge | trend | bull | 0.0010 | 0.0010 | original | 1144 | 0.4878 |
+| 1 | custom.liquid_momentum_rank | trend | bull | -0.2048 | 0.2048 | invert | 768 | 0.4036 |
+| 2 | custom.liquid_momentum_rank | trend | bear | -0.2045 | 0.2045 | invert | 569 | 0.3937 |
+| 3 | custom.close_momentum_20 | trend | bear | -0.1815 | 0.1815 | invert | 569 | 0.4218 |
+| 4 | custom.close_momentum_20 | trend | bull | -0.1711 | 0.1711 | invert | 768 | 0.4284 |
+| 5 | custom.close_momentum_20 | trend | neutral | -0.1149 | 0.1149 | invert | 1818 | 0.4521 |
+| 6 | custom.liquid_momentum_rank | trend | neutral | -0.1106 | 0.1106 | invert | 1818 | 0.4664 |
+| 7 | custom.volume_surge | trend | bull | 0.0345 | 0.0345 | original | 768 | 0.5039 |
+| 8 | custom.volume_surge | trend | bear | -0.0330 | 0.0330 | invert | 569 | 0.5062 |
+| 9 | custom.volume_surge | trend | neutral | 0.0053 | 0.0053 | original | 1818 | 0.5006 |
 
 ## Reading order
 

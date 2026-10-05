@@ -61,16 +61,22 @@ from track import Track, load_track  # noqa: E402
 STAGE = "ml_training"
 
 
-def _config_payload() -> dict:
-    # 损失掩码不在这里：它是模型 spec.liquidity 的一部分，已经进了特征指纹。
+def _config_payload(cfg: config.TrainConfig) -> dict:
+    """写进模型清单的训练配置（参与配置指纹）：这个模型的有效训练配置 + 时间口径。
+    损失掩码不在这里：它是模型 spec.liquidity 的一部分，已经进了特征指纹。"""
     return {
-        **config.as_dict(),
+        **cfg.to_dict(),
         "interval": INTERVAL,
         "research_start": START_TIME,
-        "horizon_bars": HORIZON_BARS,
+        "label_horizon_bars": _label_horizon(cfg),
         "execution_delay_bars": EXECUTION_DELAY_BARS,
         "benchmark_symbol": BENCHMARK_SYMBOL,
     }
+
+
+def _label_horizon(cfg: config.TrainConfig) -> int:
+    """训练标签的持有期：模型 / 默认配置没指定就跟 research_config.json 一致。"""
+    return HORIZON_BARS if cfg.label_horizon_bars is None else int(cfg.label_horizon_bars)
 
 
 def _check_liquidity(track: Track, alpha: MLAlpha) -> None:
@@ -127,23 +133,25 @@ def _entry_complete(alpha: MLAlpha, entry: ModelEntry) -> bool:
     return all((alpha.model_dir / rel).exists() for rel in entry.files)
 
 
-def train_alpha(alpha: MLAlpha, frame: TrainingFrame, panel_last_bar: pd.Timestamp, payload: dict, force: bool) -> Manifest:
-    manifest = _prepare_manifest(alpha, payload, force)
+def train_alpha(
+    alpha: MLAlpha, frame: TrainingFrame, panel_last_bar: pd.Timestamp, cfg: config.TrainConfig, force: bool
+) -> Manifest:
+    manifest = _prepare_manifest(alpha, _config_payload(cfg), force)
     done = {e.valid_from: e for e in manifest.entries if _entry_complete(alpha, e)}
     manifest.entries = list(done.values())
-    purge = HORIZON_BARS + EXECUTION_DELAY_BARS
+    purge = _label_horizon(cfg) + EXECUTION_DELAY_BARS
     folds = plan_folds(
         research_start=pd.Timestamp(START_TIME, tz="UTC"),
         last_bar=panel_last_bar,
         interval=INTERVAL,
-        retrain_every_bars=config.RETRAIN_EVERY_BARS,
-        min_train_bars=config.MIN_TRAIN_BARS,
+        retrain_every_bars=cfg.retrain_every_bars,
+        min_train_bars=cfg.min_train_bars,
         purge_bars=purge,
-        train_window_bars=config.TRAIN_WINDOW_BARS,
+        train_window_bars=cfg.train_window_bars,
     )
     todo = [f for f in folds if format_ts(f.valid_from) not in done]
-    print(f"  时间表 {len(folds)} 个重训时点（{format_ts(folds[0].valid_from)} 起，每 {config.RETRAIN_EVERY_BARS} 根 bar），"
-          f"已有 {len(folds) - len(todo)} 个，本次训练 {len(todo)} 个 × {len(config.SEEDS)} 个种子")
+    print(f"  时间表 {len(folds)} 个重训时点（{format_ts(folds[0].valid_from)} 起，每 {cfg.retrain_every_bars} 根 bar），"
+          f"已有 {len(folds) - len(todo)} 个，本次训练 {len(todo)} 个 × {len(cfg.seeds)} 个种子")
 
     started = time.monotonic()
     for i, fold in enumerate(todo, 1):
@@ -154,18 +162,18 @@ def train_alpha(alpha: MLAlpha, frame: TrainingFrame, panel_last_bar: pd.Timesta
             raise AssertionError(f"训练行越过了 {fold.train_until}")
         # ① 早停用：拟合段 + 最近 INNER_VALID_BARS 根的内部验证段；② 重训用：整个训练窗口 rows（见 trainer.train_fold）
         fit, valid = split_inner_validation(
-            frame, rows, train_until=fold.train_until, valid_bars=config.INNER_VALID_BARS, purge_bars=purge, interval=INTERVAL
+            frame, rows, train_until=fold.train_until, valid_bars=cfg.inner_valid_bars, purge_bars=purge, interval=INTERVAL
         )
         rel = fold_dir_name(fold.valid_from)
         result = train_fold(
             frame, fit, valid, alpha.model_dir / rel,
-            full=rows,
-            objective=config.OBJECTIVE,
-            seeds=config.SEEDS,
-            lgb_params=config.LGB_PARAMS,
-            num_boost_round=config.NUM_BOOST_ROUND,
-            early_stopping_rounds=config.EARLY_STOPPING_ROUNDS,
-            min_period_rows=config.MIN_PERIOD_ROWS,
+            full=rows if cfg.refit_on_full_window else None,
+            objective=cfg.objective,
+            seeds=cfg.seeds,
+            lgb_params=cfg.lgb_params,
+            num_boost_round=cfg.num_boost_round,
+            early_stopping_rounds=cfg.early_stopping_rounds,
+            min_period_rows=cfg.min_period_rows,
             rel_prefix=rel,
         )
         manifest.entries.append(ModelEntry(
@@ -186,7 +194,9 @@ def train_alpha(alpha: MLAlpha, frame: TrainingFrame, panel_last_bar: pd.Timesta
     return manifest
 
 
-def evaluate(alpha: MLAlpha, manifest: Manifest, frame: TrainingFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+def evaluate(
+    alpha: MLAlpha, manifest: Manifest, frame: TrainingFrame, cfg: config.TrainConfig
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """清单里每个模型只预测它服务的那段时间（样本外），逐期 RankIC。"""
     entries = manifest.sorted_entries()
     assigned = manifest.assign(frame.times)
@@ -201,13 +211,13 @@ def evaluate(alpha: MLAlpha, manifest: Manifest, frame: TrainingFrame) -> tuple[
             pred[rows] = np.mean([load_booster(alpha.model_dir / f).predict(frame.features[rows]) for f in entry.files], axis=0)
             try:
                 row.update(ic_stats(spearman_by_period(pred[rows], frame.label[rows], frame.times[rows],
-                                                       min_period_rows=config.MIN_PERIOD_ROWS)))
+                                                       min_period_rows=cfg.min_period_rows)))
             except ValueError:
                 pass
         fold_rows.append(row)
 
     covered = np.isfinite(pred)
-    ic = spearman_by_period(pred[covered], frame.label[covered], frame.times[covered], min_period_rows=config.MIN_PERIOD_ROWS)
+    ic = spearman_by_period(pred[covered], frame.label[covered], frame.times[covered], min_period_rows=cfg.min_period_rows)
     validation_start = pd.Timestamp(VALIDATION_START, tz="UTC")
     summary = [
         {"segment": "selection(样本外，特征名单在此段选出，偏乐观)", **ic_stats(ic[ic.index < validation_start])},
@@ -229,14 +239,13 @@ def main(argv: list[str] | None = None) -> None:
 
     track = load_track(args.track)
     alphas = [cls() for cls in _ml_alphas(track)]
-    payload = _config_payload()
+    configs = {a.qualified_name: config.for_model(a.training_overrides) for a in alphas}  # 每个模型的有效训练配置
     for alpha in alphas:
         _check_liquidity(track, alpha)  # 先校验再取数，配错了不白等
     if args.check_only:
         print(f"[校验通过] 研究线 {track.id}：{[a.qualified_name for a in alphas]} 的流动性范围 = 评估掩码 {track.tradable}")
         return
     print(f"研究线 {track.id}：训练 {[a.qualified_name for a in alphas]}")
-    print(f"  目标 {config.OBJECTIVE}；首尾加权 {config.TAIL_QUANTILE:.0%} × {config.TAIL_WEIGHT}；标签中性化 {config.NEUTRALIZE_LABEL}")
 
     end_time = END_TIME if args.until == "research" else HOLDOUT_END
     print(f"\n正在从 ClickHouse 拉取 {START_TIME} ~ {end_time} 的 {INTERVAL} K 线……")
@@ -248,16 +257,20 @@ def main(argv: list[str] | None = None) -> None:
     for alpha in alphas:
         print(f"\n== {alpha.qualified_name}：{len(alpha.spec.feature_names)} 个特征，模型目录 {alpha.model_dir} ==")
         print(f"  流动性范围（特征排名 + 损失掩码 + 推断，跟研究线评估掩码已校验一致）：{alpha.spec.liquidity}")
+        cfg = configs[alpha.qualified_name]
+        print(f"  训练配置（默认值 + 覆盖 {dict(alpha.training_overrides)}）：标签持有 {_label_horizon(cfg)} 根、{cfg.label_transform}；"
+              f"目标 {cfg.objective}；窗口 {cfg.train_window_bars or '扩展'}；种子 {len(cfg.seeds)} 个；"
+              f"首尾加权 {cfg.tail_quantile:.0%} × {cfg.tail_weight}；标签中性化 {cfg.neutralize_label}")
         started = time.monotonic()
         frame = build_training_frame(
             panel, alpha.spec,
-            horizon=HORIZON_BARS, delay=EXECUTION_DELAY_BARS, neutralize_label=config.NEUTRALIZE_LABEL,
-            tail_quantile=config.TAIL_QUANTILE, tail_weight=config.TAIL_WEIGHT,
+            horizon=_label_horizon(cfg), delay=EXECUTION_DELAY_BARS, neutralize_label=cfg.neutralize_label,
+            tail_quantile=cfg.tail_quantile, tail_weight=cfg.tail_weight, label_transform=cfg.label_transform,
         )
         print(f"  训练集（损失掩码内、标签已知）{len(frame):,} 行，构建用时 {time.monotonic() - started:.0f} 秒")
-        manifest = train_alpha(alpha, frame, panel.index[-1], payload, args.force)
+        manifest = train_alpha(alpha, frame, panel.index[-1], cfg, args.force)
 
-        folds, summary = evaluate(alpha, manifest, frame)
+        folds, summary = evaluate(alpha, manifest, frame, cfg)
         prefix = alpha.model_name
         folds.to_csv(results_dir / f"{prefix}_folds.csv", index=False)
         summary.to_csv(results_dir / f"{prefix}_oos_summary.csv", index=False)

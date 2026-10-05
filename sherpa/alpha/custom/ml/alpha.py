@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Mapping
 
 import numpy as np
 import pandas as pd
@@ -47,6 +47,9 @@ class MLAlpha(CustomAlpha):
 
     spec: ClassVar[FeatureSpec]
     model_name: ClassVar[str]
+    # 训练配置的覆盖项（只给离线训练 `research/ml_training/` 用，推断不看）：键 = `research/ml_training/config.py`
+    # 里 `as_dict()` 的键，没写的项用那边的默认值。同一条研究线里的几个模型可以用不同的标签 / 种子 / 窗口。
+    training_overrides: ClassVar[Mapping[str, Any]] = {}
 
     def __init__(self):
         super().__init__()

@@ -1,4 +1,6 @@
-"""ML alpha 滚动训练的参数。所有 ML 研究线共用；改了任何一项，已有模型的配置指纹就对不上，要 `--force` 重训
+"""ML alpha 滚动训练的参数。这里是**默认值**，所有 ML 模型共用；某个模型要不一样，就在它的类上写
+`training_overrides = {"label_transform": "raw_clip", ...}`（键 = 下面 `as_dict()` 的键），`for_model()` 合并出
+这个模型的有效配置。改了任何一项（默认值或覆盖），该模型的配置指纹就对不上，要 `--force` 重训
 （或者给新配置开一个新的模型名），不会悄悄混用两套配置训练出来的模型。
 
 流动性范围（哪些 symbol 参与特征排名、损失计算、推断）不在这里：它是模型的一部分，写在 `FeatureSpec.liquidity`
@@ -7,7 +9,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from dataclasses import asdict, dataclass, fields
+from typing import Any, Mapping, Optional
 
 # ---- 滚动时间表（单位：bar；研究周期 4h，一天 6 根）----
 
@@ -27,6 +30,12 @@ INNER_VALID_BARS: int = 6 * 20
 
 # ---- 标签 ----
 
+# 训练标签持有几根 bar。None = 跟 `research_config.json` 的 label.horizon_bars 一致（1 根）。只影响训练用的标签，
+# 不影响研究流水线评估：阶段一的 IC 仍按全局口径做诊断，关卡3 的回测本来就不依赖 IC 标签的持有期。
+LABEL_HORIZON_BARS: Optional[int] = None
+# 训练标签的形态（dataset.build_training_frame）："rank" = 掩码内截面排名；"raw_clip" = 原始收益、每期 1%/99% 截尾。
+# 2026-10-05 探索实验：原始收益标签明显更赚钱（排名标签奖励中位数效应，Top-K 等权赚的是平均收益），见 MLalpha/experiments/FINDINGS.md
+LABEL_TRANSFORM: str = "rank"
 # 标签先剥离 Beta / Size 暴露再训练（ML_ALPHA_DESIGN.md §5.5）。默认不做。
 NEUTRALIZE_LABEL: bool = False
 
@@ -60,13 +69,15 @@ LGB_PARAMS: dict[str, Any] = {
 
 
 def as_dict() -> dict[str, Any]:
-    """写进模型清单的训练配置（参与配置指纹）。"""
+    """默认训练配置（键 = `TrainConfig` 的字段，也是模型 `training_overrides` 能写的键）。"""
     return {
         "retrain_every_bars": RETRAIN_EVERY_BARS,
         "min_train_bars": MIN_TRAIN_BARS,
         "train_window_bars": TRAIN_WINDOW_BARS,
         "inner_valid_bars": INNER_VALID_BARS,
         "refit_on_full_window": True,
+        "label_horizon_bars": LABEL_HORIZON_BARS,
+        "label_transform": LABEL_TRANSFORM,
         "neutralize_label": NEUTRALIZE_LABEL,
         "objective": OBJECTIVE,
         "tail_quantile": TAIL_QUANTILE,
@@ -77,3 +88,39 @@ def as_dict() -> dict[str, Any]:
         "early_stopping_rounds": EARLY_STOPPING_ROUNDS,
         "lgb_params": LGB_PARAMS,
     }
+
+
+@dataclass(frozen=True)
+class TrainConfig:
+    """一个模型的有效训练配置 = 默认值（上面的常量）+ 模型类上的 `training_overrides`。写进模型清单、参与配置指纹。"""
+
+    retrain_every_bars: int
+    min_train_bars: int
+    train_window_bars: Optional[int]
+    inner_valid_bars: int
+    refit_on_full_window: bool
+    label_horizon_bars: Optional[int]
+    label_transform: str
+    neutralize_label: bool
+    objective: str
+    tail_quantile: float
+    tail_weight: float
+    min_period_rows: int
+    seeds: list[int]
+    num_boost_round: int
+    early_stopping_rounds: int
+    lgb_params: dict[str, Any]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def for_model(overrides: Mapping[str, Any]) -> TrainConfig:
+    """默认配置 + 模型的覆盖项。覆盖项的键写错直接报错，不会悄悄被忽略。"""
+    names = {f.name for f in fields(TrainConfig)}
+    unknown = set(overrides) - names
+    if unknown:
+        raise ValueError(f"training_overrides 里有不认识的键 {sorted(unknown)}，可选 {sorted(names)}")
+    merged = {**as_dict(), **overrides}
+    merged["seeds"] = list(merged["seeds"])
+    return TrainConfig(**merged)

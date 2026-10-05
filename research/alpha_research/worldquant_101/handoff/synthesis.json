@@ -3,141 +3,39 @@
   "schema_version": 1,
   "track": "worldquant_101",
   "producer": "synthesis",
-  "created_at": "2026-10-05T10:08:06Z",
+  "created_at": "2026-10-05T12:56:54Z",
   "meta": {
     "input_producer": "orthogonalization"
   },
   "recipes": {
-    "L2-volatility 路由等权": {
-      "kind": "routed",
-      "dimension": "volatility",
-      "states": {
-        "low": {
-          "worldquant.alpha040": 1.0,
-          "worldquant.alpha094": 1.0,
-          "worldquant.alpha044": 1.0,
-          "worldquant.alpha016": 1.0,
-          "worldquant.alpha055": 1.0
-        },
-        "normal": {
-          "worldquant.alpha040": 1.0,
-          "worldquant.alpha025": 1.0,
-          "worldquant.alpha016": 1.0,
-          "worldquant.alpha094": 1.0,
-          "worldquant.alpha044": 1.0
-        },
-        "high": {
-          "worldquant.alpha040": 1.0,
-          "worldquant.alpha016": 1.0,
-          "worldquant.alpha094": 1.0,
-          "worldquant.alpha044": 1.0,
-          "worldquant.alpha029": 1.0
-        }
-      },
-      "fallback": {
-        "worldquant.alpha040": 1.0,
-        "worldquant.alpha044": 1.0,
-        "worldquant.alpha094": 1.0,
-        "worldquant.alpha016": 1.0,
-        "worldquant.alpha015": 1.0,
-        "worldquant.alpha050": 1.0,
-        "worldquant.alpha029": 1.0,
-        "worldquant.alpha073": 1.0,
-        "worldquant.alpha055": 1.0,
-        "worldquant.alpha025": 1.0,
-        "worldquant.alpha037": 1.0,
-        "worldquant.alpha003": 1.0,
-        "worldquant.alpha036": 1.0
-      },
-      "reference": {
-        "validation_ic_ir": 0.32580406548553037,
-        "selection_ic_ir": 0.2594358480019739,
-        "validation_score_autocorr": 0.764227851712183
-      }
-    },
-    "L0 并集等权": {
-      "kind": "static",
-      "weights": {
-        "worldquant.alpha040": 1.0,
-        "worldquant.alpha044": 1.0,
-        "worldquant.alpha094": 1.0,
-        "worldquant.alpha016": 1.0,
-        "worldquant.alpha015": 1.0,
-        "worldquant.alpha050": 1.0,
-        "worldquant.alpha029": 1.0,
-        "worldquant.alpha073": 1.0,
-        "worldquant.alpha055": 1.0,
-        "worldquant.alpha025": 1.0,
-        "worldquant.alpha037": 1.0,
-        "worldquant.alpha003": 1.0,
-        "worldquant.alpha036": 1.0
-      },
-      "reference": {
-        "validation_ic_ir": 0.3253922514369936,
-        "selection_ic_ir": 0.2603325044449558,
-        "validation_score_autocorr": 0.7779005893549346
-      }
-    },
-    "L2-trend 路由等权": {
-      "kind": "routed",
-      "dimension": "trend",
-      "states": {
-        "bear": {
-          "worldquant.alpha040": 1.0,
-          "worldquant.alpha044": 1.0,
-          "worldquant.alpha016": 1.0,
-          "worldquant.alpha003": 1.0,
-          "worldquant.alpha055": 1.0
-        },
-        "neutral": {
-          "worldquant.alpha040": 1.0,
-          "worldquant.alpha044": 1.0,
-          "worldquant.alpha094": 1.0,
-          "worldquant.alpha016": 1.0,
-          "worldquant.alpha036": 1.0
-        },
-        "bull": {
-          "worldquant.alpha040": 1.0,
-          "worldquant.alpha094": 1.0,
-          "worldquant.alpha016": 1.0,
-          "worldquant.alpha029": 1.0,
-          "worldquant.alpha025": 1.0
-        }
-      },
-      "fallback": {
-        "worldquant.alpha040": 1.0,
-        "worldquant.alpha044": 1.0,
-        "worldquant.alpha094": 1.0,
-        "worldquant.alpha016": 1.0,
-        "worldquant.alpha015": 1.0,
-        "worldquant.alpha050": 1.0,
-        "worldquant.alpha029": 1.0,
-        "worldquant.alpha073": 1.0,
-        "worldquant.alpha055": 1.0,
-        "worldquant.alpha025": 1.0,
-        "worldquant.alpha037": 1.0,
-        "worldquant.alpha003": 1.0,
-        "worldquant.alpha036": 1.0
-      },
-      "reference": {
-        "validation_ic_ir": 0.3235397014352035,
-        "selection_ic_ir": 0.27131060335725077,
-        "validation_score_autocorr": 0.7282408532688202
-      }
-    },
     "L1 全局ICIR加权": {
       "kind": "static",
       "weights": {
-        "worldquant.alpha040": 0.22093365822270686,
-        "worldquant.alpha094": 0.17866834630029155,
-        "worldquant.alpha016": 0.17152506005511045,
-        "worldquant.alpha044": 0.16290592717771976,
-        "worldquant.alpha029": 0.13862469975857108
+        "worldquant.alpha040": 0.22524325560425512,
+        "worldquant.alpha016": 0.205497814300047,
+        "worldquant.alpha094": 0.19797039909228095,
+        "worldquant.alpha044": 0.17001135685385457,
+        "worldquant.alpha036": 0.16593091236898763
       },
       "reference": {
-        "validation_ic_ir": 0.3193769669161328,
-        "selection_ic_ir": 0.24825812457798105,
-        "validation_score_autocorr": 0.8076905498608126
+        "validation_ic_ir": 0.33680023382093965,
+        "selection_ic_ir": 0.2886684974770011,
+        "validation_score_autocorr": 0.8058078837789308
+      }
+    },
+    "G0 全局等权": {
+      "kind": "static",
+      "weights": {
+        "worldquant.alpha040": 1.0,
+        "worldquant.alpha016": 1.0,
+        "worldquant.alpha094": 1.0,
+        "worldquant.alpha044": 1.0,
+        "worldquant.alpha036": 1.0
+      },
+      "reference": {
+        "validation_ic_ir": 0.3360371731382034,
+        "selection_ic_ir": 0.28830068505850287,
+        "validation_score_autocorr": 0.7967876849288851
       }
     },
     "L2-liquidity 路由等权": {
@@ -145,46 +43,43 @@
       "dimension": "liquidity",
       "states": {
         "starved": {
-          "worldquant.alpha040": 1.0,
           "worldquant.alpha094": 1.0,
-          "worldquant.alpha044": 1.0,
           "worldquant.alpha016": 1.0,
-          "worldquant.alpha073": 1.0
+          "worldquant.alpha040": 1.0,
+          "worldquant.alpha073": 1.0,
+          "worldquant.alpha050": 1.0
         },
         "normal": {
           "worldquant.alpha040": 1.0,
           "worldquant.alpha016": 1.0,
           "worldquant.alpha094": 1.0,
           "worldquant.alpha044": 1.0,
-          "worldquant.alpha029": 1.0
+          "worldquant.alpha036": 1.0
         },
         "high": {
           "worldquant.alpha040": 1.0,
-          "worldquant.alpha055": 1.0,
+          "worldquant.alpha036": 1.0,
+          "worldquant.alpha016": 1.0,
           "worldquant.alpha025": 1.0,
-          "worldquant.alpha094": 1.0,
-          "worldquant.alpha037": 1.0
+          "worldquant.alpha044": 1.0
         }
       },
       "fallback": {
         "worldquant.alpha040": 1.0,
-        "worldquant.alpha044": 1.0,
-        "worldquant.alpha094": 1.0,
         "worldquant.alpha016": 1.0,
-        "worldquant.alpha015": 1.0,
-        "worldquant.alpha050": 1.0,
-        "worldquant.alpha029": 1.0,
+        "worldquant.alpha094": 1.0,
+        "worldquant.alpha036": 1.0,
+        "worldquant.alpha044": 1.0,
         "worldquant.alpha073": 1.0,
         "worldquant.alpha055": 1.0,
+        "worldquant.alpha050": 1.0,
         "worldquant.alpha025": 1.0,
-        "worldquant.alpha037": 1.0,
-        "worldquant.alpha003": 1.0,
-        "worldquant.alpha036": 1.0
+        "worldquant.alpha029": 1.0
       },
       "reference": {
-        "validation_ic_ir": 0.3154855360095602,
-        "selection_ic_ir": 0.25871833698869834,
-        "validation_score_autocorr": 0.6882602902861703
+        "validation_ic_ir": 0.33414648872056074,
+        "selection_ic_ir": 0.3042121056239853,
+        "validation_score_autocorr": 0.7333807801728358
       }
     },
     "L2-dispersion 路由等权": {
@@ -193,60 +88,150 @@
       "states": {
         "low": {
           "worldquant.alpha040": 1.0,
-          "worldquant.alpha044": 1.0,
-          "worldquant.alpha094": 1.0,
           "worldquant.alpha016": 1.0,
-          "worldquant.alpha015": 1.0
+          "worldquant.alpha094": 1.0,
+          "worldquant.alpha036": 1.0,
+          "worldquant.alpha044": 1.0
         },
         "normal": {
           "worldquant.alpha040": 1.0,
           "worldquant.alpha094": 1.0,
           "worldquant.alpha016": 1.0,
           "worldquant.alpha044": 1.0,
-          "worldquant.alpha050": 1.0
+          "worldquant.alpha073": 1.0
         },
         "high": {
           "worldquant.alpha040": 1.0,
           "worldquant.alpha016": 1.0,
-          "worldquant.alpha094": 1.0,
-          "worldquant.alpha029": 1.0,
-          "worldquant.alpha044": 1.0
+          "worldquant.alpha036": 1.0,
+          "worldquant.alpha055": 1.0,
+          "worldquant.alpha094": 1.0
         }
       },
       "fallback": {
         "worldquant.alpha040": 1.0,
-        "worldquant.alpha044": 1.0,
-        "worldquant.alpha094": 1.0,
         "worldquant.alpha016": 1.0,
-        "worldquant.alpha015": 1.0,
-        "worldquant.alpha050": 1.0,
-        "worldquant.alpha029": 1.0,
+        "worldquant.alpha094": 1.0,
+        "worldquant.alpha036": 1.0,
+        "worldquant.alpha044": 1.0,
         "worldquant.alpha073": 1.0,
         "worldquant.alpha055": 1.0,
+        "worldquant.alpha050": 1.0,
         "worldquant.alpha025": 1.0,
-        "worldquant.alpha037": 1.0,
-        "worldquant.alpha003": 1.0,
-        "worldquant.alpha036": 1.0
-      },
-      "reference": {
-        "validation_ic_ir": 0.31303782375575195,
-        "selection_ic_ir": 0.2540172861537755,
-        "validation_score_autocorr": 0.7819487027462442
-      }
-    },
-    "G0 全局等权": {
-      "kind": "static",
-      "weights": {
-        "worldquant.alpha040": 1.0,
-        "worldquant.alpha094": 1.0,
-        "worldquant.alpha016": 1.0,
-        "worldquant.alpha044": 1.0,
         "worldquant.alpha029": 1.0
       },
       "reference": {
-        "validation_ic_ir": 0.31171662722614907,
-        "selection_ic_ir": 0.24147053904464114,
-        "validation_score_autocorr": 0.7949486598986305
+        "validation_ic_ir": 0.3338591500167668,
+        "selection_ic_ir": 0.28559724335885295,
+        "validation_score_autocorr": 0.7495566497439651
+      }
+    },
+    "L2-trend 路由等权": {
+      "kind": "routed",
+      "dimension": "trend",
+      "states": {
+        "bear": {
+          "worldquant.alpha016": 1.0,
+          "worldquant.alpha094": 1.0,
+          "worldquant.alpha040": 1.0,
+          "worldquant.alpha029": 1.0,
+          "worldquant.alpha044": 1.0
+        },
+        "neutral": {
+          "worldquant.alpha040": 1.0,
+          "worldquant.alpha016": 1.0,
+          "worldquant.alpha044": 1.0,
+          "worldquant.alpha094": 1.0,
+          "worldquant.alpha036": 1.0
+        },
+        "bull": {
+          "worldquant.alpha040": 1.0,
+          "worldquant.alpha094": 1.0,
+          "worldquant.alpha016": 1.0,
+          "worldquant.alpha036": 1.0,
+          "worldquant.alpha025": 1.0
+        }
+      },
+      "fallback": {
+        "worldquant.alpha040": 1.0,
+        "worldquant.alpha016": 1.0,
+        "worldquant.alpha094": 1.0,
+        "worldquant.alpha036": 1.0,
+        "worldquant.alpha044": 1.0,
+        "worldquant.alpha073": 1.0,
+        "worldquant.alpha055": 1.0,
+        "worldquant.alpha050": 1.0,
+        "worldquant.alpha025": 1.0,
+        "worldquant.alpha029": 1.0
+      },
+      "reference": {
+        "validation_ic_ir": 0.32996502162388325,
+        "selection_ic_ir": 0.29476847269323153,
+        "validation_score_autocorr": 0.7493804759799034
+      }
+    },
+    "L2-volatility 路由等权": {
+      "kind": "routed",
+      "dimension": "volatility",
+      "states": {
+        "low": {
+          "worldquant.alpha040": 1.0,
+          "worldquant.alpha094": 1.0,
+          "worldquant.alpha016": 1.0,
+          "worldquant.alpha050": 1.0,
+          "worldquant.alpha044": 1.0
+        },
+        "normal": {
+          "worldquant.alpha025": 1.0,
+          "worldquant.alpha016": 1.0,
+          "worldquant.alpha040": 1.0,
+          "worldquant.alpha036": 1.0,
+          "worldquant.alpha094": 1.0
+        },
+        "high": {
+          "worldquant.alpha016": 1.0,
+          "worldquant.alpha036": 1.0,
+          "worldquant.alpha040": 1.0,
+          "worldquant.alpha044": 1.0,
+          "worldquant.alpha094": 1.0
+        }
+      },
+      "fallback": {
+        "worldquant.alpha040": 1.0,
+        "worldquant.alpha016": 1.0,
+        "worldquant.alpha094": 1.0,
+        "worldquant.alpha036": 1.0,
+        "worldquant.alpha044": 1.0,
+        "worldquant.alpha073": 1.0,
+        "worldquant.alpha055": 1.0,
+        "worldquant.alpha050": 1.0,
+        "worldquant.alpha025": 1.0,
+        "worldquant.alpha029": 1.0
+      },
+      "reference": {
+        "validation_ic_ir": 0.32699896418744734,
+        "selection_ic_ir": 0.2938650134970492,
+        "validation_score_autocorr": 0.7669757378698386
+      }
+    },
+    "L0 并集等权": {
+      "kind": "static",
+      "weights": {
+        "worldquant.alpha040": 1.0,
+        "worldquant.alpha016": 1.0,
+        "worldquant.alpha094": 1.0,
+        "worldquant.alpha036": 1.0,
+        "worldquant.alpha044": 1.0,
+        "worldquant.alpha073": 1.0,
+        "worldquant.alpha055": 1.0,
+        "worldquant.alpha050": 1.0,
+        "worldquant.alpha025": 1.0,
+        "worldquant.alpha029": 1.0
+      },
+      "reference": {
+        "validation_ic_ir": 0.3249863811244534,
+        "selection_ic_ir": 0.27523187396232734,
+        "validation_score_autocorr": 0.7784080100880321
       }
     },
     "single:worldquant.alpha040": {
@@ -256,7 +241,7 @@
       },
       "reference": {
         "validation_ic_ir": 0.26032310142912807,
-        "selection_ic_ir": 0.22093365822270686,
+        "selection_ic_ir": 0.22524325560425512,
         "validation_score_autocorr": 0.8610016107272539
       }
     }

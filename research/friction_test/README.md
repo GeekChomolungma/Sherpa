@@ -40,10 +40,13 @@
 
 | 维度 | 当前取值 | 说明 |
 |---|---|---|
-| `WEIGHTINGS`：分数 → 仓位 | Top-K 多空 + 排名迟滞：`top10` / `top10_exit20` / `_exit30` / `_exit50`，`top20` / `top20_exit40` / `_exit60` / `_exit100` | 做多分数最高的 k 个、做空最低的 k 个，各等权，总敞口统一为 1（多空各 0.5）。`exit_k`：排进前 k 才开仓，跌出前 exit_k 才平仓（`sherpa.portfolio.buffer.top_k_hysteresis`），`exit_k = k` 就是不设缓冲 |
+| `WEIGHTINGS`：分数 → 仓位 | Top-K 多空 + 排名迟滞：`top10` / `top10_exit20` / `_exit30` / `_exit50`，`top20` / `top20_exit40` / `_exit60` / `_exit100`；**相对分位版**（2026-10-05 起）：`q10` / `q10_exit20` / `q10_exit30`，`q20` / `q20_exit40` | 做多分数最高的 k 个、做空最低的 k 个，各等权，总敞口统一为 1（多空各 0.5）。`exit_k`：排进前 k 才开仓，跌出前 exit_k 才平仓（`sherpa.portfolio.buffer.top_k_hysteresis`），`exit_k = k` 就是不设缓冲。`q10_exit30` 的 k / exit_k 按当期有效币数的比例算（前 10% 开仓、跌出前 30% 平仓）：绝对名次在币池小的早期几乎从不触发平仓，同一个参数在两段是两种策略，按比例算没有这个漂移；有效币少于 20 个的期空仓 |
 | `REBALANCE_EVERY`：调仓频率 | 1 / 3 / 6 根 bar（4h 周期下是每 4 小时 / 12 小时 / 1 天） | 每 N 根 bar 把整个组合换成最新目标（全仓调仓），中间不交易，持仓随价格漂移 |
 | `COST_MODELS`：成本 | `zero` / `all_maker` / `all_taker` / `stress` | 费率读自 `research_config.json` 的 `costs` 一节，换会员档位或交易所只改 JSON。挂单能成交多少事先估不出来，所以只跑两个极端：`all_maker` 是全部挂单、不计滑点（乐观上限）；`all_taker` 是全部吃单加常规滑点（保守）。`stress` 是吃单加大滑点，`zero` 用来算毛收益 |
 | 验收红线 | `all_taker` 成本下、验证段：净 Sharpe ≥ 2.5 且换手衰减 < 40% | 取自 lifecycle 文档 §4 关卡3 |
+
+打分 → 目标仓位 → 回测 → 分段绩效这条链在 `sherpa.backtest.score_backtest`（跟关卡2 的合成、ML 探索实验共用）。
+**分段从每个 case 第一根有打分的 bar 开始**：因子 / 模型的 warm-up 期没有信号，不算进选择段（2026-10-05 起）。
 
 执行时点跟 IC 标签对齐：`shift = 1 + execution_delay_bars`。信号在 t 收盘算出，t+delay 收盘成交，回测赚的正是 IC 标签衡量的那段收益。
 
@@ -76,6 +79,9 @@ bash research/alpha_research/worldquant_101/run_track.sh --from-step 5
 | `02_validation_base_cost.csv` | 验证段、全吃单成本下每个组合一行，附其他成本下的净 Sharpe 和红线判定，按净 Sharpe 排序 |
 | `03_validation_net_equity.csv` | 验证段、全吃单成本下净 Sharpe 前 30 名组合的净值曲线 |
 | `case_grids/<case>.csv` | 每个 case 一张验证段净 Sharpe 的二维截面（行 = 映射，列 = 成本 × 调仓频率），找稳健区域用 |
+| `04_robustness.csv` | **先看这张**：每个 case × 成本一行，全部组合（映射 × 调仓频率）在两段的净 Sharpe **中位数** / 为正占比、两段都为正的组合占比。看的是"一片参数区域都成立"，不是网格里最高的那格；选择段空仓 > 20% 的组合不计入 |
+| `05_style_attribution.csv` | 每个组合 × 段（全吃单成本）：净收益对 BTC / 全市场等权 / 低波动 / 小市值 / 反转 / 动量 六个风格收益做时间序列回归——`beta[*]` 是风格暴露，`alpha_sharpe` 是剥离风格后的 Sharpe（选币能力的估计），`r2` 是风格能解释的比例（`sherpa.backtest.attribution`） |
+| `06_quarterly.csv` | 每个组合（全吃单成本）按自然季度的净 Sharpe / 收益，`positive_quarter_frac` = 赚钱季度的占比 |
 
 **怎么读、按什么顺序读、什么情况算好，见 [`RESULT_READING.md`](RESULT_READING.md)。**不要只看 `02` 排第一的那一行：在几百个组合里挑最高的一格，结果天然偏乐观。
 

@@ -51,3 +51,31 @@ class LgbmV1(MLAlpha):
         # 那边是 {"min_percentile": 0.5, "min_quote_volume": 0, "min_trades_count": 0}，其余取 tradable_mask 默认值。
         liquidity=LiquidityFilter(min_percentile=0.5, seasoning_period=SEASONING_PERIOD, lookback=DEFAULT_LOOKBACK),
     )
+
+
+@register_alpha
+class LgbmV2(MLAlpha):
+    """LightGBM 第二版基线（2026-10-05 探索实验的结论，见 research/alpha_research/MLalpha/experiments/FINDINGS.md）。
+
+    特征、流动性范围跟 LgbmV1 完全相同，只有训练配置不同：
+    - 标签持有 1 天（6 根 bar）：4 小时换手太高，12 小时 / 2 天都更差；
+    - 原始收益标签（每期 1%/99% 截尾）：排名标签奖励"排名靠前"的中位数效应，Top-K 等权赚的是平均收益；
+    - 9 个随机种子集成：单个模型树少、随机性大，两组种子的打分截面相关只有 0.43–0.50；
+    - 扩展窗口：探索实验里验证段最强（h6_raw_exp_ens9）。
+    之后的新模型（新特征、NN……）都先跟它比。
+    """
+
+    name = "ml_lgbm_v2"
+    model_name = "lgbm_v2"
+    spec = FeatureSpec(
+        name="lgbm_v2",
+        version=1,
+        alphas=WORLDQUANT_L0_UNION,
+        liquidity=LiquidityFilter(min_percentile=0.5, seasoning_period=SEASONING_PERIOD, lookback=DEFAULT_LOOKBACK),
+    )
+    training_overrides = {
+        "label_horizon_bars": 6,
+        "label_transform": "raw_clip",
+        "seeds": list(range(9)),
+        "train_window_bars": None,
+    }

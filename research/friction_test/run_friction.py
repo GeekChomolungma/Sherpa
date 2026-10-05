@@ -71,6 +71,7 @@ import sherpa.alpha.tradingview  # noqa: F401
 import sherpa.alpha.worldquant  # noqa: F401
 from sherpa.backtest.regime_screening import regime_report
 from sherpa.backtest.residual import ScorePreprocessor, residual_scores
+from sherpa.backtest.attribution import attribute, period_stats, style_factor_returns
 from sherpa.backtest.score_backtest import cost_segment_rows, run_score_backtest
 from sherpa.data.schema import interval_to_timedelta
 from sherpa.metrics.factor import ic_summary, rank_ic
@@ -105,6 +106,9 @@ SUMMARY_FILE = "01_friction_summary.csv"
 RANKING_FILE = "02_validation_base_cost.csv"
 EQUITY_FILE = "03_validation_net_equity.csv"
 CASE_GRIDS_DIR = "case_grids"
+ROBUSTNESS_FILE = "04_robustness.csv"
+ATTRIBUTION_FILE = "05_style_attribution.csv"
+QUARTERLY_FILE = "06_quarterly.csv"
 
 # 重算的验证段 IC_IR 跟关卡2 报告的差多少算"对不上"。同一份数据、同一套公式，理论上只有浮点误差；
 # 放宽到 1e-3 是为了容忍 ClickHouse 里最近几根 bar 被补写 / 修订之类的数据漂移。
@@ -208,6 +212,7 @@ def main(argv: list[str] | None = None) -> None:
     periods_per_year = pd.Timedelta(days=365) / interval_to_timedelta(panel.interval)
     summary: list[dict] = []
     equity: dict[str, pd.Series] = {}
+    base_nets: dict[str, pd.Series] = {}
     started = time.monotonic()
     print(f"\n正在跑 {len(scores) * len(grid)} 组回测（{len(scores)} 个 case 分到 {MAX_WORKERS} 个进程）……")
     with ProcessPoolExecutor(max_workers=MAX_WORKERS) as pool:
@@ -216,9 +221,10 @@ def main(argv: list[str] | None = None) -> None:
             for case, score in scores.items()
         }
         for done, future in enumerate(as_completed(futures), 1):
-            rows, curves = future.result()
+            rows, curves, nets = future.result()
             summary += rows
             equity.update(curves)
+            base_nets.update(nets)
             print(f"  [{done}/{len(futures)}] {futures[future]} 完成，已用时 {(time.monotonic() - started) / 60:.1f} 分钟", flush=True)
 
     summary_df = pd.DataFrame(summary)
@@ -234,6 +240,17 @@ def main(argv: list[str] | None = None) -> None:
     pd.DataFrame({label: equity[label] for label in top_labels}).to_csv(results_dir / EQUITY_FILE)
     write_case_grids(summary_df, results_dir / CASE_GRIDS_DIR)
 
+    robustness = _robustness(summary_df)
+    robustness.to_csv(results_dir / ROBUSTNESS_FILE, index=False)
+    print("\n正在算风格归因（BTC / 全市场 / 低波动 / 小市值 / 反转 / 动量）和分季度表现……")
+    style = style_factor_returns(
+        panel.close, panel.quote_volume, preprocessor.mask,
+        interval=panel.interval, shift=shift, benchmark_symbol=BENCHMARK_SYMBOL,
+    )
+    attribution, quarterly = _attribution_and_quarterly(base_nets, style, validation_start, periods_per_year)
+    attribution.to_csv(results_dir / ATTRIBUTION_FILE, index=False)
+    quarterly.to_csv(results_dir / QUARTERLY_FILE, index=False)
+
     other_costs = [f"net_sharpe[{name}]" for name in config.COST_MODELS if name not in (config.BASE_COST, "zero")]
     columns = [*KEYS, "gross_sharpe", "net_sharpe", *other_costs,
                "net_max_drawdown", "turnover_per_bar", "turnover_decay", "breakeven_cost_bps", "passes_red_lines"]
@@ -241,7 +258,11 @@ def main(argv: list[str] | None = None) -> None:
     print(ranking[columns].head(20).round(3).to_string(index=False))
     print(f"\n== 验证段 · 各 case 的最好组合（红线：净 Sharpe >= {config.MIN_NET_SHARPE}，换手衰减 < {config.MAX_TURNOVER_DECAY:.0%}） ==")
     print(ranking.drop_duplicates("case")[columns].round(3).to_string(index=False))
-    print(f"\n结果已写入 {results_dir}：{CONSISTENCY_FILE} / {SUMMARY_FILE} / {RANKING_FILE} / {EQUITY_FILE} / {CASE_GRIDS_DIR}/")
+    print(f"\n== 稳健性（{config.BASE_COST}：全部组合的净 Sharpe 中位数、两段都为正的组合占比；选择段空仓 > "
+          f"{config.ROBUSTNESS_MAX_FLAT:.0%} 的组合不计入） ==")
+    print(robustness[robustness.cost_model == config.BASE_COST].drop(columns="cost_model").round(3).to_string(index=False))
+    print(f"\n结果已写入 {results_dir}：{CONSISTENCY_FILE} / {SUMMARY_FILE} / {RANKING_FILE} / {EQUITY_FILE} / {CASE_GRIDS_DIR}/ / "
+          f"{ROBUSTNESS_FILE} / {ATTRIBUTION_FILE} / {QUARTERLY_FILE}")
 
 
 def write_case_grids(summary_df: pd.DataFrame, out_dir: Path) -> list[Path]:
@@ -282,25 +303,78 @@ def _run_case(
     segments: dict[str, pd.Series],
     periods_per_year: float,
 ) -> tuple[list[dict], dict[str, pd.Series]]:
-    """一个 case 的整套网格（worker 进程里跑）：返回绩效长表的行 + 验证段 BASE_COST 下的净值曲线。
+    """一个 case 的整套网格（worker 进程里跑）：返回绩效长表的行、验证段 BASE_COST 下的净值曲线、
+    全时段（从第一根有打分的 bar 起）BASE_COST 下的逐 bar 净收益（风格归因 / 分季度用）。
 
     打分 → 目标仓位 → 回测 → 分段绩效这条链在 `sherpa.backtest.score_backtest`（跟 ML 探索实验共用），这里只管网格。
     """
     rows: list[dict] = []
     curves: dict[str, pd.Series] = {}
+    nets: dict[str, pd.Series] = {}
+    # 分段从这个 case 第一根有打分的 bar 开始：模型 / 因子的 warm-up 期（比如 ML alpha 第一个模型之前）没有信号，
+    # 算进选择段只会制造一大段"空仓"，拉低 Sharpe、让空仓比例失真
+    scored = score.notna().any(axis=1)
+    active_start = scored.idxmax() if scored.any() else score.index[-1]
+    segments = {name: mask & (mask.index >= active_start) for name, mask in segments.items()}
     for weighting, rebalance in grid:
         # 目标权重路径先按时间顺序算好（缓冲带要参考上一期目标），回测只做恒等映射。
         targets = target_path(score, config.WEIGHTINGS[weighting], rebalance)
         gross, turnover = run_score_backtest(targets, close, interval, shift=shift, rebalance_every=rebalance)
         key = {"case": case, "weighting": weighting, "rebalance_every": rebalance}
-        nets: dict[tuple[str, str], pd.Series] = {}
+        seg_nets: dict[tuple[str, str], pd.Series] = {}
         rows += [{**key, **row} for row in cost_segment_rows(
-            gross, turnover, config.COST_MODELS, segments, periods_per_year=periods_per_year, net_curves=nets
+            gross, turnover, config.COST_MODELS, segments, periods_per_year=periods_per_year, net_curves=seg_nets
         )]
-        for (cost_name, segment), net in nets.items():
+        for (cost_name, segment), net in seg_nets.items():
             if cost_name == config.BASE_COST and segment.startswith("validation"):
                 curves[_label(key)] = (1.0 + net).cumprod()
-    return rows, curves
+        base_net = gross - turnover.map(config.COST_MODELS[config.BASE_COST].cost)
+        nets[_label(key)] = base_net[base_net.index >= active_start]
+    return rows, curves, nets
+
+
+def _robustness(summary_df: pd.DataFrame) -> pd.DataFrame:
+    """每个 case × 成本假设一行：全部组合（映射 × 调仓频率）在两段的净 Sharpe 中位数 / 为正占比，两段都为正的组合占比。
+
+    看的是"一片参数区域都成立"，不是网格里最高的那一格——最高的那格往往是噪声挑出来的。选择段空仓比例超过
+    `config.ROBUSTNESS_MAX_FLAT` 的组合不计入。
+    """
+    selection = summary_df[~summary_df["segment"].str.startswith("validation")]
+    flat = selection[selection["cost_model"] == "zero"].set_index(KEYS)["flat_bar_fraction"]
+    usable = flat[flat <= config.ROBUSTNESS_MAX_FLAT].index
+    rows = []
+    for (case, cost), group in summary_df.groupby(["case", "cost_model"], sort=False):
+        wide = group.set_index(KEYS).pivot(columns="segment", values="net_sharpe")
+        wide = wide.loc[wide.index.intersection(usable)]
+        sel = wide[[c for c in wide.columns if not c.startswith("validation")][0]] if len(wide.columns) else pd.Series(dtype=float)
+        val = wide[[c for c in wide.columns if c.startswith("validation")][0]] if len(wide.columns) else pd.Series(dtype=float)
+        rows.append({
+            "case": case, "cost_model": cost, "n_combos": len(wide),
+            "selection_median": sel.median(), "validation_median": val.median(),
+            "selection_positive_frac": (sel > 0).mean(), "validation_positive_frac": (val > 0).mean(),
+            "both_positive_frac": ((sel > 0) & (val > 0)).mean(),
+        })
+    return pd.DataFrame(rows)
+
+
+def _attribution_and_quarterly(
+    nets: dict[str, pd.Series], style: pd.DataFrame, validation_start: pd.Timestamp, periods_per_year: float
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """每个 (case, 映射, 调仓频率) 的 BASE_COST 净收益：分段做风格归因（`05`），按季度统计（`06`）。"""
+    attribution, quarterly = [], []
+    for label, net in nets.items():
+        case, weighting, rebalance = [part.strip() for part in label.split("|")]
+        key = {"case": case, "weighting": weighting, "rebalance_every": int(rebalance.removeprefix("every"))}
+        for segment, in_segment in (("selection", net.index < validation_start), ("validation", net.index >= validation_start)):
+            attribution.append({**key, "segment": segment,
+                                **attribute(net[in_segment], style, periods_per_year=periods_per_year)})
+        stats = period_stats(net, periods_per_year=periods_per_year)
+        full = stats["return"].dropna()  # 不足 60 根 bar 的季度（开头 / 结尾的零头）不计
+        row = {**key, "quarters": len(full), "positive_quarter_frac": float((full > 0).mean()) if len(full) else float("nan")}
+        row.update({f"sharpe[{p}]": v for p, v in stats["sharpe"].items()})
+        row.update({f"return[{p}]": v for p, v in stats["return"].items()})
+        quarterly.append(row)
+    return pd.DataFrame(attribution), pd.DataFrame(quarterly)
 
 
 def _validation_ranking(summary_df: pd.DataFrame) -> pd.DataFrame:

@@ -91,7 +91,9 @@ def target_path(scores: pd.DataFrame, spec: Mapping[str, Any], rebalance_every: 
     - `{"method": "demean_l1", "band": b}`：按分数配权；`band > 0` 时叠加逐 symbol 不交易带
       （`sherpa.portfolio.buffer.no_trade_band`）；
     - `{"method": "top_k", "k": k, "exit_k": e}`：Top-K 多空；`exit_k > k` 时叠加排名迟滞
-      （`sherpa.portfolio.buffer.top_k_hysteresis`，排进前 k 开仓、跌出前 exit_k 才平仓）。
+      （`sherpa.portfolio.buffer.top_k_hysteresis`，排进前 k 开仓、跌出前 exit_k 才平仓）；
+    - `{"method": "top_quantile", "q": 0.1, "exit_q": 0.3}`：同上，但 k / exit_k 按当期有效 symbol 数的比例算
+      （排进前 10% 开仓、跌出前 30% 才平仓），币池大小变化时含义不变。
 
     `rebalance_every=N`：每 N 根 bar 把整个组合换成最新目标（全仓调仓），中间不交易。
 
@@ -117,6 +119,23 @@ def target_path(scores: pd.DataFrame, spec: Mapping[str, Any], rebalance_every: 
             if alpha.notna().sum() < 2 * k:
                 return pd.Series(0.0, index=alpha.index)
             return top_k_hysteresis(alpha, prev, k, exit_k) / 2.0  # 迟滞只看上一期的多空方向，不看权重大小
+    elif method == "top_quantile":
+        # 相对分位版的 Top-K 迟滞：每期按当期有效 symbol 数 n 算 k = round(q·n)、exit_k = round(exit_q·n)。
+        # 绝对名次（top20_exit80）在币池小的时候（早期每期 50–90 个币）几乎从不触发平仓、币池大了才正常换手，同一个
+        # 参数在不同时期是两种策略；按比例算就没有这个漂移。有效 symbol 少于 `min_names` 的期空仓。
+        q = float(spec["q"])
+        exit_q = float(spec.get("exit_q", q))
+        min_names = int(spec.get("min_names", 20))
+        if not 0 < q <= exit_q <= 1:
+            raise ValueError(f"要求 0 < q <= exit_q <= 1，收到 q={q}, exit_q={exit_q}")
+
+        def step(alpha: pd.Series, prev: pd.Series | None) -> pd.Series:
+            n = int(alpha.notna().sum())
+            k = max(1, round(q * n))
+            if n < max(min_names, 2 * k):
+                return pd.Series(0.0, index=alpha.index)
+            exit_k = max(k, round(exit_q * n))
+            return top_k_hysteresis(alpha, prev, k, exit_k) / 2.0
     else:
         raise ValueError(f"未知的权重映射方式：{method!r}")
 

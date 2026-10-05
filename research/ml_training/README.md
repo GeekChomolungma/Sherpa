@@ -2,7 +2,8 @@
 
 > **状态：第一版已落地**（`run_training.py`，LightGBM + IC_IR 损失）。设计和决策记录见
 > [`sherpa/alpha/custom/ML_ALPHA_DESIGN.md`](../../sherpa/alpha/custom/ML_ALPHA_DESIGN.md)；本文只讲训练这一步怎么跑、
-> 每一步做了什么、产出在哪。
+> 每一步做了什么、产出在哪。训练完之后结果怎么读、新模型怎么跟基线 `LgbmV2` 比，见
+> [`research/alpha_research/MLalpha/RESULT_READING.md`](../alpha_research/MLalpha/RESULT_READING.md)。
 
 ---
 
@@ -329,6 +330,21 @@ compute(panel):
 | `LGB_PARAMS` | 见文件 | LightGBM 超参数，第一版是经验值，没调过 |
 
 流动性范围（损失掩码）不在这里，在模型的 `spec.liquidity`（见 §3 ③）。改任何一项都要 `--force` 重训。
+
+另外两项（2026-10-05 起）：`LABEL_HORIZON_BARS`（训练标签持有几根，`None` = 跟 `research_config.json` 一致）、`LABEL_TRANSFORM`（`"rank"` 截面排名 / `"raw_clip"` 原始收益 1%/99% 截尾）。
+
+**按模型覆盖**：上表是默认值。某个模型要不一样，在它的类上写 `training_overrides`（键 = `config.as_dict()` 的键，拼错直接报错），`config.for_model()` 合并出这个模型的有效配置，写进它自己的清单、参与它自己的配置指纹。同一条研究线里的几个模型可以用不同的标签 / 种子 / 窗口，比如：
+
+```python
+class LgbmV2(MLAlpha):            # sherpa/alpha/custom/ml/models.py
+    training_overrides = {"label_horizon_bars": 6, "label_transform": "raw_clip",
+                          "seeds": list(range(9)), "train_window_bars": None}
+```
+
+| 模型 | 标签 | 窗口 | 种子 | 说明 |
+| --- | --- | --- | --- | --- |
+| `LgbmV1`（`custom.ml_lgbm_v1`） | 持有 1 根、截面排名 | 滑动 60 天 | 3 | 第一 / 第二版，全用默认值 |
+| `LgbmV2`（`custom.ml_lgbm_v2`） | 持有 6 根、原始收益截尾 | 扩展 | 9 | 基线：探索实验结论（`MLalpha/experiments/FINDINGS.md`），之后的新模型都先跟它比 |
 
 ---
 

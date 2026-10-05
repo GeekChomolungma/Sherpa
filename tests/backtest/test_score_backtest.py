@@ -99,3 +99,19 @@ def test_weighted_composite_factors_select_candidates_and_zero_weights_are_skipp
     pd.testing.assert_frame_equal(weighted_composite(ranked, {"a": 0.0, "b": -1.0}), -b)  # 权重 0 不参与
     with pytest.raises(ValueError):
         weighted_composite(ranked, {"a": 0.0, "b": 0.0})
+
+
+def test_top_quantile_sizes_legs_by_the_current_cross_section():
+    """相对分位：k = round(q·n)。币池从 20 个变成 40 个，每条腿的币数跟着从 2 变成 4，多空仍各 0.5。"""
+    close = _close(n=30, n_symbols=40)
+    close.iloc[:15, 20:] = np.nan  # 前 15 根只有 20 个币上线
+    scores = cross_sectional_rank(close.pct_change(fill_method=None))
+    targets = target_path(scores, {"method": "top_quantile", "q": 0.1, "exit_q": 0.3}, rebalance_every=1)
+    early, late = targets.iloc[5], targets.iloc[25]
+    assert (early > 0).sum() == 2 and (early < 0).sum() == 2
+    assert (late > 0).sum() == 4 and (late < 0).sum() == 4
+    assert late.clip(lower=0).sum() == pytest.approx(0.5) and late.clip(upper=0).sum() == pytest.approx(-0.5)
+    small = target_path(scores.iloc[:, :15], {"method": "top_quantile", "q": 0.1}, rebalance_every=1)
+    assert (small == 0).all().all()  # 有效币少于 min_names=20 的期空仓
+    with pytest.raises(ValueError):
+        target_path(scores, {"method": "top_quantile", "q": 0.3, "exit_q": 0.1}, rebalance_every=1)

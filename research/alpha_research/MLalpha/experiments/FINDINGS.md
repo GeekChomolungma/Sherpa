@@ -1,5 +1,9 @@
 # MLalpha 探索实验：4h 截面上的盈利点（2026-10-05）
 
+> 注意：本文的实验都是在研究起点 **2022-01-01** 下跑的。之后研究起点改到了 2023-01-01（`research_config.json`），
+> 结论被做成了正式基线 `LgbmV2`（`sherpa/alpha/custom/ml/models.py`），新起点下的正式结果在研究线
+> `results_without_neutralization/` 里。本文的数字留作历史记录。
+
 工具：`research/ml_training/run_experiments.py`（case 定义 + 滚动训练 + 样本外打分）、`research/ml_training/evaluation.py`（关卡3
 同口径的扣费回测 + 诊断）。每个 case 的结果在本目录 `<case>/`，全部 case 的汇总在 `summary.csv`（CSV、模型、打分缓存都不进 git，
 重跑 `python run_experiments.py --summary-only` 可以重新生成汇总）。

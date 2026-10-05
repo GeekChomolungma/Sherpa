@@ -12,7 +12,7 @@
 | [`worldquant_101/`](worldquant_101/) | 世坤101 全量因子，全流程样板：关卡1/2 真跑。编排 `run_track.sh`（根目录 `run_research.sh` 转发到这里） |
 | [`custom_starter/`](custom_starter/) | 自定义因子 starter 主题（`sherpa/alpha/custom/starter.py`），只看 trend；因子少，关卡1/2 透传，直接进关卡3 |
 | [`custom_quote_activity/`](custom_quote_activity/) | 成交活跃度排名单因子（`sherpa/alpha/custom/quote_activity.py`），只看 trend；关卡1/2 透传，直接进关卡3 |
-| [`MLalpha/`](MLalpha/) | 机器学习模型 alpha（`sherpa/alpha/custom/ml/`）：步骤 0 滚动训练（`research/ml_training/`），之后跟普通 alpha 一样评估；关卡1/2 透传 |
+| [`MLalpha/`](MLalpha/) | 机器学习模型 alpha（`sherpa/alpha/custom/ml/`）：步骤 0 滚动训练（`research/ml_training/`），之后跟普通 alpha 一样评估；关卡1/2 透传。结果阅读指南（ML alpha 研究的主框架）：[`MLalpha/RESULT_READING.md`](MLalpha/RESULT_READING.md) |
 
 ## 流水线：各阶段只靠交接文件（handoff）连接
 
