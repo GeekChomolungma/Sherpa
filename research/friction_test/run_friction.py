@@ -9,7 +9,8 @@
 对每个 case（配方集里的每个配方）× 每种权重映射
 （`config.WEIGHTINGS`，Top-K + 排名迟滞）× 每种调仓频率（`config.REBALANCE_EVERY`，全仓调仓）
 跑一遍 `run_vectorized_backtest`
-（零成本，得到逐 bar 毛收益和换手），再对每种成本假设（`config.COST_MODELS`）扣费：
+（零成本，得到逐 bar 毛收益和换手；打分 → 目标仓位 → 回测 → 分段绩效这条链在 `sherpa.backtest.score_backtest`，
+跟 ML 探索实验 `research/ml_training/evaluation.py` 共用），再对每种成本假设（`config.COST_MODELS`）扣费：
 `净收益 = 毛收益 − CostModel.cost(换手)`。成本只从收益里扣、不影响仓位（权重是资金占比），所以这跟
 直接用该 CostModel 跑回测的结果完全相同，只是省掉了重复的逐 bar 递推。
 
@@ -57,9 +58,8 @@ import re
 import sys
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8")
@@ -69,11 +69,10 @@ import pandas as pd
 import sherpa.alpha.custom  # noqa: F401  触发内置三大家族的 @register_alpha 注册
 import sherpa.alpha.tradingview  # noqa: F401
 import sherpa.alpha.worldquant  # noqa: F401
-from sherpa.backtest.cost_model import ZeroCostModel
 from sherpa.backtest.regime_screening import regime_report
 from sherpa.backtest.residual import ScorePreprocessor, residual_scores
-from sherpa.backtest.vectorized import run_vectorized_backtest
-from sherpa.data.schema import BarPanel, interval_to_timedelta
+from sherpa.backtest.score_backtest import cost_segment_rows, run_score_backtest
+from sherpa.data.schema import interval_to_timedelta
 from sherpa.metrics.factor import ic_summary, rank_ic
 
 import config
@@ -93,7 +92,6 @@ from signals import (
     case_scores,
     cross_sectional_rank,
     segment_masks,
-    segment_stats,
     target_path,
 )
 
@@ -118,17 +116,6 @@ EQUITY_TOP_N = 30
 MAX_WORKERS = min(8, os.cpu_count() or 1)
 
 KEYS = ["case", "weighting", "rebalance_every"]
-
-
-@dataclass(frozen=True)
-class _PricePanel:
-    """只带 `close` + `interval` 的轻量 panel：`run_vectorized_backtest` 只用到这两个字段。
-
-    完整的 `BarPanel` 有十来个 (T, N) 字段，发给每个 worker 进程要序列化几百 MB，这里只传用得到的部分。
-    """
-
-    close: pd.DataFrame
-    interval: str
 
 
 def _check_config(recipes: handoff.RecipeSet, path: Path) -> None:
@@ -219,14 +206,13 @@ def main(argv: list[str] | None = None) -> None:
               "常见原因：关卡2 的 results 是旧的（改了候选池没重跑）、或 research_config.json 改过。")
 
     periods_per_year = pd.Timedelta(days=365) / interval_to_timedelta(panel.interval)
-    prices = _PricePanel(close=panel.close, interval=panel.interval)
     summary: list[dict] = []
     equity: dict[str, pd.Series] = {}
     started = time.monotonic()
     print(f"\n正在跑 {len(scores) * len(grid)} 组回测（{len(scores)} 个 case 分到 {MAX_WORKERS} 个进程）……")
     with ProcessPoolExecutor(max_workers=MAX_WORKERS) as pool:
         futures = {
-            pool.submit(_run_case, case, score, prices, shift, grid, segments, periods_per_year): case
+            pool.submit(_run_case, case, score, panel.close, panel.interval, shift, grid, segments, periods_per_year): case
             for case, score in scores.items()
         }
         for done, future in enumerate(as_completed(futures), 1):
@@ -289,35 +275,31 @@ def _label(row: dict[str, Any]) -> str:
 def _run_case(
     case: str,
     score: pd.DataFrame,
-    prices: _PricePanel,
+    close: pd.DataFrame,
+    interval: str,
     shift: int,
     grid: list[tuple[str, int]],
     segments: dict[str, pd.Series],
     periods_per_year: float,
 ) -> tuple[list[dict], dict[str, pd.Series]]:
-    """一个 case 的整套网格（worker 进程里跑）：返回绩效长表的行 + 验证段 BASE_COST 下的净值曲线。"""
+    """一个 case 的整套网格（worker 进程里跑）：返回绩效长表的行 + 验证段 BASE_COST 下的净值曲线。
+
+    打分 → 目标仓位 → 回测 → 分段绩效这条链在 `sherpa.backtest.score_backtest`（跟 ML 探索实验共用），这里只管网格。
+    """
     rows: list[dict] = []
     curves: dict[str, pd.Series] = {}
     for weighting, rebalance in grid:
         # 目标权重路径先按时间顺序算好（缓冲带要参考上一期目标），回测只做恒等映射。
         targets = target_path(score, config.WEIGHTINGS[weighting], rebalance)
-        result = run_vectorized_backtest(
-            targets, cast(BarPanel, prices), lambda row: row, ZeroCostModel(), shift=shift, rebalance_every=rebalance,
-        )
-        gross, turnover = result.returns, result.turnover
+        gross, turnover = run_score_backtest(targets, close, interval, shift=shift, rebalance_every=rebalance)
         key = {"case": case, "weighting": weighting, "rebalance_every": rebalance}
-        for cost_name, cost_model in config.COST_MODELS.items():
-            net = gross - turnover.map(cost_model.cost)
-            for segment, in_segment in segments.items():
-                in_rows = in_segment.reindex(net.index, fill_value=False)
-                rows.append({
-                    **key,
-                    "cost_model": cost_name,
-                    "segment": segment,
-                    **segment_stats(gross[in_rows], turnover[in_rows], net[in_rows], periods_per_year=periods_per_year),
-                })
-                if cost_name == config.BASE_COST and segment.startswith("validation"):
-                    curves[_label(key)] = (1.0 + net[in_rows]).cumprod()
+        nets: dict[tuple[str, str], pd.Series] = {}
+        rows += [{**key, **row} for row in cost_segment_rows(
+            gross, turnover, config.COST_MODELS, segments, periods_per_year=periods_per_year, net_curves=nets
+        )]
+        for (cost_name, segment), net in nets.items():
+            if cost_name == config.BASE_COST and segment.startswith("validation"):
+                curves[_label(key)] = (1.0 + net).cumprod()
     return rows, curves
 
 

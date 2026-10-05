@@ -368,3 +368,22 @@ sherpa/alpha/custom/ml/   推断侧（训练也用到其中的特征构建和清
 
 所以看训练结果时**不能只看 RankIC**，还要看首尾价差、Pearson IC 和打分对波动率的暴露。损失和标签怎么改，见设计文档
 后续讨论。
+
+---
+
+## 11. 探索实验（`run_experiments.py` / `evaluation.py`）
+
+批量试配置用的工具，不改正式模型：每个 case 用跟正式训练相同的函数滚动训练、样本外打分，用关卡3 同口径的扣费回测比较
+（Top-K 迟滞网格 × 调仓频率 × 成本 × 打分平滑），并输出 RankIC / Pearson IC / 首尾价差 / vol 暴露 / 空仓比例等诊断。
+"打分 → 目标仓位 → 回测 → 分段绩效"这条链在 `sherpa.backtest.score_backtest`，跟关卡3 共用同一份实现（2026-10-05 重构，
+前后结果逐项相同），`evaluation.py` 只放探索特有的平滑、诊断、多空两腿拆分和更宽的迟滞网格。
+挑配置只看选择段、验证段只用来确认。case 定义在 `run_experiments.py` 的 `CASES`，结果在
+`research/alpha_research/MLalpha/experiments/<case>/`，汇总 `summary.csv`，结论 `FINDINGS.md`。
+
+```bash
+python research/ml_training/run_experiments.py                       # 全部 case（第一次会从 ClickHouse 取数并缓存）
+python research/ml_training/run_experiments.py --cases h6_raw         # 指定 case
+python research/ml_training/run_experiments.py --skip-existing        # 跳过已跑完的
+python research/ml_training/run_experiments.py --reeval               # 评估网格改了：读已有打分重新评估，不重训
+python research/ml_training/run_experiments.py --summary-only         # 只重新汇总
+```

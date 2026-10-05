@@ -1,8 +1,9 @@
 """关卡2 合成用的纯函数：截面标准化、方向估计、等权合成、按 regime 路由合成、分段切分、评估指标。
 
-只依赖 pandas 和 `sherpa.metrics.factor`，不碰 IO、不读 research 配置——`README.md` §8：合成逻辑
-将来要原样搬进 `sherpa`，给回测和实盘共用（离线 / 在线信号必须逐笔一致），所以从一开始就写成
-"输入矩阵、输出矩阵"的纯函数。
+只依赖 pandas 和 sherpa，不碰 IO、不读 research 配置——`README.md` §8：合成逻辑要搬进 `sherpa`，给回测和实盘
+共用（离线 / 在线信号必须逐笔一致），所以从一开始就写成"输入矩阵、输出矩阵"的纯函数。截面排名
+`cross_sectional_rank`、加权合成 `weighted_composite` 已经搬到 `sherpa.backtest.score_backtest`（关卡2、关卡3、
+ML 探索实验共用），这里 re-export，保持 `from signals import ...` 的老写法可用。
 
 矩阵约定跟 sherpa 其余部分一致：`(T, N)` DataFrame，行 = bar 时间，列 = symbol。
 """
@@ -13,21 +14,8 @@ from typing import Mapping, Sequence
 
 import pandas as pd
 
+from sherpa.backtest.score_backtest import cross_sectional_rank, weighted_composite  # noqa: F401  re-export
 from sherpa.metrics.factor import ic_significance, ic_summary, rank_ic
-
-
-# ---------------------------------------------------------------------------
-# 合成前的预处理
-# ---------------------------------------------------------------------------
-
-def cross_sectional_rank(scores: pd.DataFrame) -> pd.DataFrame:
-    """逐期截面百分位排名，平移到 [-0.5, 0.5]（截面中位数约为 0）。NaN 保持 NaN。
-
-    为什么合成前必须先做这一步：不同因子的原始分数量级、分布差别极大（有的是秩，有的是价格比率），
-    直接相加等于让量级最大的那个因子独占权重。换成截面排名后，每个因子在每一期都落在同一个尺度上，
-    "等权"才名副其实。用排名而不是 z-score，是为了不让少数极端值主导。
-    """
-    return scores.rank(axis=1, pct=True) - 0.5
 
 
 def ic_sign(ic_series: pd.Series, min_samples: int = 30) -> float:
@@ -82,32 +70,6 @@ def estimate_state_signs(
 # ---------------------------------------------------------------------------
 # 合成
 # ---------------------------------------------------------------------------
-
-def weighted_composite(
-    ranked: Mapping[str, pd.DataFrame],
-    weights: Mapping[str, float],
-    factors: Sequence[str],
-) -> pd.DataFrame:
-    """加权合成：`Σ_i w_i × rank_i / Σ_i |w_i|`，逐 (bar, symbol) 只对当期有值的因子求和、归一。
-
-    `weights` 是**带符号**的权重：符号就是方向（+1 原方向 / -1 反向使用），绝对值是权重大小。
-    等权合成就是 `w_i = sign_i` 的特例（见 `equal_weight_composite`）。
-
-    某个 symbol 在某一期缺了部分因子（比如刚上线、窗口还没攒够），就只用它有值的那几个因子，
-    分母也只累加这几个因子的 |w_i|，而不是整格丢掉；一个因子都没有才是 NaN。权重为 0 的因子不参与。
-    """
-    used = [name for name in factors if weights.get(name, 0.0) != 0.0]
-    if not used:
-        raise ValueError(f"没有可用于合成的因子（候选 {list(factors)} 的权重全部为 0）")
-    total = None
-    norm = None
-    for name in used:
-        weight = weights[name]
-        contribution = ranked[name] * weight
-        total = contribution.fillna(0.0) if total is None else total.add(contribution.fillna(0.0), fill_value=0.0)
-        present = ranked[name].notna().astype(float) * abs(weight)
-        norm = present if norm is None else norm.add(present, fill_value=0.0)
-    return total.where(norm > 0) / norm.where(norm > 0)
 
 
 def equal_weight_composite(

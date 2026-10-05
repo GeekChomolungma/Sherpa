@@ -91,10 +91,24 @@ def build_training_frame(
     neutralize_label: bool,
     tail_quantile: float,
     tail_weight: float,
+    label_transform: str = "rank",
+    scope: Optional[pd.DataFrame] = None,
+    features: Optional[pd.DataFrame] = None,
 ) -> TrainingFrame:
+    """`label_transform`：y 用什么——
+    - `"rank"`（默认）：掩码内截面排名，[-0.5, 0.5]；
+    - `"raw_clip"`：原始收益，每期在掩码内按 1% / 99% 分位截尾。IC 损失对每期的平移、缩放不敏感，所以不用再去均值。
+      排名标签奖励"排名靠前"（中位数效应），原始收益标签奖励"平均收益高"，后者跟 Top-K 等权持仓赚的东西一致。
+    首尾权重始终按标签排名给。
+
+    `scope` / `features` 可以由调用方传入已经算好的（必须是 `spec.liquidity.mask(panel)` 和
+    `build_features(panel, spec, scope)` 的结果），多个实验共用一份特征时省掉重算。
+    """
     # 流动性范围（损失掩码）只有一个来源：spec.liquidity。特征的截面排名、标签都用这同一张 (T, N) 布尔表
-    scope = spec.liquidity.mask(panel)
-    features = build_features(panel, spec, scope)
+    if scope is None:
+        scope = spec.liquidity.mask(panel)
+    if features is None:
+        features = build_features(panel, spec, scope)
 
     # labels 是对齐 close的 2d 面板，(T, N)的未来收益标签，NaN表示不参与训练的行
     labels = build_labels(
@@ -102,14 +116,23 @@ def build_training_frame(
         benchmark_symbol=spec.benchmark_symbol,
     )
     label_rank = cross_sectional_rank(labels)  # 只在掩码内有值，所以就是损失掩码内的截面排名
+    if label_transform == "rank":
+        target = label_rank
+    elif label_transform == "raw_clip":
+        lo = labels.quantile(0.01, axis=1)
+        hi = labels.quantile(0.99, axis=1)
+        target = labels.clip(lower=lo, upper=hi, axis=0)
+    else:
+        raise ValueError(f"未知的 label_transform：{label_transform!r}")
 
     times = features.index.get_level_values("start_time")
     symbols = features.index.get_level_values("symbol")
     ti = panel.close.index.get_indexer(times)
     si = panel.close.columns.get_indexer(symbols)
-    y = label_rank.to_numpy(dtype="float64")[ti, si]
+    y = target.to_numpy(dtype="float64")[ti, si]
+    rank_y = label_rank.to_numpy(dtype="float64")[ti, si]
     raw = labels.to_numpy(dtype="float64")[ti, si]
-    keep = np.isfinite(y) & np.isfinite(raw)
+    keep = np.isfinite(y) & np.isfinite(raw) & np.isfinite(rank_y)
 
     # 特征和标签靠"行号相同"对齐：y 是按 features.index 的顺序逐行查出来的，第 i 个 y 就是 features 第 i 行那个
     # (时间, 币) 的标签。to_numpy() 只去掉 MultiIndex，行列都不变（二维，不是压成一条）；keep 按行筛，两边用同一个 keep。
@@ -146,7 +169,7 @@ def build_training_frame(
         features=features.to_numpy(dtype="float32")[keep],
         feature_names=list(features.columns),
         y=y[keep],
-        weights=tail_weights(y[keep], tail_quantile=tail_quantile, tail_weight=tail_weight),
+        weights=tail_weights(rank_y[keep], tail_quantile=tail_quantile, tail_weight=tail_weight),
         label=raw[keep],
         times=pd.DatetimeIndex(times[keep]),
         symbols=np.asarray(symbols[keep]),

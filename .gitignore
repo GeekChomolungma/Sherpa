@@ -12,3 +12,7 @@ research/**/*.csv
 
 # ML alpha 的模型文件（每个重训时点一个子目录）不进仓库；同目录的 manifest.json 进仓库，方便复现和审计。
 research/alpha_research/*/models/*/*/
+# ML alpha 探索实验（research/ml_training/run_experiments.py）：取数缓存、各 case 的模型和样本外打分不进仓库
+research/alpha_research/*/experiments/_cache/
+research/alpha_research/*/experiments/*/models/
+research/alpha_research/*/experiments/**/*.pkl

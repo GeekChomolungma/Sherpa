@@ -263,6 +263,11 @@ factor_synthesis/
   不用隐藏的全局变量。这样批量回测（整段矩阵）和实盘（逐 bar）才能共用同一个实现；
 - 等关卡2、关卡3 的结论稳定后，再把这几个函数迁移到 `sherpa`（候选位置：`sherpa.portfolio`
   下新增一个合成模块），研究脚本改为 import 它。
+- **已迁移（2026-10-05）**：截面排名 `cross_sectional_rank`、加权合成 `weighted_composite` 搬到了
+  `sherpa.backtest.score_backtest`（跟关卡3 的打分 → 仓位 → 回测链放在一起，关卡2、关卡3、ML 探索实验共用），
+  `signals.py` 里 re-export。迁移前后世坤研究线关卡2 / 关卡3 的全部产出和配方交接文件逐项相同。方向估计、等权
+  合成、路由合成还在 `signals.py`；以后实盘要用合成逻辑时，再考虑把合成部分从 `sherpa.backtest` 挪到
+  `sherpa.portfolio`。
 
 ---
 
