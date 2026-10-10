@@ -146,3 +146,42 @@ def test_has_open_interest_false_when_table_missing():
     client = FakeCHClient(responses=[_df([{"result": 0}])])
     reader = CHReader(client)
     assert reader.has_open_interest() is False
+
+
+def test_fetch_ls_ratio_history_1m_short_circuits_without_query():
+    client = FakeCHClient(responses=[])
+    df = CHReader(client).fetch_ls_ratio_history(["BTCUSDT"], "1m", lookback_bars=10)
+    assert df.empty
+    assert client.queries == []
+
+
+def test_fetch_ls_ratio_history_5m_queries_raw_table_with_semantic_names():
+    client = FakeCHClient(responses=[_df([])])
+    CHReader(client).fetch_ls_ratio_history(["BTCUSDT"], "5m", lookback_bars=200)
+
+    sql = client.queries[0]
+    assert "market.fapi_ls_ratio_5m FINAL" in sql
+    assert "count_long_short_ratio AS long_short_ratio" in sql
+    assert "count_toptrader_long_short_ratio AS top_account_long_short_ratio" in sql
+    assert "sum_toptrader_long_short_ratio AS top_position_long_short_ratio" in sql
+    assert "_high" not in sql
+    assert "samples" not in sql
+    assert "LIMIT 200 BY symbol" in sql
+
+
+def test_fetch_ls_ratio_history_rollup_interval_filters_on_samples():
+    client = FakeCHClient(responses=[_df([])])
+    CHReader(client).fetch_ls_ratio_history(["BTCUSDT"], "4h", start_time="2026-01-01", end_time="2026-01-02")
+
+    sql = client.queries[0]
+    assert "market.fapi_ls_ratio_4h FINAL" in sql
+    assert "count_long_short_ratio_close AS long_short_ratio," in sql
+    assert "count_long_short_ratio_high AS long_short_ratio_high" in sql
+    assert "sum_toptrader_long_short_ratio_low AS top_position_long_short_ratio_low" in sql
+    assert "AND samples = 48" in sql
+
+
+def test_has_long_short_ratio_probes_raw_table():
+    client = FakeCHClient(responses=[_df([{"result": 1}])])
+    assert CHReader(client).has_long_short_ratio() is True
+    assert "EXISTS TABLE market.fapi_ls_ratio_5m" in client.queries[0]

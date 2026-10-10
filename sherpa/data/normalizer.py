@@ -10,7 +10,7 @@ from typing import Mapping, Sequence
 
 import pandas as pd
 
-from .schema import OPTIONAL_OI_FIELDS, PANEL_FIELDS, BarPanel, build_coverage, empty_panel
+from .schema import OPTIONAL_LS_RATIO_FIELDS, OPTIONAL_OI_FIELDS, PANEL_FIELDS, BarPanel, build_coverage, empty_panel
 
 # ClickHouse 长表期望列（顺序对应 PANEL_FIELDS，前面多一个 symbol/start_time）。
 CH_LONG_FORM_COLUMNS: tuple[str, ...] = ("symbol", "start_time", *PANEL_FIELDS)
@@ -80,6 +80,7 @@ def ch_long_to_panel(
     interval: str,
     symbols: Sequence[str],
     oi_df: pd.DataFrame | None = None,
+    ls_df: pd.DataFrame | None = None,
 ) -> BarPanel:
     """ClickHouse 长表（一次 fetch_history 的结果）-> BarPanel。
 
@@ -93,6 +94,9 @@ def ch_long_to_panel(
     比 kline 短（例如这套环境里 OI 历史从 2020-08-31 才开始回补，比 kline 晚约 8 个月），
     对不上的位置如实留 NaN，不做任何前向填充。不传/传空表时 `BarPanel.open_interest`
     等字段保持 `None`（比如 interval="1m" 时上游根本不会去查 OI）。
+
+    `ls_df`：可选，`CHReader.fetch_ls_ratio_history()` 的结果，对齐规则跟 `oi_df` 完全一样，落到
+    `BarPanel.long_short_ratio` 等 `OPTIONAL_LS_RATIO_FIELDS` 字段上。
     """
     symbols_final = tuple(sorted(set(symbols) | (set(df["symbol"].unique()) if not df.empty else set())))
 
@@ -116,40 +120,44 @@ def ch_long_to_panel(
         index = pivoted.index
 
     assert index is not None  # PANEL_FIELDS 非空，循环至少跑一次，index 一定被赋值过
-    oi_fields = _pivot_optional_oi(oi_df, index=index, symbols_final=symbols_final)
+    oi_fields = _pivot_optional(oi_df, OPTIONAL_OI_FIELDS, "OI", index=index, symbols_final=symbols_final)
+    ls_fields = _pivot_optional(ls_df, OPTIONAL_LS_RATIO_FIELDS, "多空比", index=index, symbols_final=symbols_final)
 
     coverage = build_coverage(fields["close"], universe_size=len(symbols_final))
-    return BarPanel(interval=interval, symbols=symbols_final, coverage=coverage, **fields, **oi_fields)
+    return BarPanel(
+        interval=interval, symbols=symbols_final, coverage=coverage, **fields, **oi_fields, **ls_fields
+    )
 
 
-def _pivot_optional_oi(
-    oi_df: pd.DataFrame | None,
+def _pivot_optional(
+    long_df: pd.DataFrame | None,
+    field_names: Sequence[str],
+    label: str,
     *,
     index: pd.DatetimeIndex,
     symbols_final: tuple[str, ...],
 ) -> dict[str, pd.DataFrame]:
-    """把 OI 长表 pivot 成跟主 kline 面板同一个 (index, symbols_final) 的宽表字典。
+    """把可选数据（OI / 多空比）的长表 pivot 成跟主 kline 面板同一个 (index, symbols_final) 的宽表字典。
 
-    只处理 `oi_df` 里实际存在的列（`fetch_oi_history` 对 interval="5m" 只给
-    `open_interest`，没有 high/low），缺的列对应的 `OPTIONAL_OI_FIELDS` 就不出现在返回
-    字典里，`BarPanel` 构造时自然落回默认值 `None`。`oi_df` 为 `None`/空表时返回空字典，
-    等价于完全没有 OI 数据。
+    只处理 `long_df` 里实际存在的列（比如 interval="5m" 时只有收盘值，没有 high/low），缺的列对应的字段
+    就不出现在返回字典里，`BarPanel` 构造时自然落回默认值 `None`。`long_df` 为 `None`/空表时返回空字典，
+    等价于完全没有这类数据。
     """
-    if oi_df is None or oi_df.empty:
+    if long_df is None or long_df.empty:
         return {}
 
-    oi_df = oi_df.copy()
-    oi_df["start_time"] = pd.to_datetime(oi_df["start_time"], utc=True)
+    long_df = long_df.copy()
+    long_df["start_time"] = pd.to_datetime(long_df["start_time"], utc=True)
 
     result: dict[str, pd.DataFrame] = {}
-    for field_name in OPTIONAL_OI_FIELDS:
-        if field_name not in oi_df.columns:
+    for field_name in field_names:
+        if field_name not in long_df.columns:
             continue
         try:
-            pivoted = oi_df.pivot(index="start_time", columns="symbol", values=field_name)
+            pivoted = long_df.pivot(index="start_time", columns="symbol", values=field_name)
         except ValueError as exc:
             raise ValueError(
-                "OI 结果里存在重复的 (symbol, start_time) —— 查询是否忘记加 FINAL？"
+                f"{label} 结果里存在重复的 (symbol, start_time) —— 查询是否忘记加 FINAL？"
             ) from exc
         result[field_name] = pivoted.reindex(index=index, columns=symbols_final).astype("float64")
     return result

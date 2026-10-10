@@ -37,6 +37,25 @@ PANEL_FIELDS: tuple[str, ...] = (
 # 恒为 None。
 OPTIONAL_OI_FIELDS: tuple[str, ...] = ("open_interest", "open_interest_high", "open_interest_low")
 
+# 可选字段：多空比（`market.fapi_ls_ratio_*`），跟 OI 同一个上游模块、同一套表结构和时间语义——`start_time` 是
+# K 线开盘时刻，值属于收盘时刻（5m 原始表 snap_time = start_time + 5m；rollup 的 `_close` 是桶内最后一个 5m 值），
+# 所以跟 `close` 同一个信息可得时点。不放进 PANEL_FIELDS 的理由同 OI。字段名用语义名，跟库里列名的对应：
+#   long_short_ratio               <- count_long_short_ratio            全市场账户多空比（多头账户数 / 空头账户数）
+#   top_account_long_short_ratio   <- count_toptrader_long_short_ratio  大户账户多空比
+#   top_position_long_short_ratio  <- sum_toptrader_long_short_ratio    大户持仓多空比（多头持仓量 / 空头持仓量）
+# `_high`/`_low` 是桶内 5m 值的最高 / 最低，只有 15m 及以上（rollup 表）才有，5m 原始表恒为 None。
+LS_RATIO_METRICS: tuple[str, ...] = (
+    "long_short_ratio",
+    "top_account_long_short_ratio",
+    "top_position_long_short_ratio",
+)
+OPTIONAL_LS_RATIO_FIELDS: tuple[str, ...] = tuple(
+    f"{metric}{suffix}" for metric in LS_RATIO_METRICS for suffix in ("", "_high", "_low")
+)
+
+# 全部可选字段：校验、切片都按这一份走，以后再加可选数据源只改这里
+OPTIONAL_FIELDS: tuple[str, ...] = OPTIONAL_OI_FIELDS + OPTIONAL_LS_RATIO_FIELDS
+
 VALID_INTERVALS: tuple[str, ...] = ("1m", "5m", "15m", "1h", "4h", "1d")
 
 _INTERVAL_SECONDS: Mapping[str, int] = {
@@ -94,6 +113,17 @@ class BarPanel:
     open_interest_high: Optional[pd.DataFrame] = None
     open_interest_low: Optional[pd.DataFrame] = None
 
+    # 可选多空比字段，见 OPTIONAL_LS_RATIO_FIELDS 上面的说明；None 的含义同 OI
+    long_short_ratio: Optional[pd.DataFrame] = None
+    long_short_ratio_high: Optional[pd.DataFrame] = None
+    long_short_ratio_low: Optional[pd.DataFrame] = None
+    top_account_long_short_ratio: Optional[pd.DataFrame] = None
+    top_account_long_short_ratio_high: Optional[pd.DataFrame] = None
+    top_account_long_short_ratio_low: Optional[pd.DataFrame] = None
+    top_position_long_short_ratio: Optional[pd.DataFrame] = None
+    top_position_long_short_ratio_high: Optional[pd.DataFrame] = None
+    top_position_long_short_ratio_low: Optional[pd.DataFrame] = None
+
     schema_version: str = SCHEMA_VERSION
     schema_notes: dict = field(default_factory=dict)
 
@@ -124,10 +154,10 @@ class BarPanel:
         if not self.coverage.index.equals(index):
             raise ValueError("BarPanel.coverage index does not match BarPanel.open index")
 
-        for name in OPTIONAL_OI_FIELDS:
+        for name in OPTIONAL_FIELDS:
             frame = getattr(self, name)
             if frame is None:
-                continue  # 允许缺席：1m/Redis 来源恒无，或调用方没有请求 OI
+                continue  # 允许缺席：1m/Redis 来源恒无，或调用方没有请求 OI / 多空比
             if not isinstance(frame, pd.DataFrame):
                 raise TypeError(f"BarPanel.{name} must be a pandas.DataFrame or None")
             if not frame.index.equals(index):
@@ -139,6 +169,11 @@ class BarPanel:
     def has_open_interest(self) -> bool:
         """这个 panel 是否带了 OI 数据——1m/Redis 来源、或调用方没请求时恒为 False。"""
         return self.open_interest is not None
+
+    @property
+    def has_long_short_ratio(self) -> bool:
+        """这个 panel 是否带了多空比数据（至少有全市场账户多空比）。"""
+        return self.long_short_ratio is not None
 
     def field(self, name: str) -> pd.DataFrame:
         if name not in PANEL_FIELDS:
@@ -158,22 +193,18 @@ class BarPanel:
     def slice(self, selector) -> "BarPanel":
         """按位置切片/布尔掩码取子集（不是按 label），selector 直接转给 `.iloc[]`。
 
-        可选 OI 字段：为 None 时保持 None（不会凭空切出一张空表），非 None 时跟核心字段
-        同步切片，保证切片前后 open_interest 的 index 始终和 open/close 对齐。
+        可选字段（OI、多空比）：为 None 时保持 None（不会凭空切出一张空表），非 None 时跟核心字段
+        同步切片，保证切片前后它们的 index 始终和 open/close 对齐。
         """
         kwargs = {name: getattr(self, name).iloc[selector] for name in PANEL_FIELDS}
-
-        def _sliced_oi(name: str) -> Optional[pd.DataFrame]:
+        for name in OPTIONAL_FIELDS:
             frame = getattr(self, name)
-            return frame.iloc[selector] if frame is not None else None
+            kwargs[name] = frame.iloc[selector] if frame is not None else None
 
         return BarPanel(
             interval=self.interval,
             symbols=self.symbols,
             coverage=self.coverage.iloc[selector],
-            open_interest=_sliced_oi("open_interest"),
-            open_interest_high=_sliced_oi("open_interest_high"),
-            open_interest_low=_sliced_oi("open_interest_low"),
             schema_version=self.schema_version,
             schema_notes=dict(self.schema_notes),
             **kwargs,

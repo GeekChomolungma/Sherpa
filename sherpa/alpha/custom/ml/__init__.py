@@ -10,6 +10,6 @@
 
 from .alpha import MLAlpha
 from .features import FeatureSpec, build_features
-from .models import LgbmV1, LgbmV2
+from .models import LgbmV1, LgbmV2, LgbmV3
 
-__all__ = ["MLAlpha", "FeatureSpec", "build_features", "LgbmV1", "LgbmV2"]
+__all__ = ["MLAlpha", "FeatureSpec", "build_features", "LgbmV1", "LgbmV2", "LgbmV3"]

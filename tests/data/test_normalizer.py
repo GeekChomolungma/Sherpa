@@ -170,3 +170,44 @@ def test_redis_window_to_panel_all_empty():
     panel = redis_window_to_panel({"BTCUSDT": []}, interval="1m", symbols=["BTCUSDT"])
     assert len(panel.index) == 0
     assert panel.symbols == ("BTCUSDT",)
+
+
+def test_ch_long_to_panel_attaches_ls_ratio_aligned_to_kline_index():
+    rows = [
+        _ch_row("BTCUSDT", "2026-01-01T00:00:00", 100),
+        _ch_row("BTCUSDT", "2026-01-01T04:00:00", 101),
+        _ch_row("ETHUSDT", "2026-01-01T00:00:00", 10),
+    ]
+    ls_rows = [
+        {
+            "symbol": "BTCUSDT",
+            "start_time": "2026-01-01T00:00:00",
+            "long_short_ratio": 1.5,
+            "long_short_ratio_high": 1.6,
+            "long_short_ratio_low": 1.4,
+            "top_account_long_short_ratio": 1.2,
+            "top_account_long_short_ratio_high": 1.3,
+            "top_account_long_short_ratio_low": 1.1,
+            "top_position_long_short_ratio": None,  # 库里是 Nullable：缺值如实 NaN
+            "top_position_long_short_ratio_high": None,
+            "top_position_long_short_ratio_low": None,
+        }
+    ]
+    panel = ch_long_to_panel(
+        pd.DataFrame(rows), interval="4h", symbols=["BTCUSDT", "ETHUSDT"], ls_df=pd.DataFrame(ls_rows)
+    )
+
+    assert panel.has_long_short_ratio
+    assert panel.open_interest is None  # 没传 OI，互不影响
+    assert panel.long_short_ratio.loc["2026-01-01T00:00:00", "BTCUSDT"] == 1.5
+    assert panel.top_account_long_short_ratio_low.loc["2026-01-01T00:00:00", "BTCUSDT"] == 1.1
+    assert math.isnan(panel.top_position_long_short_ratio.loc["2026-01-01T00:00:00", "BTCUSDT"])
+    assert math.isnan(panel.long_short_ratio.loc["2026-01-01T04:00:00", "BTCUSDT"])
+    assert math.isnan(panel.long_short_ratio.loc["2026-01-01T00:00:00", "ETHUSDT"])
+
+
+def test_ch_long_to_panel_without_ls_df_leaves_ls_ratio_none():
+    rows = [_ch_row("BTCUSDT", "2026-01-01T00:00:00", 100)]
+    panel = ch_long_to_panel(pd.DataFrame(rows), interval="4h", symbols=["BTCUSDT"])
+    assert not panel.has_long_short_ratio
+    assert panel.top_position_long_short_ratio is None

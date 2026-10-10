@@ -40,7 +40,9 @@ import numpy as np
 import pandas as pd
 
 from sherpa.alpha.custom.ml import LgbmV1
-from sherpa.alpha.custom.ml.features import FeatureSpec, build_features
+from sherpa.alpha.custom.ml.features import (
+    DERIVATIVE_FEATURES, DERIVATIVES_CORE, DERIVATIVES_LS, DERIVATIVES_OI, FeatureSpec, build_features,
+)
 from sherpa.alpha.liquidity import LiquidityFilter
 from sherpa.data.schema import interval_to_timedelta
 from sherpa.metrics.factor import forward_returns
@@ -76,6 +78,7 @@ class Case:
     valid_bars: int = config.INNER_VALID_BARS
     neutralize_label: bool = False
     drop_features: tuple[str, ...] = ()         # 按前缀去掉的特征，比如 ("alpha:",) = 不要 B 组
+    derivatives: tuple[str, ...] = ()           # A 组可选的 OI / 多空比特征（features.DERIVATIVE_FEATURES 的名字）
     min_percentile: float = 0.5                 # 流动性范围（特征排名 + 损失 + 评估）
     lgb_overrides: tuple[tuple[str, Any], ...] = ()
     seeds: tuple[int, ...] = config.SEEDS
@@ -85,6 +88,7 @@ class Case:
         return FeatureSpec(
             name="lgbm_v1", version=1, alphas=LgbmV1.spec.alphas,
             liquidity=LiquidityFilter(min_percentile=self.min_percentile, seasoning_period=SEASONING_PERIOD, lookback=DEFAULT_LOOKBACK),
+            derivatives=self.derivatives,
         )
 
 
@@ -104,6 +108,7 @@ FACTORS = {
 }
 
 H6 = dict(horizon=6)
+V2 = dict(horizon=6, label_transform="raw_clip", window_bars=None, seeds=tuple(range(9)))
 CASES: list[Case] = [
     # ---- 基线：核对本脚本跟正式流水线一致 ----
     Case("v2_official", "正式流水线当前的模型（第二版），用来核对评估口径跟关卡3 一致", source="official"),
@@ -157,6 +162,20 @@ CASES: list[Case] = [
     Case("h6_raw_exp_seed678", "h6_raw_expanding 换种子（6,7,8）", label_transform="raw_clip", window_bars=None, seeds=(6, 7, 8), **H6),
     Case("h6_raw_exp_ens9", "h6_raw_expanding 三组种子共 9 个模型的打分平均",
          source="blend:h6_raw_expanding+h6_raw_exp_seed345+h6_raw_exp_seed678", **H6),
+    # ---- 第六批（2026-10-09，研究起点 2023-01-01）：A 组加 OI / 多空比特征，其余同 LgbmV2 ----
+    Case("d_base", "LgbmV2 配置（持有 1 天、原始收益、扩展窗口、9 种子），本批对照", **V2),
+    Case("d_core", "d_base + 核心 6 个（OI 2 + 多空比 4）", derivatives=DERIVATIVES_CORE, **V2),
+    Case("d_oi", "d_base + 只加 OI 2 个", derivatives=DERIVATIVES_OI, **V2),
+    Case("d_ls", "d_base + 只加多空比 4 个", derivatives=DERIVATIVES_LS, **V2),
+    Case("d_wide", "d_base + 全部 10 个候选（核心 + 边缘）", derivatives=tuple(DERIVATIVE_FEATURES), **V2),
+    # 换一组独立种子（9-17）复核 d_base vs d_core 的差别不是种子运气
+    Case("d_base_s2", "d_base 换种子 9-17", **{**V2, "seeds": tuple(range(9, 18))}),
+    Case("d_core_s2", "d_core 换种子 9-17", derivatives=DERIVATIVES_CORE, **{**V2, "seeds": tuple(range(9, 18))}),
+    Case("d_ls_s2", "d_ls 换种子 9-17", derivatives=DERIVATIVES_LS, **{**V2, "seeds": tuple(range(9, 18))}),
+    # 两组种子合并成 18 种子集成：单个 9 种子集成换种子后选择段中位数仍能差 0.4，最终比较用这一组
+    Case("d_base_ens18", "d_base + d_base_s2 共 18 个模型的打分平均", source="blend:d_base+d_base_s2", **V2),
+    Case("d_core_ens18", "d_core + d_core_s2 共 18 个模型的打分平均", source="blend:d_core+d_core_s2", **V2),
+    Case("d_ls_ens18", "d_ls + d_ls_s2 共 18 个模型的打分平均", source="blend:d_ls+d_ls_s2", **V2),
 ]
 
 
@@ -175,15 +194,16 @@ def load_panel(refresh: bool):
     return panel
 
 
-_FEATURE_CACHE: dict[float, tuple[pd.DataFrame, pd.DataFrame]] = {}
+_FEATURE_CACHE: dict[tuple[float, tuple[str, ...]], tuple[pd.DataFrame, pd.DataFrame]] = {}
 
 
 def scope_and_features(panel, case: Case) -> tuple[pd.DataFrame, pd.DataFrame]:
-    if case.min_percentile not in _FEATURE_CACHE:
+    key = (case.min_percentile, case.derivatives)
+    if key not in _FEATURE_CACHE:
         spec = case.spec
         scope = spec.liquidity.mask(panel)
-        _FEATURE_CACHE[case.min_percentile] = (scope, build_features(panel, spec, scope))
-    return _FEATURE_CACHE[case.min_percentile]
+        _FEATURE_CACHE[key] = (scope, build_features(panel, spec, scope))
+    return _FEATURE_CACHE[key]
 
 
 def _keep_columns(names: list[str], drop: tuple[str, ...]) -> list[int]:

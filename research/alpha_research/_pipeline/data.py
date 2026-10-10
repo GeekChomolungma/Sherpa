@@ -77,6 +77,7 @@ def load_universe_panel(
     start_time: str = START_TIME,
     end_time: str = END_TIME,
     include_open_interest: bool = True,
+    include_long_short_ratio: bool = True,
 ) -> BarPanel:
     """拉取指定区间/周期的全市场 K 线，拼成研究用的 `BarPanel`。
 
@@ -88,6 +89,7 @@ def load_universe_panel(
     默认的 2020-01-01 起始区间基本重合（只差开头约 8 个月），直接拼进 `panel.open_interest`
     不吃亏；因子代码不想用就不引用这个字段，成本仅是多一次 ClickHouse 查询。
     interval="1m" 时该参数无效——OI 最细只到 5m，`fetch_oi_history` 会自己短路。
+    `include_long_short_ratio` 同理：多空比（`market.fapi_ls_ratio_*`）拼进 `panel.long_short_ratio` 等字段。
     """
     ch_reader = ch_reader or connect_ch_reader()
     universe = Universe.from_clickhouse(ch_reader)
@@ -99,7 +101,10 @@ def load_universe_panel(
     oi_df = None
     if include_open_interest and interval != "1m":
         oi_df = ch_reader.fetch_oi_history(symbols, interval, start_time=start_time, end_time=end_time)
-    return ch_long_to_panel(long_df, interval=interval, symbols=symbols, oi_df=oi_df)
+    ls_df = None
+    if include_long_short_ratio and interval != "1m":
+        ls_df = ch_reader.fetch_ls_ratio_history(symbols, interval, start_time=start_time, end_time=end_time)
+    return ch_long_to_panel(long_df, interval=interval, symbols=symbols, oi_df=oi_df, ls_df=ls_df)
 
 
 def label_forward_returns(panel: BarPanel) -> pd.DataFrame:

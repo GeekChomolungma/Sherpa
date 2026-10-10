@@ -6,7 +6,7 @@ import pytest
 
 from sherpa.alpha import registry
 from sherpa.alpha.custom.ml import LgbmV1, MLAlpha, build_features
-from sherpa.alpha.custom.ml.features import FeatureSpec, cross_sectional_rank, market_features
+from sherpa.alpha.custom.ml.features import DERIVATIVES_CORE, FeatureSpec, cross_sectional_rank, market_features
 from sherpa.alpha.liquidity import LiquidityFilter, restrict
 from sherpa.alpha.custom.ml.manifest import Manifest, ModelEntry, load_manifest, save_manifest
 from sherpa.data.schema import BarPanel, build_coverage
@@ -155,3 +155,48 @@ def test_fingerprint_changes_with_liquidity_scope():
     a = FeatureSpec(name="x", version=1, liquidity=LiquidityFilter(min_percentile=0.5))
     b = FeatureSpec(name="x", version=1, liquidity=LiquidityFilter(min_percentile=0.6))
     assert a.fingerprint != b.fingerprint
+
+
+def _with_derivatives(panel: BarPanel) -> BarPanel:
+    """补上 OI 和三个多空比（含 high / low），随机游走，正值。"""
+    rng = np.random.default_rng(3)
+
+    def walk(scale):
+        steps = rng.normal(0, 0.02, panel.close.shape)
+        return pd.DataFrame(scale * np.exp(np.cumsum(steps, axis=0)), index=panel.index, columns=panel.close.columns)
+
+    extra = {"open_interest": walk(1e6)}
+    for metric in ("long_short_ratio", "top_account_long_short_ratio", "top_position_long_short_ratio"):
+        value = walk(1.5)
+        extra[metric], extra[f"{metric}_high"], extra[f"{metric}_low"] = value, value * 1.01, value * 0.99
+    return dataclasses.replace(panel, **extra)
+
+
+DERIV_SPEC = FeatureSpec(name="d", version=1, alphas=LgbmV1.spec.alphas, derivatives=DERIVATIVES_CORE)
+
+
+def test_derivative_features_are_optional_and_keep_old_fingerprints():
+    assert LgbmV1.spec.derivatives == ()
+    plain = FeatureSpec(name="x", version=1)
+    assert plain.fingerprint != FeatureSpec(name="x", version=1, derivatives=("ls_global",)).fingerprint
+    names = DERIV_SPEC.feature_names
+    assert names.index("ls_global") == names.index("beta") + 1 + DERIVATIVES_CORE.index("ls_global")  # A 组末尾、beta 之后
+    with pytest.raises(ValueError, match="未知的衍生品特征"):
+        FeatureSpec(name="x", version=1, derivatives=("nope",))
+
+
+def test_derivative_features_are_point_in_time_and_ranked():
+    panel = _with_derivatives(_panel())
+    k = 260
+    full = build_features(panel, DERIV_SPEC)
+    cut = build_features(panel.slice(slice(0, k)), DERIV_SPEC)
+    pd.testing.assert_frame_equal(cut, full.loc[: panel.index[k - 1]])
+    last = full.xs(panel.index[-1], level="start_time")
+    for name in DERIVATIVES_CORE:
+        assert last[name].notna().all() and last[name].between(-0.5, 0.5).all()
+
+
+def test_derivative_features_are_nan_when_panel_has_no_derivatives_data():
+    features = build_features(_panel(), DERIV_SPEC)
+    assert features[list(DERIVATIVES_CORE)].isna().all().all()
+    assert features["ret_6"].notna().any()

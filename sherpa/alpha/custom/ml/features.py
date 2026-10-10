@@ -127,6 +127,77 @@ SYMBOL_FEATURES: tuple[tuple[str, Callable[[BarPanel], pd.DataFrame]], ...] = (
 BETA_FEATURE = "beta"
 SYMBOL_FEATURE_LOOKBACK = max(121, DEFAULT_BETA_WINDOW + 1)
 
+
+# ---- A 组可选项：衍生品持仓 / 多空比（`FeatureSpec.derivatives` 按名字挑，默认不带）----
+#
+# 跟上面的 SYMBOL_FEATURES 一样是单币时序量、每期在流动性范围内截面排名，只是做成可选：A 组固定那部分一改，
+# 所有已训练模型的特征指纹都会变；可选项默认为空，旧模型（LgbmV1 / V2）的特征清单和指纹不受影响。
+# 数据来自 `BarPanel.open_interest` 和多空比字段（`market.fapi_ls_ratio_*`，Binance vision 归档），
+# 面板没取这些数据时整列 NaN，同 oi_change。多空比都取对数：log(r) 关于 0 对称（偏多 / 偏空等距），差值 = 比值之比。
+#
+# 2026-10-09 在 2023-01-01 ~ 2026-03-15 上做单变量扫描（持有 6 根原始收益、流动性前 50%），筛选口径：两段方向一致、
+# 对现有 A+B 组截面回归后的残差仍有 IC（增量），且彼此不冗余（截面秩相关 < 0.8），得到 OI 2 个 + 多空比 4 个候选；
+# 再用 LgbmV2 配置做 ML 消融（两组种子）：**多空比 4 个（`DERIVATIVES_LS`）稳定提升，OI 2 个反而拖累**，所以 LgbmV3
+# 只用前者。OI 原本就在 A 组固定部分（oi_change_6 / oi_change_42）。过程和数字见
+# research/alpha_research/MLalpha/experiments/FINDINGS_DERIVATIVES.md。
+
+def _log_positive(x: Optional[pd.DataFrame], panel: BarPanel) -> pd.DataFrame:
+    if x is None:
+        return pd.DataFrame(np.nan, index=panel.index, columns=panel.close.columns)
+    return x.where(x > 0).transform(np.log)
+
+
+def _oi_value(panel: BarPanel) -> pd.DataFrame:
+    """持仓的美元价值 OI × close（OI 单位是币）。"""
+    if panel.open_interest is None:
+        return pd.DataFrame(np.nan, index=panel.index, columns=panel.close.columns)
+    return panel.open_interest * panel.close
+
+
+def _zscore(x: pd.DataFrame, window: int) -> pd.DataFrame:
+    return (x - x.rolling(window).mean()) / x.rolling(window).std()
+
+
+def _ret_corr(x: pd.DataFrame, panel: BarPanel, window: int) -> pd.DataFrame:
+    """x 的逐根变化跟逐根收益的滚动相关。"""
+    return x.diff().rolling(window).corr(panel.close.pct_change(fill_method=None))
+
+
+DERIVATIVE_FEATURES: dict[str, Callable[[BarPanel], pd.DataFrame]] = {
+    # ┌──────────────────────────────────────────────────────────────────────────────────────────────┐
+    # │ 8. 持仓量（OI）进阶 —— ML 消融里没带来提升（只加这两个时选择段明显变差），目前没有模型使用        │
+    # │    oi_value          log(OI × close)，持仓的美元规模。跟 quote_volume_42 相关 0.84，但对现有特征   │
+    # │                      回归后的残差 IC 两段都为正：同样成交额下，持仓沉淀多的币更好                    │
+    # │    oi_price_corr_42  近 7 天 Δlog(OI) 跟收益的相关。高 = 涨时加仓、跌时减仓（追涨杀跌的杠杆盘），  │
+    # │                      两段都偏负                                                                │
+    # └──────────────────────────────────────────────────────────────────────────────────────────────┘
+    "oi_value": lambda p: _log_positive(_oi_value(p), p),
+    "oi_price_corr_42": lambda p: _ret_corr(_log_positive(p.open_interest, p), p, 42),
+    # ┌──────────────────────────────────────────────────────────────────────────────────────────────┐
+    # │ 9. 多空比                                                                                      │
+    # │    ls_global                 log(全体账户多空比)，散户情绪水平。越偏多，平均收益越低（拥挤）：      │
+    # │                              首尾价差两段 −40 / −17 bps                                        │
+    # │    ls_top_minus_global       log(大户持仓多空比) − log(全体账户多空比)：大户比散户更偏多的程度。   │
+    # │                              首尾价差 +35 / +18 bps，跟 ls_global 相关 −0.74（没用大户账户比：    │
+    # │                              它跟全体账户比相关 0.96）                                          │
+    # │    ls_global_z_42            全体账户多空比相对自己近 7 天的 z 分数：散户情绪的突变，两段都偏负    │
+    # │    ls_top_position_corr_42   近 7 天 Δlog(大户持仓比) 跟收益的相关：大户顺势加多为正，两段都偏正   │
+    # └──────────────────────────────────────────────────────────────────────────────────────────────┘
+    "ls_global": lambda p: _log_positive(p.long_short_ratio, p),
+    "ls_top_minus_global": lambda p: _log_positive(p.top_position_long_short_ratio, p) - _log_positive(p.long_short_ratio, p),
+    "ls_global_z_42": lambda p: _zscore(_log_positive(p.long_short_ratio, p), 42),
+    "ls_top_position_corr_42": lambda p: _ret_corr(_log_positive(p.top_position_long_short_ratio, p), p, 42),
+    # ---- 边缘候选（单变量证据弱或跟已有特征部分重叠），只给"宽版"对照实验用 ----
+    "ls_top_position": lambda p: _log_positive(p.top_position_long_short_ratio, p),
+    "volume_to_oi_6": lambda p: _safe_div(p.quote_volume.rolling(6).mean(), _oi_value(p).rolling(6).mean()),
+    "oi_change_120": _oi_change(120),
+    "ls_global_change_42": lambda p: _log_positive(p.long_short_ratio, p).diff(42),
+}
+DERIVATIVES_OI: tuple[str, ...] = ("oi_value", "oi_price_corr_42")
+DERIVATIVES_LS: tuple[str, ...] = ("ls_global", "ls_top_minus_global", "ls_global_z_42", "ls_top_position_corr_42")
+# 单变量筛出的核心 6 个（OI 2 + 多空比 4）
+DERIVATIVES_CORE: tuple[str, ...] = DERIVATIVES_OI + DERIVATIVES_LS
+
 # ---- C. 市场状态变量：只用本身就是比例 / 滚动分位数、跨年份可比的量 ----
 
 MARKET_FEATURES: tuple[str, ...] = (
@@ -162,10 +233,17 @@ class FeatureSpec:
     alphas: tuple[str, ...] = ()
     benchmark_symbol: str = "BTCUSDT"
     liquidity: LiquidityFilter = LiquidityFilter()
+    # A 组可选项（`DERIVATIVE_FEATURES` 里的名字），排在 beta 之后；空 = 不带，特征清单和指纹跟加这个字段之前一样
+    derivatives: tuple[str, ...] = ()
+
+    def __post_init__(self):
+        unknown = [name for name in self.derivatives if name not in DERIVATIVE_FEATURES]
+        if unknown:
+            raise ValueError(f"未知的衍生品特征：{unknown}，可选 {sorted(DERIVATIVE_FEATURES)}")
 
     @property
     def feature_names(self) -> tuple[str, ...]:
-        symbol = tuple(name for name, _ in SYMBOL_FEATURES) + (BETA_FEATURE,)
+        symbol = tuple(name for name, _ in SYMBOL_FEATURES) + (BETA_FEATURE,) + self.derivatives
         alphas = tuple(f"alpha:{name}" for name in self.alphas)
         market = tuple(f"market:{name}" for name in MARKET_FEATURES)
         return symbol + alphas + market
@@ -196,6 +274,8 @@ def _symbol_features(panel: BarPanel, spec: FeatureSpec, scope: pd.DataFrame) ->
     for name, compute in SYMBOL_FEATURES:
         yield name, ranked(compute(panel))
     yield BETA_FEATURE, ranked(rolling_beta(panel.close, benchmark_symbol=spec.benchmark_symbol))
+    for name in spec.derivatives:
+        yield name, ranked(DERIVATIVE_FEATURES[name](panel))
     for name in spec.alphas:
         yield f"alpha:{name}", ranked(registry.get(name)().compute(panel))
 

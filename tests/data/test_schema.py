@@ -2,6 +2,7 @@ import pandas as pd
 import pytest
 
 from sherpa.data.schema import (
+    OPTIONAL_LS_RATIO_FIELDS,
     OPTIONAL_OI_FIELDS,
     PANEL_FIELDS,
     BarPanel,
@@ -200,3 +201,25 @@ def test_market_event_bar_end_time_matches_binance_close_time_convention():
     )
     assert this_bar.bar_end_time == pd.Timestamp("2026-01-01T10:00:59.999", tz="UTC")
     assert next_bar.bar_start_time == this_bar.bar_end_time + pd.Timedelta(milliseconds=1)
+
+
+def test_barpanel_slice_propagates_optional_ls_ratio():
+    base = _make_panel(n=4)
+    ls = {name: pd.DataFrame(float(i), index=base.index, columns=list(base.symbols))
+          for i, name in enumerate(OPTIONAL_LS_RATIO_FIELDS)}
+    fields = {name: getattr(base, name) for name in PANEL_FIELDS}
+    panel = BarPanel(interval=base.interval, symbols=base.symbols, coverage=base.coverage, **fields, **ls)
+
+    sliced = panel.slice(slice(1, 3))
+    assert sliced.has_long_short_ratio
+    for name in OPTIONAL_LS_RATIO_FIELDS:
+        assert getattr(sliced, name).index.equals(sliced.index)
+    assert sliced.open_interest is None
+
+
+def test_barpanel_rejects_mismatched_ls_ratio_index():
+    base = _make_panel(n=3)
+    fields = {name: getattr(base, name) for name in PANEL_FIELDS}
+    bad = pd.DataFrame(1.0, index=base.index[:2], columns=list(base.symbols))
+    with pytest.raises(ValueError):
+        BarPanel(interval=base.interval, symbols=base.symbols, coverage=base.coverage, **fields, long_short_ratio=bad)

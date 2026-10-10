@@ -13,7 +13,7 @@ from sherpa.metrics.tradability import DEFAULT_LOOKBACK, SEASONING_PERIOD
 from ...base import register_alpha
 from ...liquidity import LiquidityFilter
 from .alpha import MLAlpha
-from .features import FeatureSpec
+from .features import DERIVATIVES_LS, FeatureSpec
 
 # B 组第一批：worldquant_101 研究线关卡1 去冗余后的候选并集（关卡2 L0 方案用的那 13 个，2026-10-01 取）。
 # 写死在这里而不是运行时读那份交接文件：世坤研究线重跑后名单会变，特征必须有固定版本。
@@ -77,5 +77,33 @@ class LgbmV2(MLAlpha):
         "label_horizon_bars": 6,
         "label_transform": "raw_clip",
         "seeds": list(range(9)),
+        "train_window_bars": None,
+    }
+
+
+@register_alpha
+class LgbmV3(MLAlpha):
+    """LightGBM 第三版：LgbmV2 + A 组 4 个多空比特征（`DERIVATIVES_LS`，数据来自 `market.fapi_ls_ratio_*`）。
+
+    2026-10-09 探索实验（research/alpha_research/MLalpha/experiments/FINDINGS_DERIVATIVES.md）：同一套 V2 配置下只改
+    特征集，18 个种子集成后吃单净 Sharpe 中位数 选择段 −0.41 → +0.12、验证段 0.59 → 0.73，两段都为正的组合占比
+    0.26 → 0.52；剥离风格后的 alpha_sharpe 选择段 −0.27 → +0.25，低波动暴露没有增加。两组独立种子下选择段都为正，
+    是本批唯一做到这一点的配置。OI 进阶特征（`DERIVATIVES_OI`）消融里拖累，没有加。
+    种子数从 9 加到 18：9 种子集成换一组种子，选择段中位数仍能差 0.4。
+    """
+
+    name = "ml_lgbm_v3"
+    model_name = "lgbm_v3"
+    spec = FeatureSpec(
+        name="lgbm_v3",
+        version=1,
+        alphas=WORLDQUANT_L0_UNION,
+        liquidity=LiquidityFilter(min_percentile=0.5, seasoning_period=SEASONING_PERIOD, lookback=DEFAULT_LOOKBACK),
+        derivatives=DERIVATIVES_LS,
+    )
+    training_overrides = {
+        "label_horizon_bars": 6,
+        "label_transform": "raw_clip",
+        "seeds": list(range(18)),
         "train_window_bars": None,
     }

@@ -3,7 +3,8 @@
   "description": "机器学习模型 alpha（sherpa/alpha/custom/ml/）：步骤 0 滚动训练，之后跟普通 alpha 一样走阶段一 -> 关卡1/2 透传 -> 关卡3",
   "alphas": {
     "modules": ["sherpa.alpha.custom.ml.models"],
-    "family": "custom"
+    "family": "custom",
+    "include": ["custom.ml_lgbm_v3"]
   },
   "preprocess": {
     "tradable_mask": {"min_percentile": 0.5, "min_quote_volume": 0, "min_trades_count": 0},
@@ -20,7 +21,7 @@
     "orthogonalization": {"mode": "passthrough"},
     "synthesis": {
       "mode": "passthrough",
-      "passthrough": {"singles": true, "equal_weight": true, "routed": true}
+      "passthrough": {"singles": true, "equal_weight": false, "routed": false}
     }
   }
 }

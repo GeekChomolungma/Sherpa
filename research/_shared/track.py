@@ -50,6 +50,7 @@ class Track:
     description: str
     alpha_modules: tuple[str, ...]
     alpha_family: Optional[str]
+    alpha_include: Optional[tuple[str, ...]]
     tradable: Union[bool, Mapping[str, Any]]
     neutralize: bool
     regime_dimensions: tuple[str, ...]
@@ -97,6 +98,9 @@ class Track:
 
         按 `cls.__module__` 判断归属，所以同一个 family 下不同主题的模块（custom.starter / custom.xxx）
         能分成不同的研究线。返回 registry 的 qualified_name，顺序同注册顺序。
+
+        `alphas.include`（可选）是 qualified_name 白名单：同一个模块里注册了多个因子、只想跑其中几个时用
+        （比如 MLalpha 只评估新模型，不重跑旧模型）。名单里的名字必须属于上面选出来的范围。
         """
         self.import_alpha_modules()
         selected = [
@@ -109,6 +113,14 @@ class Track:
                 f"track {self.id!r}：alphas.modules={list(self.alpha_modules)} / family={self.alpha_family!r} "
                 "下一个已注册的因子都没有，检查模块路径和 @register_alpha"
             )
+        if self.alpha_include is not None:
+            unknown = [name for name in self.alpha_include if name not in selected]
+            if unknown:
+                raise SystemExit(
+                    f"track {self.id!r}：alphas.include 里的 {unknown} 不在 alphas.modules / family 选出的因子里，"
+                    f"可选 {selected}"
+                )
+            selected = [name for name in selected if name in self.alpha_include]
         return selected
 
 
@@ -134,6 +146,9 @@ def load_track(name_or_path: Union[str, Path]) -> Track:
     modules = alphas["modules"]
     if isinstance(modules, str) or not modules:
         raise SystemExit(f"track {track_id!r}：alphas.modules 必须是非空的模块路径列表")
+    include = alphas.get("include")
+    if include is not None and (isinstance(include, str) or not include):
+        raise SystemExit(f"track {track_id!r}：alphas.include 必须是非空的 qualified_name 列表（不限制就别写）")
 
     preprocess = raw.get("preprocess", {})
     tradable = preprocess.get("tradable_mask", True)
@@ -167,6 +182,7 @@ def load_track(name_or_path: Union[str, Path]) -> Track:
         description=raw.get("description", ""),
         alpha_modules=tuple(modules),
         alpha_family=alphas.get("family"),
+        alpha_include=None if include is None else tuple(include),
         tradable=tradable,
         neutralize=bool(preprocess.get("neutralize", True)),
         regime_dimensions=dimensions,

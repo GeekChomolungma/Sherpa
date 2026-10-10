@@ -3,41 +3,21 @@
   "schema_version": 1,
   "track": "MLalpha",
   "producer": "synthesis:passthrough",
-  "created_at": "2026-10-05T12:53:01Z",
+  "created_at": "2026-10-09T23:05:54Z",
   "meta": {
     "input_producer": "orthogonalization:passthrough",
     "options": {
       "singles": true,
-      "equal_weight": true,
-      "routed": true
+      "equal_weight": false,
+      "routed": false
     },
     "note": "透传：方向取自候选集（选择段 IC 符号），等权；未经关卡2 在验证段上比较"
   },
   "recipes": {
-    "直通·G0 全局等权": {
+    "single:custom.ml_lgbm_v3": {
       "kind": "static",
       "weights": {
-        "custom.ml_lgbm_v2": 1.0,
-        "custom.ml_lgbm_v1": 1.0
-      },
-      "equivalent_to": [
-        "直通·L0 并集等权",
-        "直通·L2-dispersion 路由等权",
-        "直通·L2-liquidity 路由等权",
-        "直通·L2-trend 路由等权",
-        "直通·L2-volatility 路由等权"
-      ]
-    },
-    "single:custom.ml_lgbm_v2": {
-      "kind": "static",
-      "weights": {
-        "custom.ml_lgbm_v2": 1.0
-      }
-    },
-    "single:custom.ml_lgbm_v1": {
-      "kind": "static",
-      "weights": {
-        "custom.ml_lgbm_v1": 1.0
+        "custom.ml_lgbm_v3": 1.0
       }
     }
   }

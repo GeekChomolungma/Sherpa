@@ -60,6 +60,7 @@ def load_universe_panel(
     start_time: str = START_TIME,
     end_time: str = END_TIME,
     include_open_interest: bool = True,
+    include_long_short_ratio: bool = True,
 ) -> BarPanel:
     """同各关卡：universe 用 `Universe.as_of(end_time)`，还没上线的币在上线前整列是 NaN，特征构建会跳过。"""
     ch_reader = ch_reader or connect_ch_reader()
@@ -72,4 +73,7 @@ def load_universe_panel(
     oi_df = None
     if include_open_interest and interval != "1m":
         oi_df = ch_reader.fetch_oi_history(symbols, interval, start_time=start_time, end_time=end_time)
-    return ch_long_to_panel(long_df, interval=interval, symbols=symbols, oi_df=oi_df)
+    ls_df = None
+    if include_long_short_ratio and interval != "1m":
+        ls_df = ch_reader.fetch_ls_ratio_history(symbols, interval, start_time=start_time, end_time=end_time)
+    return ch_long_to_panel(long_df, interval=interval, symbols=symbols, oi_df=oi_df, ls_df=ls_df)

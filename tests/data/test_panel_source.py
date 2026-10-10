@@ -214,3 +214,23 @@ def test_live_panel_source_filters_unwanted_intervals():
     source = LivePanelSource(ch_reader, redis_reader, universe=universe, intervals=["1m"])
     event = next(iter(source))
     assert event.interval == "1m"
+
+
+def test_historical_panel_source_include_long_short_ratio_attaches_ls():
+    kline_rows = [_ch_row("BTCUSDT", "2026-01-01T00:00", 100.0)]
+    ls_rows = [{"symbol": "BTCUSDT", "start_time": "2026-01-01T00:00", "long_short_ratio": 1.7}]
+    ch_client = FakeCHClient(responses=[pd.DataFrame(kline_rows), pd.DataFrame(ls_rows)])
+    source = HistoricalPanelSource(
+        CHReader(ch_client),
+        universe=_FakeUniverse(["BTCUSDT"]),
+        interval="5m",
+        start_time="2026-01-01",
+        end_time="2026-01-01T00:00",
+        include_long_short_ratio=True,
+    )
+    events = list(source)
+
+    assert len(ch_client.queries) == 2
+    assert "market.fapi_ls_ratio_5m" in ch_client.queries[1]
+    assert events[0].panel.long_short_ratio.loc[pd.Timestamp("2026-01-01T00:00", tz="UTC"), "BTCUSDT"] == 1.7
+    assert events[0].panel.open_interest is None

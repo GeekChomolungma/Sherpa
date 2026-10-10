@@ -89,6 +89,7 @@ def load_universe_panel(
     start_time: str = START_TIME,
     end_time: str = END_TIME,
     include_open_interest: bool = True,
+    include_long_short_ratio: bool = True,
 ) -> BarPanel:
     """拉取指定区间/周期的全市场 K 线，拼成研究用的 `BarPanel`。
 
@@ -97,6 +98,7 @@ def load_universe_panel(
 
     `include_open_interest` 默认打开，行为跟 `alpha_research/_pipeline/data.py`
     里同名参数一致（见那边的注释）；interval="1m" 时无效。
+    `include_long_short_ratio` 同理：多空比（`market.fapi_ls_ratio_*`）拼进 `panel.long_short_ratio` 等字段。
     """
     ch_reader = ch_reader or connect_ch_reader()
     universe = Universe.from_clickhouse(ch_reader)
@@ -108,7 +110,10 @@ def load_universe_panel(
     oi_df = None
     if include_open_interest and interval != "1m":
         oi_df = ch_reader.fetch_oi_history(symbols, interval, start_time=start_time, end_time=end_time)
-    return ch_long_to_panel(long_df, interval=interval, symbols=symbols, oi_df=oi_df)
+    ls_df = None
+    if include_long_short_ratio and interval != "1m":
+        ls_df = ch_reader.fetch_ls_ratio_history(symbols, interval, start_time=start_time, end_time=end_time)
+    return ch_long_to_panel(long_df, interval=interval, symbols=symbols, oi_df=oi_df, ls_df=ls_df)
 
 
 def label_forward_returns(panel: BarPanel) -> pd.DataFrame:

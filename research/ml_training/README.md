@@ -97,6 +97,10 @@ bash research/alpha_research/MLalpha/run_track.sh --from-step 1
 
 只保留掩码内、标签已知的行，按时间排好序（93 万行，构建 39 秒）。
 
+A 组还有一组**可选特征**（`FeatureSpec.derivatives`，名字取自 `features.DERIVATIVE_FEATURES`）：OI 进阶和多空比
+（`market.fapi_ls_ratio_*`），排在 beta 之后。默认不带，所以 V1 / V2 的特征清单和指纹不变；`LgbmV3` 带了 4 个多空比特征，共 37 列。
+怎么选出来的见 [`experiments/FINDINGS_DERIVATIVES.md`](../alpha_research/MLalpha/experiments/FINDINGS_DERIVATIVES.md)。
+
 ### ⑤ 滚动训练（`run_training.train_alpha`）
 
 `dataset.plan_folds` 先排出时间表：第一个重训时点 τ₁ = 研究起点 + 180 天（2022-06-30），之后每 20 天一个（共 68 个）。

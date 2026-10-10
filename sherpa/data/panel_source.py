@@ -48,6 +48,7 @@ class HistoricalPanelSource:
         end_time,
         lookback_bars: int = 200,
         include_open_interest: bool = False,
+        include_long_short_ratio: bool = False,
     ):
         self._ch_reader = ch_reader
         self._universe = universe
@@ -58,6 +59,8 @@ class HistoricalPanelSource:
         # 默认关闭：OI 是可选数据（见 sherpa.data.schema.OPTIONAL_OI_FIELDS），interval="1m"
         # 恒无来源；打开时对非 1m 区间多发一次 fetch_oi_history，不影响既有调用方的行为。
         self._include_open_interest = include_open_interest
+        # 多空比同 OI：可选数据，默认关闭，1m 恒无来源
+        self._include_long_short_ratio = include_long_short_ratio
 
     def universe(self, as_of: Optional[pd.Timestamp] = None) -> list[str]:
         return self._universe.as_of(self._end_time if as_of is None else as_of)
@@ -78,7 +81,14 @@ class HistoricalPanelSource:
             oi_df = self._ch_reader.fetch_oi_history(
                 symbols, self._interval, start_time=padded_start, end_time=self._end_time
             )
-        full_panel = ch_long_to_panel(long_df, interval=self._interval, symbols=symbols, oi_df=oi_df)
+        ls_df = None
+        if self._include_long_short_ratio and self._interval != "1m":
+            ls_df = self._ch_reader.fetch_ls_ratio_history(
+                symbols, self._interval, start_time=padded_start, end_time=self._end_time
+            )
+        full_panel = ch_long_to_panel(
+            long_df, interval=self._interval, symbols=symbols, oi_df=oi_df, ls_df=ls_df
+        )
 
         for pos, ts in enumerate(full_panel.index):
             if ts < self._start_time:
@@ -116,6 +126,7 @@ class LivePanelSource:
         block_ms: int = 5000,
         read_count: int = 10,
         include_open_interest: bool = False,
+        include_long_short_ratio: bool = False,
     ):
         self._ch_reader = ch_reader
         self._redis_reader = redis_reader
@@ -126,6 +137,7 @@ class LivePanelSource:
         self._read_count = read_count
         # 同 HistoricalPanelSource：默认关闭，1m 走 WindowCache/Redis，恒无 OI，不受此开关影响。
         self._include_open_interest = include_open_interest
+        self._include_long_short_ratio = include_long_short_ratio
         self._window_cache: Optional[WindowCache] = None
         if "1m" in self._intervals:
             self._window_cache = WindowCache(
@@ -157,7 +169,10 @@ class LivePanelSource:
         oi_df = None
         if self._include_open_interest and interval != "1m":
             oi_df = self._ch_reader.fetch_oi_history(symbols, interval, lookback_bars=self._lookback_bars)
-        panel = ch_long_to_panel(long_df, interval=interval, symbols=symbols, oi_df=oi_df)
+        ls_df = None
+        if self._include_long_short_ratio and interval != "1m":
+            ls_df = self._ch_reader.fetch_ls_ratio_history(symbols, interval, lookback_bars=self._lookback_bars)
+        panel = ch_long_to_panel(long_df, interval=interval, symbols=symbols, oi_df=oi_df, ls_df=ls_df)
         symbols_count = int(panel.close.iloc[-1].notna().sum()) if len(panel.index) else 0
         return MarketEvent.build(
             interval=interval,
