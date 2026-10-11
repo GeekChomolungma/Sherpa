@@ -40,8 +40,11 @@ import numpy as np
 import pandas as pd
 
 from sherpa.alpha.custom.ml import LgbmV1
+from sherpa.alpha.custom.ml import models as ml_models
+from sherpa.backtest.attribution import attribute, period_stats, style_factor_returns
+from sherpa.backtest.score_backtest import cost_segment_rows, run_score_backtest, target_path
 from sherpa.alpha.custom.ml.features import (
-    DERIVATIVE_FEATURES, DERIVATIVES_CORE, DERIVATIVES_LS, DERIVATIVES_OI, FeatureSpec, build_features,
+    EXTRA_SYMBOL_FEATURES, DERIVATIVES_CORE, DERIVATIVES_LS, DERIVATIVES_OI, PRICE_VOLUME_EXTRAS, FeatureSpec, build_features,
 )
 from sherpa.alpha.liquidity import LiquidityFilter
 from sherpa.data.schema import interval_to_timedelta
@@ -56,7 +59,6 @@ from trainer import train_fold
 
 OUT_DIR = Path(__file__).resolve().parents[1] / "alpha_research" / "MLalpha" / "experiments"
 CACHE_DIR = OUT_DIR / "_cache"
-SMOOTH_HALFLIVES: tuple[float, ...] = (0, 3, 6)
 
 
 @dataclass(frozen=True)
@@ -65,9 +67,9 @@ class Case:
 
     name: str
     note: str
-    source: str = "train"                       # "train"：本脚本滚动训练；"official"：直接用正式模型（MLAlpha.compute）；
+    source: str = "train"                       # "train"：本脚本滚动训练；"official:<模型类名>"：直接用正式模型（MLAlpha.compute）；
                                                 # "factor:<名字>"：不用 ML，直接拿单个原始特征打分（FACTORS），方向按选择段 IC 符号定；
-                                                # "blend:<case1>+<case2>+..."：几个已跑完 case 的打分取截面排名的平均（更多种子的集成）
+                                                # "blend:<case1>+<case2>+..."：几个已跑完 case 的原始预测值平均（更多种子的集成）
     neutralize_scores: tuple[str, ...] = ()     # 打分出来后，逐期截面回归剥离这些暴露再交易：可选 "vol42" / "beta" / "size"
     horizon: int = 1                            # 标签持有期（根 bar）；执行延迟固定用 research_config 的
     label_transform: str = "rank"               # "rank" / "raw_clip"
@@ -78,18 +80,58 @@ class Case:
     valid_bars: int = config.INNER_VALID_BARS
     neutralize_label: bool = False
     drop_features: tuple[str, ...] = ()         # 按前缀去掉的特征，比如 ("alpha:",) = 不要 B 组
-    derivatives: tuple[str, ...] = ()           # A 组可选的 OI / 多空比特征（features.DERIVATIVE_FEATURES 的名字）
+    extras: tuple[str, ...] = ()                # A 组可选特征（OI / 多空比 / 价量补充，features.EXTRA_SYMBOL_FEATURES 的名字）
+    with_b: bool = True                         # False = 不算 B 组（世坤因子），比 drop_features=("alpha:",) 省掉计算
+    # 研究窗口：取数从 research_start 起（之前的数据切掉，特征 warm-up 跟正式流水线一致），第一个模型要攒够 min_train_bars；
+    # validation_start 切选择段 / 验证段。默认 = research_config.json
+    research_start: str = START_TIME
+    validation_start: str = VALIDATION_START
+    min_train_bars: int = config.MIN_TRAIN_BARS
     min_percentile: float = 0.5                 # 流动性范围（特征排名 + 损失 + 评估）
     lgb_overrides: tuple[tuple[str, Any], ...] = ()
     seeds: tuple[int, ...] = config.SEEDS
+    model: Optional[str] = None                 # 绑定的正式模型类名（`model_case` 填），特征清单直接用它的 spec
 
     @property
     def spec(self) -> FeatureSpec:
+        if self.model is not None:
+            return getattr(ml_models, self.model).spec
         return FeatureSpec(
-            name="lgbm_v1", version=1, alphas=LgbmV1.spec.alphas,
+            name="lgbm_v1", version=1, alphas=LgbmV1.spec.alphas if self.with_b else (),
             liquidity=LiquidityFilter(min_percentile=self.min_percentile, seasoning_period=SEASONING_PERIOD, lookback=DEFAULT_LOOKBACK),
-            derivatives=self.derivatives,
+            extras=self.extras,
         )
+
+
+def model_case(name: str, note: str, model: str, **overrides: Any) -> Case:
+    """跟正式模型（`sherpa.alpha.custom.ml.models` 里的 MLAlpha 子类）**完全相同配置**的探索 case：特征清单 = 它的 spec，
+    训练配置 = `config.for_model(它的 training_overrides)`（正式训练 run_training.py 用的同一个函数）。`overrides` 只用来
+    在它的基础上改一两项做对照（比如换种子），改了什么就是什么，其余跟正式模型一致。
+
+    探索里挑出来的配置要进正式流水线，先写成 models.py 里的子类，再用这个函数跑一次核对：同一份数据上它的打分应该跟
+    正式模型 `MLAlpha.compute` 的逐格相同（训练集分箱随机数固定之后，见 config.LGB_PARAMS）。
+    """
+    cls = getattr(ml_models, model)
+    cfg = config.for_model(cls.training_overrides)
+    lgb_defaults = config.LGB_PARAMS
+    fields = dict(
+        horizon=cfg.label_horizon_bars, label_transform=cfg.label_transform, objective=cfg.objective,
+        tail_quantile=cfg.tail_quantile, tail_weight=cfg.tail_weight, window_bars=cfg.train_window_bars,
+        valid_bars=cfg.inner_valid_bars, neutralize_label=cfg.neutralize_label, min_train_bars=cfg.min_train_bars,
+        seeds=tuple(cfg.seeds), min_percentile=cls.spec.liquidity.min_percentile,
+        extras=cls.spec.extras, with_b=bool(cls.spec.alphas),
+        lgb_overrides=tuple((k, v) for k, v in cfg.lgb_params.items() if lgb_defaults.get(k) != v),
+        model=model,
+    )
+    unsupported = {
+        "retrain_every_bars": config.RETRAIN_EVERY_BARS, "refit_on_full_window": True,
+        "min_period_rows": config.MIN_PERIOD_ROWS, "num_boost_round": config.NUM_BOOST_ROUND,
+        "early_stopping_rounds": config.EARLY_STOPPING_ROUNDS,
+    }
+    differs = {k: getattr(cfg, k) for k, v in unsupported.items() if getattr(cfg, k) != v}
+    if differs:
+        raise ValueError(f"{model} 改了探索脚本不支持覆盖的训练配置 {differs}，先给 Case 加对应字段")
+    return Case(name, note, **{**fields, **overrides})
 
 
 # 单因子基线（source="factor:<名字>"）：原始值，panel -> (T, N)；方向在 evaluate 前按选择段 RankIC 的符号统一成"越大越好"
@@ -109,9 +151,18 @@ FACTORS = {
 
 H6 = dict(horizon=6)
 V2 = dict(horizon=6, label_transform="raw_clip", window_bars=None, seeds=tuple(range(9)))
+W4 = dict(V2, research_start="2024-01-01", validation_start="2025-03-01", min_train_bars=6 * 120)
+V4H_FINALISTS = {
+    "v4h_ac": (),
+    "v4h_ls": DERIVATIVES_LS,
+    "v4h_ls_pv": DERIVATIVES_LS + PRICE_VOLUME_EXTRAS,
+    "v4h_all": DERIVATIVES_LS + DERIVATIVES_OI + PRICE_VOLUME_EXTRAS,
+}
+# 第 1–7 批的产出没有保留，定义留着作记录（结论见 research/alpha_research/MLalpha/experiments/FINDINGS*.md，那里的数字是
+# 早期评估口径）；要复现就 --cases 重跑，重跑的结果是当前口径。
 CASES: list[Case] = [
     # ---- 基线：核对本脚本跟正式流水线一致 ----
-    Case("v2_official", "正式流水线当前的模型（第二版），用来核对评估口径跟关卡3 一致", source="official"),
+    Case("v2_official", "正式流水线当前的模型（第二版），用来核对评估口径跟关卡3 一致", source="official:LgbmV1"),
     Case("v2_retrain", "本脚本按第二版配置重训，用来核对训练路径跟正式训练一致"),
     # ---- 标签持有期：信号越慢、换手越低 ----
     Case("h3", "标签持有 3 根（12 小时）", horizon=3),
@@ -134,8 +185,8 @@ CASES: list[Case] = [
     # ---- 流动性范围 ----
     Case("h6_p70", "持有 1 天，只用成交额截面前 30% 的币", min_percentile=0.7, **H6),
     # ---- 剥离暴露：去掉低波动 / Beta 倾向之后还剩多少 ----
-    Case("v2_resid_vol", "正式模型打分，剥离 vol_42 暴露", source="official", neutralize_scores=("vol42",)),
-    Case("v2_resid_vol_beta", "正式模型打分，剥离 vol_42 + Beta 暴露", source="official", neutralize_scores=("vol42", "beta")),
+    Case("v2_resid_vol", "正式模型打分，剥离 vol_42 暴露", source="official:LgbmV1", neutralize_scores=("vol42",)),
+    Case("v2_resid_vol_beta", "正式模型打分，剥离 vol_42 + Beta 暴露", source="official:LgbmV1", neutralize_scores=("vol42", "beta")),
     # ---- 单因子基线：不用 ML，这个币池里单个原始特征能不能赚钱 ----
     *[Case(f"f_{name}", f"单因子 {name}（方向按选择段 IC 定）", source=f"factor:{name}") for name in FACTORS],
     # ---- 第三批：围绕 h6_raw（持有 1 天 + 原始收益标签）----
@@ -164,18 +215,49 @@ CASES: list[Case] = [
          source="blend:h6_raw_expanding+h6_raw_exp_seed345+h6_raw_exp_seed678", **H6),
     # ---- 第六批（2026-10-09，研究起点 2023-01-01）：A 组加 OI / 多空比特征，其余同 LgbmV2 ----
     Case("d_base", "LgbmV2 配置（持有 1 天、原始收益、扩展窗口、9 种子），本批对照", **V2),
-    Case("d_core", "d_base + 核心 6 个（OI 2 + 多空比 4）", derivatives=DERIVATIVES_CORE, **V2),
-    Case("d_oi", "d_base + 只加 OI 2 个", derivatives=DERIVATIVES_OI, **V2),
-    Case("d_ls", "d_base + 只加多空比 4 个", derivatives=DERIVATIVES_LS, **V2),
-    Case("d_wide", "d_base + 全部 10 个候选（核心 + 边缘）", derivatives=tuple(DERIVATIVE_FEATURES), **V2),
+    Case("d_core", "d_base + 核心 6 个（OI 2 + 多空比 4）", extras=DERIVATIVES_CORE, **V2),
+    Case("d_oi", "d_base + 只加 OI 2 个", extras=DERIVATIVES_OI, **V2),
+    Case("d_ls", "d_base + 只加多空比 4 个", extras=DERIVATIVES_LS, **V2),
+    Case("d_wide", "d_base + 全部 10 个候选（核心 + 边缘）",
+         extras=DERIVATIVES_CORE + ("ls_top_position", "volume_to_oi_6", "oi_change_120", "ls_global_change_42"), **V2),
     # 换一组独立种子（9-17）复核 d_base vs d_core 的差别不是种子运气
     Case("d_base_s2", "d_base 换种子 9-17", **{**V2, "seeds": tuple(range(9, 18))}),
-    Case("d_core_s2", "d_core 换种子 9-17", derivatives=DERIVATIVES_CORE, **{**V2, "seeds": tuple(range(9, 18))}),
-    Case("d_ls_s2", "d_ls 换种子 9-17", derivatives=DERIVATIVES_LS, **{**V2, "seeds": tuple(range(9, 18))}),
+    Case("d_core_s2", "d_core 换种子 9-17", extras=DERIVATIVES_CORE, **{**V2, "seeds": tuple(range(9, 18))}),
+    Case("d_ls_s2", "d_ls 换种子 9-17", extras=DERIVATIVES_LS, **{**V2, "seeds": tuple(range(9, 18))}),
     # 两组种子合并成 18 种子集成：单个 9 种子集成换种子后选择段中位数仍能差 0.4，最终比较用这一组
     Case("d_base_ens18", "d_base + d_base_s2 共 18 个模型的打分平均", source="blend:d_base+d_base_s2", **V2),
     Case("d_core_ens18", "d_core + d_core_s2 共 18 个模型的打分平均", source="blend:d_core+d_core_s2", **V2),
     Case("d_ls_ens18", "d_ls + d_ls_s2 共 18 个模型的打分平均", source="blend:d_ls+d_ls_s2", **V2),
+    # ---- 第七批（2026-10-10）：V4 探索。新窗口——研究起点 2024-01-01（币池约为 2023 年的 1.6 倍）、最小训练 120 天
+    # （第一份打分 2024-04-30）、验证段从 2025-03-01 起；去掉 B 组，只研究 A + C。训练配置同 LgbmV2 ----
+    Case("w_v2", "新窗口下的 LgbmV2（A+B+C）", **W4),
+    Case("w_v3", "新窗口下的 LgbmV3（A+B+C+多空比 4）", extras=DERIVATIVES_LS, **W4),
+    Case("v4_ac", "V4 底座：A+C，无 B", with_b=False, **W4),
+    Case("v4_ls", "A+C + 多空比 4", with_b=False, extras=DERIVATIVES_LS, **W4),
+    Case("v4_pv", "A+C + 价量补充 4", with_b=False, extras=PRICE_VOLUME_EXTRAS, **W4),
+    Case("v4_ls_oi", "A+C + 多空比 4 + OI 2", with_b=False, extras=DERIVATIVES_LS + DERIVATIVES_OI, **W4),
+    Case("v4_ls_pv", "A+C + 多空比 4 + 价量补充 4", with_b=False, extras=DERIVATIVES_LS + PRICE_VOLUME_EXTRAS, **W4),
+    Case("v4_all", "A+C + 多空比 4 + OI 2 + 价量补充 4", with_b=False,
+         extras=DERIVATIVES_LS + DERIVATIVES_OI + PRICE_VOLUME_EXTRAS, **W4),
+    # 结论：起点挪到 2024 后头 10 个月训练历史太短，同一时期（2024-05 ~ 2025-02）V2 配置毛 Sharpe 1.50 -> 0.21，
+    # 选择段对特征决策没有区分度。V4 特征消融改回 2023 窗口（训练历史够），对照组是第六批的 d_base（V2）/ d_ls（V3）
+    Case("v4h_ac", "2023 窗口：A+C，无 B", with_b=False, **V2),
+    Case("v4h_ls", "2023 窗口：A+C + 多空比 4", with_b=False, extras=DERIVATIVES_LS, **V2),
+    Case("v4h_pv", "2023 窗口：A+C + 价量补充 4", with_b=False, extras=PRICE_VOLUME_EXTRAS, **V2),
+    Case("v4h_ls_pv", "2023 窗口：A+C + 多空比 4 + 价量补充 4", with_b=False, extras=DERIVATIVES_LS + PRICE_VOLUME_EXTRAS, **V2),
+    Case("v4h_all", "2023 窗口：A+C + 多空比 4 + OI 2 + 价量补充 4", with_b=False,
+         extras=DERIVATIVES_LS + DERIVATIVES_OI + PRICE_VOLUME_EXTRAS, **V2),
+    # 入围的三个 + 底座换种子 9-17，再合成 18 种子集成
+    *[Case(f"{name}_s2", f"{name} 换种子 9-17", with_b=False, extras=extras, **{**V2, "seeds": tuple(range(9, 18))})
+      for name, extras in V4H_FINALISTS.items()],
+    *[Case(f"{name}_ens18", f"{name} + {name}_s2 共 18 个模型的打分平均", source=f"blend:{name}+{name}_s2", **V2)
+      for name in V4H_FINALISTS],
+]
+# ---- 第八批（2026-10-10）：探索 ↔ 正式流水线一致性核对（m_v4 跟正式 V4 逐格相同）。之后要进正式流水线的配置都先写成
+# 模型类，再用 model_case 探索 ----
+CASES += [
+    model_case("m_v4", "跟 LgbmV4 完全相同的配置（model_case），本脚本训练", "LgbmV4"),
+    Case("m_v4_official", "LgbmV4 正式模型的打分（MLAlpha.compute），应跟 m_v4 逐格相同", source="official:LgbmV4", horizon=6),
 ]
 
 
@@ -194,11 +276,17 @@ def load_panel(refresh: bool):
     return panel
 
 
-_FEATURE_CACHE: dict[tuple[float, tuple[str, ...]], tuple[pd.DataFrame, pd.DataFrame]] = {}
+def case_panel(panel, case: Case):
+    """切掉 case 研究起点之前的数据：跟正式流水线从 research_start 取数一样，特征 / 流动性范围的 warm-up 都从这里开始。"""
+    start = pd.Timestamp(case.research_start, tz="UTC")
+    return panel if panel.index[0] >= start else panel.slice(panel.index >= start)
+
+
+_FEATURE_CACHE: dict[tuple, tuple[pd.DataFrame, pd.DataFrame]] = {}
 
 
 def scope_and_features(panel, case: Case) -> tuple[pd.DataFrame, pd.DataFrame]:
-    key = (case.min_percentile, case.derivatives)
+    key = (case.min_percentile, case.extras, case.with_b, panel.index[0])
     if key not in _FEATURE_CACHE:
         spec = case.spec
         scope = spec.liquidity.mask(panel)
@@ -233,8 +321,8 @@ def train_case(panel, case: Case, case_dir: Path) -> pd.DataFrame:
 
     purge = case.horizon + EXECUTION_DELAY_BARS
     folds = plan_folds(
-        research_start=pd.Timestamp(START_TIME, tz="UTC"), last_bar=panel.index[-1], interval=INTERVAL,
-        retrain_every_bars=config.RETRAIN_EVERY_BARS, min_train_bars=config.MIN_TRAIN_BARS, purge_bars=purge,
+        research_start=pd.Timestamp(case.research_start, tz="UTC"), last_bar=panel.index[-1], interval=INTERVAL,
+        retrain_every_bars=config.RETRAIN_EVERY_BARS, min_train_bars=case.min_train_bars, purge_bars=purge,
         train_window_bars=case.window_bars,
     )
     params = {**config.LGB_PARAMS, **dict(case.lgb_overrides)}
@@ -267,8 +355,11 @@ def train_case(panel, case: Case, case_dir: Path) -> pd.DataFrame:
     return scores.reindex(index=panel.close.index, columns=panel.close.columns)
 
 
-def official_scores(panel) -> pd.DataFrame:
-    return LgbmV1().compute(panel)
+def official_scores(panel, case: Case) -> pd.DataFrame:
+    """`source="official:<模型类名>"`：直接用正式训练好的模型推断（`MLAlpha.compute`），模型文件在它的 model_dir。
+    老写法 `source="official"` = LgbmV1。"""
+    name = case.source.split(":", 1)[1] if ":" in case.source else "LgbmV1"
+    return getattr(ml_models, name)().compute(panel)
 
 
 def factor_scores(panel, case: Case) -> pd.DataFrame:
@@ -277,7 +368,7 @@ def factor_scores(panel, case: Case) -> pd.DataFrame:
     raw = FACTORS[case.source.split(":", 1)[1]](panel)
     raw = raw.where(np.isfinite(raw)).where(scope)
     label = forward_returns(panel.close, horizon=case.horizon, delay=EXECUTION_DELAY_BARS).where(scope)
-    sel = panel.close.index < pd.Timestamp(VALIDATION_START, tz="UTC")
+    sel = panel.close.index < pd.Timestamp(case.validation_start, tz="UTC")
     a, b = raw[sel], label[sel]
     both = a.notna() & b.notna()
     ic = a.where(both).rank(axis=1).corrwith(b.where(both).rank(axis=1), axis=1).mean()
@@ -286,13 +377,16 @@ def factor_scores(panel, case: Case) -> pd.DataFrame:
 
 
 def blend_scores(case: Case) -> pd.DataFrame:
-    """几个已跑完 case 的样本外打分：各自逐期截面排名后取平均（任一缺失就是缺失）。"""
+    """几个已跑完 case 的样本外打分取平均（任一缺失就是缺失）。
+
+    取**原始预测值**的平均，跟 `MLAlpha.compute` 把多个种子的预测直接平均一致：两组 9 种子 blend 起来 = 同一批 18 个
+    模型一起训练（训练集分箱的随机数是固定的，见 config.LGB_PARAMS["data_random_seed"]）。"""
     names = case.source.split(":", 1)[1].split("+")
-    ranked = [pd.read_pickle(OUT_DIR / n / "scores.pkl").rank(axis=1, pct=True) for n in names]
-    total = ranked[0]
-    for r in ranked[1:]:
-        total = total + r
-    return total / len(ranked)
+    scores = [pd.read_pickle(OUT_DIR / n / "scores.pkl") for n in names]
+    total = scores[0]
+    for x in scores[1:]:
+        total = total + x
+    return total / len(scores)
 
 
 def neutralize_scores(panel, scores: pd.DataFrame, names: tuple[str, ...]) -> pd.DataFrame:
@@ -310,118 +404,126 @@ def neutralize_scores(panel, scores: pd.DataFrame, names: tuple[str, ...]) -> pd
 
 
 # ---------------------------------------------------------------------------
-# 评估（多进程跑回测网格）
+# 评估（多进程跑回测网格）。产出跟关卡3 同口径（同一套组合网格、成本、稳健性过滤、风格因子、季度统计），文件对应关系：
+#   friction_grid.csv     <-> 关卡3 01_friction_summary.csv（每个组合 × 成本 × 段的绩效）
+#   robustness.csv        <-> 04_robustness.csv
+#   style_attribution.csv <-> 05_style_attribution.csv（BASE_COST 净收益对 6 个风格回归）
+#   quarterly.csv         <-> 06_quarterly.csv
+# 打分 → 截面排名 → 目标仓位 → 回测这条链跟关卡3 共用 sherpa.backtest.score_backtest；段从第一根有打分的 bar 起。
 # ---------------------------------------------------------------------------
 
 _W: dict[str, Any] = {}
 
 
-def _init_worker(close, interval, smoothed, segments, shift, ppy):
-    _W.update(close=close, interval=interval, smoothed=smoothed, segments=segments, shift=shift, ppy=ppy)
+def _init_worker(close, interval, ranked, segments, shift, ppy, style, active_start):
+    _W.update(close=close, interval=interval, ranked=ranked, segments=segments, shift=shift, ppy=ppy, style=style,
+              active_start=active_start)
 
 
-def _run_combo(args: tuple[float, str, int]) -> list[dict]:
-    halflife, weighting, rebalance = args
-    spec = evaluation.WEIGHTINGS[weighting]
-    rows = evaluation.backtest(
-        _W["smoothed"][halflife], _W["close"], _W["interval"], spec=spec,
-        rebalance_every=rebalance, shift=_W["shift"], segments=_W["segments"], periods_per_year=_W["ppy"],
-    )
-    return [{"smooth": halflife, "weighting": weighting, "rebalance_every": rebalance, **r} for r in rows]
+def _run_combo(args: tuple[str, int]) -> tuple[list[dict], list[dict], dict]:
+    weighting, rebalance = args
+    key = {"weighting": weighting, "rebalance_every": rebalance}
+    targets = target_path(_W["ranked"], evaluation.WEIGHTINGS[weighting], rebalance)
+    gross, turnover = run_score_backtest(targets, _W["close"], _W["interval"], shift=_W["shift"], rebalance_every=rebalance)
+    rows = [{**key, **r} for r in cost_segment_rows(gross, turnover, evaluation.COST_MODELS, _W["segments"],
+                                                    periods_per_year=_W["ppy"])]
+    net = gross - turnover.map(evaluation.COST_MODELS[evaluation.BASE_COST].cost)
+    net = net[net.index >= _W["active_start"]]
+    attribution = [
+        {**key, "segment": name,
+         **attribute(net[mask.reindex(net.index, fill_value=False)], _W["style"], periods_per_year=_W["ppy"])}
+        for name, mask in _W["segments"].items()
+    ]
+    stats = period_stats(net, periods_per_year=_W["ppy"])
+    full = stats["return"].dropna()  # 不足 60 根 bar 的零头季度不计（同关卡3）
+    quarterly = {**key, "quarters": len(full),
+                 "positive_quarter_frac": float((full > 0).mean()) if len(full) else float("nan"),
+                 **{f"sharpe[{q}]": v for q, v in stats["sharpe"].items()},
+                 **{f"return[{q}]": v for q, v in stats["return"].items()}}
+    return rows, attribution, quarterly
+
+
+def robustness(grid: pd.DataFrame) -> pd.DataFrame:
+    """同关卡3 `_robustness`：每个成本一行，全部组合两段净 Sharpe 的中位数 / 为正占比 / 两段都为正的占比；
+    选择段（零成本下）空仓比例超过 ROBUSTNESS_MAX_FLAT 的组合不计入。"""
+    keys = ["weighting", "rebalance_every"]
+    sel_zero = grid[(grid.segment == "selection_oos") & (grid.cost_model == "zero")].set_index(keys)["flat_bar_fraction"]
+    usable = sel_zero[sel_zero <= evaluation.ROBUSTNESS_MAX_FLAT].index
+    rows = []
+    for cost, g in grid.groupby("cost_model", sort=False):
+        wide = g.set_index(keys).pivot(columns="segment", values="net_sharpe")
+        wide = wide.loc[wide.index.intersection(usable)]
+        sel, val = wide["selection_oos"], wide["validation"]
+        rows.append({"cost_model": cost, "n_combos": len(wide),
+                     "selection_median": sel.median(), "validation_median": val.median(),
+                     "selection_positive_frac": (sel > 0).mean(), "validation_positive_frac": (val > 0).mean(),
+                     "both_positive_frac": ((sel > 0) & (val > 0)).mean()})
+    return pd.DataFrame(rows)
 
 
 def evaluate_case(panel, case: Case, scores: pd.DataFrame, case_dir: Path, workers: int) -> None:
     scope, features = scope_and_features(panel, case)
     close = panel.close
-    first = scores.dropna(how="all").index[0]
-    validation_start = pd.Timestamp(VALIDATION_START, tz="UTC")
+    # 跟关卡3 一样：打分先套流动性范围（= 研究线评估掩码，训练脚本校验过两者一致），再逐期截面排名
+    ranked = evaluation.cross_sectional_rank(scores.reindex(index=close.index, columns=close.columns).where(scope))
+    active_start = ranked.notna().any(axis=1).idxmax()
+    validation_start = pd.Timestamp(case.validation_start, tz="UTC")
     segments = {
-        "selection_oos": pd.Series((close.index >= first) & (close.index < validation_start), index=close.index),
+        "selection_oos": pd.Series((close.index >= active_start) & (close.index < validation_start), index=close.index),
         "validation": pd.Series(close.index >= validation_start, index=close.index),
     }
-    ranked = evaluation.cross_sectional_rank(scores)
-    smoothed = {h: evaluation.smooth(ranked, h) for h in SMOOTH_HALFLIVES}
 
     label_1 = forward_returns(close, horizon=1, delay=EXECUTION_DELAY_BARS).where(scope)
     label_h = forward_returns(close, horizon=case.horizon, delay=EXECUTION_DELAY_BARS).where(scope)
     vol = close.pct_change(fill_method=None).rolling(42).std()
-    diag = []
-    for h, sm in smoothed.items():
-        diag += [{"smooth": h, **row} for row in evaluation.diagnostics(sm, label_1, label_h, vol, segments)]
-    pd.DataFrame(diag).to_csv(case_dir / "diagnostics.csv", index=False)
+    pd.DataFrame(evaluation.diagnostics(ranked, label_1, label_h, vol, segments)).to_csv(case_dir / "diagnostics.csv", index=False)
 
     shift = 1 + EXECUTION_DELAY_BARS
     ppy = pd.Timedelta(days=365) / interval_to_timedelta(INTERVAL)
-    combos = [(h, w, r) for h in SMOOTH_HALFLIVES for w in evaluation.WEIGHTINGS for r in evaluation.REBALANCE_EVERY]
+    style = style_factor_returns(close, panel.quote_volume, scope, interval=INTERVAL, shift=shift,
+                                 benchmark_symbol=LgbmV1.spec.benchmark_symbol)
+    combos = [(w, r) for w in evaluation.WEIGHTINGS for r in evaluation.REBALANCE_EVERY]
     with ProcessPoolExecutor(max_workers=workers, initializer=_init_worker,
-                             initargs=(close, INTERVAL, smoothed, segments, shift, ppy)) as pool:
-        grid = [row for rows in pool.map(_run_combo, combos) for row in rows]
-    pd.DataFrame(grid).to_csv(case_dir / "friction_grid.csv", index=False)
+                             initargs=(close, INTERVAL, ranked, segments, shift, ppy, style, active_start)) as pool:
+        results = list(pool.map(_run_combo, combos))
+    grid = pd.DataFrame([row for rows, _, _ in results for row in rows])
+    grid.to_csv(case_dir / "friction_grid.csv", index=False)
+    robustness(grid).to_csv(case_dir / "robustness.csv", index=False)
+    pd.DataFrame([row for _, rows, _ in results for row in rows]).to_csv(case_dir / "style_attribution.csv", index=False)
+    pd.DataFrame([q for _, _, q in results]).to_csv(case_dir / "quarterly.csv", index=False)
 
 
 # ---------------------------------------------------------------------------
-# 汇总
+# 汇总：每个 case 一行，列跟关卡3 的 04 / 05 / 06 对应（全部组合的中位数，不挑最高格）
 # ---------------------------------------------------------------------------
-
-KEY = ["smooth", "weighting", "rebalance_every"]
-MAX_FLAT_FRACTION = 0.2
-
 
 def summarize(cases: list[Case]) -> pd.DataFrame:
     rows = []
     for case in cases:
         d = OUT_DIR / case.name
-        if not (d / "friction_grid.csv").exists():
+        if not (d / "robustness.csv").exists():  # 没跑过评估（或产出已删）的 case 不进汇总
             continue
-        g = pd.read_csv(d / "friction_grid.csv")
-        diag = pd.read_csv(d / "diagnostics.csv")
-        sel = g[(g.segment == "selection_oos") & (g.cost_model == "all_taker")]
-        if "flat_bar_fraction" in sel:  # 选择段空仓超过 20% 的组合不参与挑选：Sharpe 是在很少的交易 bar 上算的
-            sel = sel[sel.flat_bar_fraction <= MAX_FLAT_FRACTION]
-        if sel.empty:
-            continue
-        sel = sel.sort_values("net_sharpe", ascending=False)
-        best = sel.iloc[0]
-        pick = (g[KEY] == best[KEY]).all(axis=1)
-
-        def at(segment, cost, col):
-            return g.loc[pick & (g.segment == segment) & (g.cost_model == cost), col].iloc[0]
-
-        val_taker = g[(g.segment == "validation") & (g.cost_model == "all_taker")]
-        dv = diag[(diag.segment == "validation") & (diag.smooth == 0)].iloc[0]
-        ds = diag[(diag.segment == "selection_oos") & (diag.smooth == 0)].iloc[0]
-        # 稳健性：不平滑的 24 个组合（映射 × 调仓频率）在两段的扣费净 Sharpe 中位数、两段都为正的组合占比，
-        # 以及零成本毛 Sharpe 的中位数——看的是"一片参数区域都成立"，不是网格里最高的那一格
-        g0 = g[g.smooth == 0]
-        if "flat_bar_fraction" in g0:
-            usable = g0[(g0.segment == "selection_oos") & (g0.cost_model == "zero") & (g0.flat_bar_fraction <= MAX_FLAT_FRACTION)]
-            g0 = g0.merge(usable[["weighting", "rebalance_every"]], on=["weighting", "rebalance_every"])
-        wide = g0[g0.cost_model.isin(["all_taker", "zero"])].pivot_table(
-            index=["weighting", "rebalance_every"], columns=["segment", "cost_model"], values="net_sharpe")
-        both_pos = ((wide[("selection_oos", "all_taker")] > 0) & (wide[("validation", "all_taker")] > 0)).mean()
+        rob = pd.read_csv(d / "robustness.csv").set_index("cost_model")
+        att = pd.read_csv(d / "style_attribution.csv").groupby("segment")[["alpha_sharpe", "beta[low_vol]"]].median()
+        qtr = pd.read_csv(d / "quarterly.csv")
+        grid = pd.read_csv(d / "friction_grid.csv")
+        val = grid[(grid.segment == "validation") & (grid.cost_model == "zero")]
+        diag = pd.read_csv(d / "diagnostics.csv").set_index("segment")
         rows.append({
             "case": case.name, "note": case.note,
-            "sel_flat_frac": best.get("flat_bar_fraction", float("nan")),
-            "sel_med_net_taker": wide[("selection_oos", "all_taker")].median(),
-            "val_med_net_taker": wide[("validation", "all_taker")].median(),
-            "sel_med_gross": wide[("selection_oos", "zero")].median(),
-            "val_med_gross": wide[("validation", "zero")].median(),
-            "both_pos_frac": both_pos,
-            "sel_spread_top10_bps": ds["spread_top10_bps"],
-            "pick": f"{best['weighting']}|every{int(best['rebalance_every'])}|hl{best['smooth']:g}",
-            "sel_net_taker": best["net_sharpe"],
-            "val_net_taker": at("validation", "all_taker", "net_sharpe"),
-            "val_net_maker": at("validation", "all_maker", "net_sharpe"),
-            "val_gross": at("validation", "zero", "gross_sharpe"),
-            "val_ann_ret_taker": at("validation", "all_taker", "net_ann_return"),
-            "val_maxdd_taker": at("validation", "all_taker", "net_max_drawdown"),
-            "val_turnover": at("validation", "zero", "turnover_per_bar"),
-            "val_breakeven_bps": at("validation", "zero", "breakeven_cost_bps"),
-            "val_best_net_taker(偷看)": val_taker["net_sharpe"].max(),
-            "val_rank_ic_1": dv["rank_ic_1"], "val_rank_ic_h": dv["rank_ic_h"], "val_pearson_ic_1": dv["pearson_ic_1"],
-            "val_spread_top10_bps": dv["spread_top10_bps"], "val_vol42_exposure": dv["vol42_exposure"],
+            "taker_sel": rob.loc["all_taker", "selection_median"], "taker_val": rob.loc["all_taker", "validation_median"],
+            "taker_both_pos": rob.loc["all_taker", "both_positive_frac"],
+            "maker_sel": rob.loc["all_maker", "selection_median"], "maker_val": rob.loc["all_maker", "validation_median"],
+            "gross_sel": rob.loc["zero", "selection_median"], "gross_val": rob.loc["zero", "validation_median"],
+            "alpha_sel": att.loc["selection_oos", "alpha_sharpe"], "alpha_val": att.loc["validation", "alpha_sharpe"],
+            "lowvol_beta_val": att.loc["validation", "beta[low_vol]"],
+            "pos_quarter_med": qtr.positive_quarter_frac.median(),
+            "pos_quarter_ge60": (qtr.positive_quarter_frac >= 0.6).mean(),
+            "val_turnover_med": val.turnover_per_bar.median(), "val_breakeven_bps_med": val.breakeven_cost_bps.median(),
+            "n_combos": int(rob.loc["all_taker", "n_combos"]),
+            "val_rank_ic_h": diag.loc["validation", "rank_ic_h"], "val_vol42_exposure": diag.loc["validation", "vol42_exposure"],
         })
-    out = pd.DataFrame(rows).sort_values("sel_net_taker", ascending=False)
+    out = pd.DataFrame(rows)
     out.to_csv(OUT_DIR / "summary.csv", index=False)
     return out
 
@@ -438,21 +540,22 @@ def main(argv: list[str] | None = None) -> None:
 
     wanted = [c for c in CASES if not args.cases or c.name in args.cases.split(",")]
     if not args.summary_only:
-        panel = load_panel(args.refresh_panel)
-        print(f"panel：{len(panel.symbols)} 个 symbol × {len(panel.index)} 根 bar", flush=True)
+        full_panel = load_panel(args.refresh_panel)
+        print(f"panel：{len(full_panel.symbols)} 个 symbol × {len(full_panel.index)} 根 bar", flush=True)
         for case in wanted:
             case_dir = OUT_DIR / case.name
             if args.skip_existing and (case_dir / "friction_grid.csv").exists():
                 print(f"[跳过] {case.name}", flush=True)
                 continue
             case_dir.mkdir(parents=True, exist_ok=True)
+            panel = case_panel(full_panel, case)
             started = time.monotonic()
             if args.reeval and (case_dir / "scores.pkl").exists():
                 evaluate_case(panel, case, pd.read_pickle(case_dir / "scores.pkl"), case_dir, args.workers)
                 print(f"[完成] {case.name}：只重新评估 {(time.monotonic() - started) / 60:.1f} 分钟", flush=True)
                 continue
-            if case.source == "official":
-                scores = official_scores(panel)
+            if case.source.startswith("official"):
+                scores = official_scores(panel, case)
             elif case.source.startswith("factor:"):
                 scores = factor_scores(panel, case)
             elif case.source.startswith("blend:"):

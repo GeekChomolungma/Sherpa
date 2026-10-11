@@ -128,7 +128,7 @@ BETA_FEATURE = "beta"
 SYMBOL_FEATURE_LOOKBACK = max(121, DEFAULT_BETA_WINDOW + 1)
 
 
-# ---- A 组可选项：衍生品持仓 / 多空比（`FeatureSpec.derivatives` 按名字挑，默认不带）----
+# ---- A 组可选项：OI / 多空比 / 价量补充（`FeatureSpec.extras` 按名字挑，默认不带）----
 #
 # 跟上面的 SYMBOL_FEATURES 一样是单币时序量、每期在流动性范围内截面排名，只是做成可选：A 组固定那部分一改，
 # 所有已训练模型的特征指纹都会变；可选项默认为空，旧模型（LgbmV1 / V2）的特征清单和指纹不受影响。
@@ -140,6 +140,7 @@ SYMBOL_FEATURE_LOOKBACK = max(121, DEFAULT_BETA_WINDOW + 1)
 # 再用 LgbmV2 配置做 ML 消融（两组种子）：**多空比 4 个（`DERIVATIVES_LS`）稳定提升，OI 2 个反而拖累**，所以 LgbmV3
 # 只用前者。OI 原本就在 A 组固定部分（oi_change_6 / oi_change_42）。过程和数字见
 # research/alpha_research/MLalpha/experiments/FINDINGS_DERIVATIVES.md。
+# 2026-10-10 V4 去掉 B 组后重新消融：多空比 + OI + 价量补充三组一起用最稳（LgbmV4），见 experiments/FINDINGS_V4.md。
 
 def _log_positive(x: Optional[pd.DataFrame], panel: BarPanel) -> pd.DataFrame:
     if x is None:
@@ -163,9 +164,9 @@ def _ret_corr(x: pd.DataFrame, panel: BarPanel, window: int) -> pd.DataFrame:
     return x.diff().rolling(window).corr(panel.close.pct_change(fill_method=None))
 
 
-DERIVATIVE_FEATURES: dict[str, Callable[[BarPanel], pd.DataFrame]] = {
+EXTRA_SYMBOL_FEATURES: dict[str, Callable[[BarPanel], pd.DataFrame]] = {
     # ┌──────────────────────────────────────────────────────────────────────────────────────────────┐
-    # │ 8. 持仓量（OI）进阶 —— ML 消融里没带来提升（只加这两个时选择段明显变差），目前没有模型使用        │
+    # │ 8. 持仓量（OI）进阶 —— 有 B 组时消融里拖累（V3 没用）；无 B 组时跟多空比 + 价量一起用有提升（V4）  │
     # │    oi_value          log(OI × close)，持仓的美元规模。跟 quote_volume_42 相关 0.84，但对现有特征   │
     # │                      回归后的残差 IC 两段都为正：同样成交额下，持仓沉淀多的币更好                    │
     # │    oi_price_corr_42  近 7 天 Δlog(OI) 跟收益的相关。高 = 涨时加仓、跌时减仓（追涨杀跌的杠杆盘），  │
@@ -192,11 +193,24 @@ DERIVATIVE_FEATURES: dict[str, Callable[[BarPanel], pd.DataFrame]] = {
     "volume_to_oi_6": lambda p: _safe_div(p.quote_volume.rolling(6).mean(), _oi_value(p).rolling(6).mean()),
     "oi_change_120": _oi_change(120),
     "ls_global_change_42": lambda p: _log_positive(p.long_short_ratio, p).diff(42),
+    # ┌──────────────────────────────────────────────────────────────────────────────────────────────┐
+    # │ 10. 价量补充（2026-10-10 V4 探索：去掉 B 组后，看通用价量能不能部分顶替世坤因子）                 │
+    # │    trade_size_42       近 7 天平均单笔成交额（成交额 / 笔数），大单多 = 机构 / 大户参与。           │
+    # │                        跟 quote_volume_42 相关约 0.76（2026-10-02 因此从固定 A 组去掉过）         │
+    # │    close_vs_vwap_6     close / 近 1 天 VWAP − 1：收在当日均价之上还是之下                          │
+    # │    ret_skew_42         近 7 天逐根收益的偏度：彩票型（右偏）币平均收益偏低                         │
+    # │    ret_volume_corr_42  近 7 天收益跟 Δlog(成交额) 的相关：放量上涨 / 放量下跌                      │
+    # └──────────────────────────────────────────────────────────────────────────────────────────────┘
+    "trade_size_42": lambda p: _safe_div(p.quote_volume, p.trades_count).rolling(42).mean(),
+    "close_vs_vwap_6": lambda p: _safe_div(p.close, _safe_div(p.quote_volume.rolling(6).sum(), p.volume.rolling(6).sum())) - 1,
+    "ret_skew_42": lambda p: p.close.pct_change(fill_method=None).rolling(42).skew(),
+    "ret_volume_corr_42": lambda p: _ret_corr(_log_positive(p.quote_volume, p), p, 42),
 }
 DERIVATIVES_OI: tuple[str, ...] = ("oi_value", "oi_price_corr_42")
 DERIVATIVES_LS: tuple[str, ...] = ("ls_global", "ls_top_minus_global", "ls_global_z_42", "ls_top_position_corr_42")
 # 单变量筛出的核心 6 个（OI 2 + 多空比 4）
 DERIVATIVES_CORE: tuple[str, ...] = DERIVATIVES_OI + DERIVATIVES_LS
+PRICE_VOLUME_EXTRAS: tuple[str, ...] = ("trade_size_42", "close_vs_vwap_6", "ret_skew_42", "ret_volume_corr_42")
 
 # ---- C. 市场状态变量：只用本身就是比例 / 滚动分位数、跨年份可比的量 ----
 
@@ -233,17 +247,17 @@ class FeatureSpec:
     alphas: tuple[str, ...] = ()
     benchmark_symbol: str = "BTCUSDT"
     liquidity: LiquidityFilter = LiquidityFilter()
-    # A 组可选项（`DERIVATIVE_FEATURES` 里的名字），排在 beta 之后；空 = 不带，特征清单和指纹跟加这个字段之前一样
-    derivatives: tuple[str, ...] = ()
+    # A 组可选项（`EXTRA_SYMBOL_FEATURES` 里的名字），排在 beta 之后；空 = 不带，特征清单和指纹跟加这个字段之前一样
+    extras: tuple[str, ...] = ()
 
     def __post_init__(self):
-        unknown = [name for name in self.derivatives if name not in DERIVATIVE_FEATURES]
+        unknown = [name for name in self.extras if name not in EXTRA_SYMBOL_FEATURES]
         if unknown:
-            raise ValueError(f"未知的衍生品特征：{unknown}，可选 {sorted(DERIVATIVE_FEATURES)}")
+            raise ValueError(f"未知的 A 组可选特征：{unknown}，可选 {sorted(EXTRA_SYMBOL_FEATURES)}")
 
     @property
     def feature_names(self) -> tuple[str, ...]:
-        symbol = tuple(name for name, _ in SYMBOL_FEATURES) + (BETA_FEATURE,) + self.derivatives
+        symbol = tuple(name for name, _ in SYMBOL_FEATURES) + (BETA_FEATURE,) + self.extras
         alphas = tuple(f"alpha:{name}" for name in self.alphas)
         market = tuple(f"market:{name}" for name in MARKET_FEATURES)
         return symbol + alphas + market
@@ -274,8 +288,8 @@ def _symbol_features(panel: BarPanel, spec: FeatureSpec, scope: pd.DataFrame) ->
     for name, compute in SYMBOL_FEATURES:
         yield name, ranked(compute(panel))
     yield BETA_FEATURE, ranked(rolling_beta(panel.close, benchmark_symbol=spec.benchmark_symbol))
-    for name in spec.derivatives:
-        yield name, ranked(DERIVATIVE_FEATURES[name](panel))
+    for name in spec.extras:
+        yield name, ranked(EXTRA_SYMBOL_FEATURES[name](panel))
     for name in spec.alphas:
         yield f"alpha:{name}", ranked(registry.get(name)().compute(panel))
 

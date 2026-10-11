@@ -172,20 +172,20 @@ def _with_derivatives(panel: BarPanel) -> BarPanel:
     return dataclasses.replace(panel, **extra)
 
 
-DERIV_SPEC = FeatureSpec(name="d", version=1, alphas=LgbmV1.spec.alphas, derivatives=DERIVATIVES_CORE)
+DERIV_SPEC = FeatureSpec(name="d", version=1, alphas=LgbmV1.spec.alphas, extras=DERIVATIVES_CORE)
 
 
-def test_derivative_features_are_optional_and_keep_old_fingerprints():
-    assert LgbmV1.spec.derivatives == ()
+def test_extra_features_are_optional_and_keep_old_fingerprints():
+    assert LgbmV1.spec.extras == ()
     plain = FeatureSpec(name="x", version=1)
-    assert plain.fingerprint != FeatureSpec(name="x", version=1, derivatives=("ls_global",)).fingerprint
+    assert plain.fingerprint != FeatureSpec(name="x", version=1, extras=("ls_global",)).fingerprint
     names = DERIV_SPEC.feature_names
     assert names.index("ls_global") == names.index("beta") + 1 + DERIVATIVES_CORE.index("ls_global")  # A 组末尾、beta 之后
-    with pytest.raises(ValueError, match="未知的衍生品特征"):
-        FeatureSpec(name="x", version=1, derivatives=("nope",))
+    with pytest.raises(ValueError, match="未知的 A 组可选特征"):
+        FeatureSpec(name="x", version=1, extras=("nope",))
 
 
-def test_derivative_features_are_point_in_time_and_ranked():
+def test_extra_features_are_point_in_time_and_ranked():
     panel = _with_derivatives(_panel())
     k = 260
     full = build_features(panel, DERIV_SPEC)
@@ -200,3 +200,14 @@ def test_derivative_features_are_nan_when_panel_has_no_derivatives_data():
     features = build_features(_panel(), DERIV_SPEC)
     assert features[list(DERIVATIVES_CORE)].isna().all().all()
     assert features["ret_6"].notna().any()
+
+
+def test_price_volume_extras_are_point_in_time():
+    from sherpa.alpha.custom.ml.features import PRICE_VOLUME_EXTRAS
+    spec = FeatureSpec(name="pv", version=1, extras=PRICE_VOLUME_EXTRAS)
+    panel = _panel()
+    k = 260
+    full = build_features(panel, spec)
+    cut = build_features(panel.slice(slice(0, k)), spec)
+    pd.testing.assert_frame_equal(cut, full.loc[: panel.index[k - 1]])
+    assert full[list(PRICE_VOLUME_EXTRAS)].xs(panel.index[-1], level="start_time").notna().all().all()

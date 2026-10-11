@@ -10,8 +10,8 @@ This file is generated automatically from the input CSV. It highlights where a h
 
 ## Data-derived thresholds
 
-- |IC_IR| median: **0.2053**; upper quartile: **0.2357**.
-- IR-spread upper quartile: **0.0943**. This is used as the primary 'regime-sensitive' cutoff.
+- |IC_IR| median: **0.2342**; upper quartile: **0.2496**.
+- IR-spread upper quartile: **0.1015**. This is used as the primary 'regime-sensitive' cutoff.
 - Material sign reversal requires meaningful IC_IR on both sides of zero; tiny sign changes near zero are not promoted to `Regime-Reversal`.
 
 ## Factor-level classification counts
@@ -38,44 +38,44 @@ Only alphas with |t_stat| >= 2 are eligible; eligible alphas are ranked by |IC_I
 
 | Dimension | State | Samples | Low sample? | Significant | Top 1 Alpha | Top 2 Alpha | Top 3 Alpha |
 |---|---|---:|:---:|---:|---|---|---|
-| dispersion | low | 677 | False | 1/1 | `+custom.ml_lgbm_v3` (IR=0.2427, t=6.33) | - | - |
-| dispersion | normal | 857 | False | 1/1 | `+custom.ml_lgbm_v3` (IR=0.1863, t=5.63) | - | - |
-| dispersion | high | 661 | False | 1/1 | `+custom.ml_lgbm_v3` (IR=0.2076, t=5.15) | - | - |
-| liquidity | starved | 563 | False | 1/1 | `+custom.ml_lgbm_v3` (IR=0.2333, t=5.65) | - | - |
-| liquidity | normal | 1065 | False | 1/1 | `+custom.ml_lgbm_v3` (IR=0.2272, t=7.50) | - | - |
-| liquidity | high | 567 | False | 1/1 | `+custom.ml_lgbm_v3` (IR=0.1537, t=3.53) | - | - |
-| trend | bear | 383 | False | 1/1 | `+custom.ml_lgbm_v3` (IR=0.1393, t=2.94) | - | - |
-| trend | neutral | 1280 | False | 1/1 | `+custom.ml_lgbm_v3` (IR=0.2030, t=6.79) | - | - |
-| trend | bull | 532 | False | 1/1 | `+custom.ml_lgbm_v3` (IR=0.2777, t=6.09) | - | - |
-| volatility | low | 982 | False | 1/1 | `+custom.ml_lgbm_v3` (IR=0.2463, t=8.50) | - | - |
-| volatility | normal | 356 | False | 1/1 | `+custom.ml_lgbm_v3` (IR=0.1812, t=3.78) | - | - |
-| volatility | high | 857 | False | 1/1 | `+custom.ml_lgbm_v3` (IR=0.1796, t=5.24) | - | - |
+| dispersion | low | 677 | False | 1/1 | `+custom.ml_lgbm_v4` (IR=0.2762, t=7.43) | - | - |
+| dispersion | normal | 857 | False | 1/1 | `+custom.ml_lgbm_v4` (IR=0.1907, t=5.44) | - | - |
+| dispersion | high | 661 | False | 1/1 | `+custom.ml_lgbm_v4` (IR=0.2214, t=5.86) | - | - |
+| liquidity | starved | 563 | False | 1/1 | `+custom.ml_lgbm_v4` (IR=0.2886, t=6.88) | - | - |
+| liquidity | normal | 1065 | False | 1/1 | `+custom.ml_lgbm_v4` (IR=0.2386, t=8.09) | - | - |
+| liquidity | high | 567 | False | 1/1 | `+custom.ml_lgbm_v4` (IR=0.1393, t=3.41) | - | - |
+| trend | bear | 383 | False | 1/1 | `+custom.ml_lgbm_v4` (IR=0.2473, t=5.60) | - | - |
+| trend | neutral | 1280 | False | 1/1 | `+custom.ml_lgbm_v4` (IR=0.2054, t=7.71) | - | - |
+| trend | bull | 532 | False | 1/1 | `+custom.ml_lgbm_v4` (IR=0.2562, t=5.78) | - | - |
+| volatility | low | 982 | False | 1/1 | `+custom.ml_lgbm_v4` (IR=0.2383, t=8.38) | - | - |
+| volatility | normal | 356 | False | 1/1 | `+custom.ml_lgbm_v4` (IR=0.1720, t=4.40) | - | - |
+| volatility | high | 857 | False | 1/1 | `+custom.ml_lgbm_v4` (IR=0.2301, t=6.65) | - | - |
 
 ## Most regime-sensitive factor/dimension pairs
 
 | Rank | Factor | Dimension | Class | IR spread | Best state | Best IC_IR | Best samples | Low sample? |
 |---:|---|---|---|---:|---|---:|---:|---|
-| 1 | custom.ml_lgbm_v3 | trend | Conditional | 0.1384 | bull | 0.2777 | 532 | False |
-| 2 | custom.ml_lgbm_v3 | liquidity | Mixed / Moderate | 0.0796 | starved | 0.2333 | 563 | False |
-| 3 | custom.ml_lgbm_v3 | volatility | Mixed / Moderate | 0.0667 | low | 0.2463 | 982 | False |
-| 4 | custom.ml_lgbm_v3 | dispersion | Stable | 0.0564 | low | 0.2427 | 677 | False |
+| 1 | custom.ml_lgbm_v4 | liquidity | Conditional | 0.1493 | starved | 0.2886 | 563 | False |
+| 2 | custom.ml_lgbm_v4 | dispersion | Mixed / Moderate | 0.0855 | low | 0.2762 | 677 | False |
+| 3 | custom.ml_lgbm_v4 | volatility | Mixed / Moderate | 0.0664 | low | 0.2383 | 982 | False |
+| 4 | custom.ml_lgbm_v4 | trend | Stable | 0.0509 | bull | 0.2562 | 532 | False |
 
 ## Strongest regime observations after excluding low-sample states
 
 | Rank | Factor | Dimension | State | IC_IR | |IC_IR| | Direction | Samples | Win rate |
 |---:|---|---|---|---:|---:|---|---:|---:|
-| 1 | custom.ml_lgbm_v3 | trend | bull | 0.2777 | 0.2777 | original | 532 | 0.6259 |
-| 2 | custom.ml_lgbm_v3 | volatility | low | 0.2463 | 0.2463 | original | 982 | 0.6130 |
-| 3 | custom.ml_lgbm_v3 | dispersion | low | 0.2427 | 0.2427 | original | 677 | 0.5908 |
-| 4 | custom.ml_lgbm_v3 | liquidity | starved | 0.2333 | 0.2333 | original | 563 | 0.5879 |
-| 5 | custom.ml_lgbm_v3 | liquidity | normal | 0.2272 | 0.2272 | original | 1065 | 0.5915 |
-| 6 | custom.ml_lgbm_v3 | dispersion | high | 0.2076 | 0.2076 | original | 661 | 0.5825 |
-| 7 | custom.ml_lgbm_v3 | trend | neutral | 0.2030 | 0.2030 | original | 1280 | 0.5734 |
-| 8 | custom.ml_lgbm_v3 | dispersion | normal | 0.1863 | 0.1863 | original | 857 | 0.5811 |
-| 9 | custom.ml_lgbm_v3 | volatility | normal | 0.1812 | 0.1812 | original | 356 | 0.5787 |
-| 10 | custom.ml_lgbm_v3 | volatility | high | 0.1796 | 0.1796 | original | 857 | 0.5543 |
-| 11 | custom.ml_lgbm_v3 | liquidity | high | 0.1537 | 0.1537 | original | 567 | 0.5679 |
-| 12 | custom.ml_lgbm_v3 | trend | bear | 0.1393 | 0.1393 | original | 383 | 0.5640 |
+| 1 | custom.ml_lgbm_v4 | liquidity | starved | 0.2886 | 0.2886 | original | 563 | 0.5950 |
+| 2 | custom.ml_lgbm_v4 | dispersion | low | 0.2762 | 0.2762 | original | 677 | 0.5923 |
+| 3 | custom.ml_lgbm_v4 | trend | bull | 0.2562 | 0.2562 | original | 532 | 0.5902 |
+| 4 | custom.ml_lgbm_v4 | trend | bear | 0.2473 | 0.2473 | original | 383 | 0.6031 |
+| 5 | custom.ml_lgbm_v4 | liquidity | normal | 0.2386 | 0.2386 | original | 1065 | 0.6038 |
+| 6 | custom.ml_lgbm_v4 | volatility | low | 0.2383 | 0.2383 | original | 982 | 0.5784 |
+| 7 | custom.ml_lgbm_v4 | volatility | high | 0.2301 | 0.2301 | original | 857 | 0.6044 |
+| 8 | custom.ml_lgbm_v4 | dispersion | high | 0.2214 | 0.2214 | original | 661 | 0.5779 |
+| 9 | custom.ml_lgbm_v4 | trend | neutral | 0.2054 | 0.2054 | original | 1280 | 0.5750 |
+| 10 | custom.ml_lgbm_v4 | dispersion | normal | 0.1907 | 0.1907 | original | 857 | 0.5811 |
+| 11 | custom.ml_lgbm_v4 | volatility | normal | 0.1720 | 0.1720 | original | 356 | 0.5478 |
+| 12 | custom.ml_lgbm_v4 | liquidity | high | 0.1393 | 0.1393 | original | 567 | 0.5344 |
 
 ## Reading order
 

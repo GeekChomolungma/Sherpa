@@ -13,7 +13,7 @@ from sherpa.metrics.tradability import DEFAULT_LOOKBACK, SEASONING_PERIOD
 from ...base import register_alpha
 from ...liquidity import LiquidityFilter
 from .alpha import MLAlpha
-from .features import DERIVATIVES_LS, FeatureSpec
+from .features import DERIVATIVES_LS, DERIVATIVES_OI, PRICE_VOLUME_EXTRAS, FeatureSpec
 
 # B 组第一批：worldquant_101 研究线关卡1 去冗余后的候选并集（关卡2 L0 方案用的那 13 个，2026-10-01 取）。
 # 写死在这里而不是运行时读那份交接文件：世坤研究线重跑后名单会变，特征必须有固定版本。
@@ -99,7 +99,34 @@ class LgbmV3(MLAlpha):
         version=1,
         alphas=WORLDQUANT_L0_UNION,
         liquidity=LiquidityFilter(min_percentile=0.5, seasoning_period=SEASONING_PERIOD, lookback=DEFAULT_LOOKBACK),
-        derivatives=DERIVATIVES_LS,
+        extras=DERIVATIVES_LS,
+    )
+    training_overrides = {
+        "label_horizon_bars": 6,
+        "label_transform": "raw_clip",
+        "seeds": list(range(18)),
+        "train_window_bars": None,
+    }
+
+
+@register_alpha
+class LgbmV4(MLAlpha):
+    """LightGBM 第四版：去掉 B 组（世坤因子），A 组 12 个 + 可选 10 个（多空比 4、OI 2、价量补充 4）+ C 组 8 个，共 30 列。
+
+    2026-10-10 探索实验（research/alpha_research/MLalpha/experiments/FINDINGS_V4.md）：研究起点仍是 2023-01-01（挪到 2024
+    会让头 10 个月训练历史太短，同一时期毛 Sharpe 1.50 -> 0.21）。18 种子集成，吃单净 Sharpe 中位数 选择段 / 验证段
+    0.82 / 0.83（V3 配置 0.12 / 0.73），两段都为正 74%，alpha_sharpe 0.86 / 1.03；两组独立种子在两段都为正。
+    训练配置同 LgbmV3（持有 6 根、原始收益标签、扩展窗口、18 种子）。
+    """
+
+    name = "ml_lgbm_v4"
+    model_name = "lgbm_v4"
+    spec = FeatureSpec(
+        name="lgbm_v4",
+        version=1,
+        alphas=(),
+        liquidity=LiquidityFilter(min_percentile=0.5, seasoning_period=SEASONING_PERIOD, lookback=DEFAULT_LOOKBACK),
+        extras=DERIVATIVES_LS + DERIVATIVES_OI + PRICE_VOLUME_EXTRAS,
     )
     training_overrides = {
         "label_horizon_bars": 6,

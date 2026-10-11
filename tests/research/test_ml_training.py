@@ -269,6 +269,37 @@ def test_refit_trains_final_model_on_the_full_window_with_the_early_stopped_roun
     assert not np.allclose(model.predict(x), other.predict(x))
 
 
+def test_a_seed_trains_the_same_model_regardless_of_which_seeds_ran_before_it(tmp_path):
+    """训练集分箱只在第一次训练时构建；随机数不固定时它取决于"第一个种子"，同一个种子的模型会因为前面先训了谁而不同
+    （比如探索分两组跑种子、正式 18 个一起跑）。`data_random_seed` 固定后必须跟顺序无关。
+    这里把 bin_construct_sample_cnt 调得很小，强制分箱抽样（真实数据要超过 20 万行才抽样）。"""
+    import config
+
+    panel, frame = _toy_frame()
+    fold = plan_folds(
+        research_start=panel.index[0], last_bar=panel.index[-1], interval="4h",
+        retrain_every_bars=120, min_train_bars=480, purge_bars=1, train_window_bars=360,
+    )[0]
+    rows = frame.rows_between(fold.train_from, fold.train_until)
+    fit, valid = split_inner_validation(frame, rows, train_until=fold.train_until, valid_bars=120, purge_bars=1, interval="4h")
+    params = {"learning_rate": 0.1, "num_leaves": 7, "min_data_in_leaf": 50, "verbose": -1, "num_threads": 1,
+              "feature_fraction": 0.8, "bagging_fraction": 0.8, "bagging_freq": 1, "max_bin": 15,
+              "bin_construct_sample_cnt": 200, "data_random_seed": config.LGB_PARAMS["data_random_seed"]}
+    common = dict(full=rows, objective="ic_ir", lgb_params=params, num_boost_round=60, early_stopping_rounds=20,
+                  min_period_rows=5, rel_prefix="x")
+
+    alone = train_fold(frame, fit, valid, tmp_path / "alone", seeds=(5,), **common)
+    after = train_fold(frame, fit, valid, tmp_path / "after", seeds=(0, 5), **common)
+
+    import lightgbm as lgb
+
+    assert alone.best_iterations[0] == after.best_iterations[1]
+    x = frame.features[valid]
+    a = lgb.Booster(model_file=str(tmp_path / "alone" / "seed5.txt")).predict(x)
+    b = lgb.Booster(model_file=str(tmp_path / "after" / "seed5.txt")).predict(x)
+    np.testing.assert_array_equal(a, b)
+
+
 # ---------------------------------------------------------------------------
 # 按模型覆盖训练配置
 # ---------------------------------------------------------------------------

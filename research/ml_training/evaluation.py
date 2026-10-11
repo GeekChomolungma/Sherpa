@@ -7,9 +7,11 @@
 - 回测：`run_vectorized_backtest`，`shift = 1 + 执行延迟`，每 N 根全仓调仓（`run_score_backtest`）；
 - 成本：`research_config.json` 的 `costs`，净收益 = 毛收益 − 换手 × (手续费 + 滑点)（`cost_segment_rows`）。
 
+网格、成本、稳健性过滤（空仓比例）**跟关卡3 完全相同**（`tests/research/test_exploration_alignment.py` 校验跟
+`friction_test/config.py` 逐项一致）：探索挑出来的东西搬到正式流水线，看的是同一批组合的同一个中位数。
+
 这里只放探索特有的东西：
-- 网格：关卡3 的网格 + 更宽的迟滞档位（`TOP_K_EXITS`）；
-- 打分平滑（`smooth`）：对截面排名做逐 symbol 的指数平滑，用少量信号新鲜度换换手；
+- 打分平滑（`smooth`）：对截面排名做逐 symbol 的指数平滑（关卡3 没有；探索默认不用，见 run_experiments.SMOOTH_HALFLIVES）；
 - 诊断（`diagnostics`）：RankIC、Pearson IC、首尾各 10 个的价差、打分对波动率（vol_42）的暴露；
 - 多头腿 / 空头腿各自的贡献（`backtest(legs=True)`）。
 """
@@ -34,20 +36,20 @@ from sherpa.metrics.performance import annualized_return, sharpe_ratio
 
 _COSTS = json.loads((Path(__file__).resolve().parents[1] / "research_config.json").read_text(encoding="utf-8"))["costs"]
 
-# 关卡3 的网格（friction_test/config.py）
-# 关卡3 原网格 + 探索时补的更宽迟滞（top20_exit80 / top30_exit90 / top30_exit150），看稳健区域的边界
-TOP_K_EXITS: dict[int, tuple[int, ...]] = {10: (10, 20, 30, 50), 20: (20, 40, 60, 80, 100), 30: (90, 150)}
+# 关卡3 的网格（friction_test/config.py 的拷贝，research 子项目之间不互相 import；单测保证两边一致）。
+# 不要在这里单独加档位：中位数是在整套组合上取的，多一档少一档都会让探索跟关卡3 的数字对不上。
+TOP_K_EXITS: dict[int, tuple[int, ...]] = {10: (10, 20, 30, 50), 20: (20, 40, 60, 100)}
+TOP_QUANTILE_EXITS: dict[float, tuple[float, ...]] = {0.1: (0.1, 0.2, 0.3), 0.2: (0.2, 0.4)}
 WEIGHTINGS: dict[str, dict[str, Any]] = {
     **{
         (f"top{k}" if exit_k == k else f"top{k}_exit{exit_k}"): {"method": "top_k", "k": k, "exit_k": exit_k}
         for k, exits in TOP_K_EXITS.items()
         for exit_k in exits
     },
-    # 相对分位迟滞（k / exit_k 按当期有效 symbol 数的比例算），跟关卡3 的 q* 档位同口径，这里多给几档
     **{
         (f"q{round(q * 100)}" if exit_q == q else f"q{round(q * 100)}_exit{round(exit_q * 100)}"):
             {"method": "top_quantile", "q": q, "exit_q": exit_q}
-        for q, exits in {0.1: (0.1, 0.2, 0.3, 0.4), 0.2: (0.2, 0.4, 0.6)}.items()
+        for q, exits in TOP_QUANTILE_EXITS.items()
         for exit_q in exits
     },
 }
@@ -59,6 +61,8 @@ COST_MODELS = {
     "stress": FixedFeeCostModel(fee_bps=float(_COSTS["taker_fee_bps"]), slippage_bps=float(_COSTS["stress_slippage_bps"])),
 }
 BASE_COST = "all_taker"
+# 稳健性汇总时，选择段空仓比例超过这个值的组合不计入（同关卡3 config.ROBUSTNESS_MAX_FLAT）
+ROBUSTNESS_MAX_FLAT = 0.2
 
 
 def smooth(ranked: pd.DataFrame, halflife: float) -> pd.DataFrame:
