@@ -29,6 +29,9 @@ bash research/alpha_research/custom_starter/run_track.sh             # 自定义
 
 **跑完怎么读结果、怎么下结论**：见 [`RESULT_READING_GUIDE.md`](RESULT_READING_GUIDE.md)。
 
+**做一个新的 ML 模型（或任何要跟当前基线 `LgbmV4` 比的新想法）按什么顺序走**：见
+[`alpha_research/MLalpha/RESEARCH_WORKFLOW.md`](alpha_research/MLalpha/RESEARCH_WORKFLOW.md)（探索 → 定型 → 正式工作流 → 归档 → 比基线）。
+
 ## 统一研究配置：时间窗、holdout、IC 标签、大盘锚点、交易成本
 
 所有子项目共用一份 [`research_config.json`](research_config.json)，按用途分节，以后有新的跨子项目

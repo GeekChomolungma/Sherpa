@@ -131,6 +131,9 @@ def model_case(name: str, note: str, model: str, **overrides: Any) -> Case:
     differs = {k: getattr(cfg, k) for k, v in unsupported.items() if getattr(cfg, k) != v}
     if differs:
         raise ValueError(f"{model} 改了探索脚本不支持覆盖的训练配置 {differs}，先给 Case 加对应字段")
+    # 改了特征相关的字段，特征清单就不再是那个模型类的 spec 了：解除绑定，按字段重建（否则覆盖会被 Case.spec 悄悄忽略）
+    if overrides.keys() & {"extras", "with_b", "min_percentile"}:
+        fields["model"] = None
     return Case(name, note, **{**fields, **overrides})
 
 

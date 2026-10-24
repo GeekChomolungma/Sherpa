@@ -323,3 +323,16 @@ def test_training_config_overrides_per_model():
     assert v1.to_dict() != v2.to_dict()
     with pytest.raises(ValueError, match="不认识的键"):
         cfg_module.for_model({"seedz": [1]})
+
+
+def test_model_case_matches_the_model_and_applies_feature_overrides():
+    """探索的 model_case：不改特征时跟正式模型同一份特征清单；改了特征相关字段要真的生效（不能被模型类的 spec 盖掉）。"""
+    import run_experiments
+    from sherpa.alpha.custom.ml.models import LgbmV4
+
+    same = run_experiments.model_case("a", "x", "LgbmV4", seeds=(1, 2))
+    assert same.spec.fingerprint == LgbmV4.spec.fingerprint
+    changed = run_experiments.model_case("b", "x", "LgbmV4", extras=LgbmV4.spec.extras[:4])
+    assert list(changed.spec.feature_names) != list(LgbmV4.spec.feature_names)
+    assert changed.spec.extras == LgbmV4.spec.extras[:4]
+    assert changed.spec.liquidity == LgbmV4.spec.liquidity and not changed.spec.alphas
