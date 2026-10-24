@@ -97,7 +97,7 @@ def test_manifest_assigns_rows_to_the_model_serving_them(tmp_path):
 
 def test_ml_alpha_registered_and_fails_clearly_without_models(tmp_path, monkeypatch):
     assert registry.get("custom.ml_lgbm_v1") is LgbmV1
-    assert LgbmV1.__module__ == "sherpa.alpha.custom.ml.models"
+    assert LgbmV1.__module__ == "sherpa.alpha.custom.ml.models.lgbm"
     assert "custom.ml_alpha" not in registry.all()  # 基类不注册
     monkeypatch.setenv("SHERPA_ML_MODEL_ROOT", str(tmp_path))
     with pytest.raises(FileNotFoundError, match="run_training"):

@@ -8,6 +8,7 @@
 
     manifest.json
     20220702T0000/seed0.txt, seed1.txt, ...   每个重训时点一个子目录，存各随机种子训练出的模型文件
+                                              （扩展名随模型后端：LightGBM .txt、XGBoost .json、LSTM .pt）
 
 模型文件不进 git，manifest.json 可以进（体积小，方便复现和审计）。
 """
@@ -69,6 +70,11 @@ class Manifest:
     config_fingerprint: str
     config: dict[str, Any] = field(default_factory=dict)
     entries: list[ModelEntry] = field(default_factory=list)
+
+    @property
+    def backend(self) -> str:
+        """训练这批模型的后端（`backends/`）。训练配置里没有这一项 = LightGBM（旧清单都是）。"""
+        return str(self.config.get("backend", "lightgbm"))
 
     def sorted_entries(self) -> list[ModelEntry]:
         return sorted(self.entries, key=lambda e: e.valid_from_ts)

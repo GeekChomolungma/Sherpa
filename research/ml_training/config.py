@@ -3,13 +3,17 @@
 这个模型的有效配置。改了任何一项（默认值或覆盖），该模型的配置指纹就对不上，要 `--force` 重训
 （或者给新配置开一个新的模型名），不会悄悄混用两套配置训练出来的模型。
 
+模型架构（`backend`）也在这里选：`lightgbm`（默认）/ `xgboost` / `lstm`，各自的超参数默认值是下面的 `LGB_PARAMS` /
+`XGB_PARAMS` / `LSTM_PARAMS`，模型类用 `training_overrides = {"backend": "xgboost", "backend_params": {...}}` 覆盖个别项。
+特征、标签、损失（IC_IR）、滚动时间表、两步训练（早停 → 整窗重训）对所有架构都相同，换架构只换"模型本身"。
+
 流动性范围（哪些 symbol 参与特征排名、损失计算、推断）不在这里：它是模型的一部分，写在 `FeatureSpec.liquidity`
-（`sherpa/alpha/custom/ml/models.py`），进特征指纹；训练脚本开头校验它跟研究线 `track.json` 的评估掩码一致。
+（`sherpa/alpha/custom/ml/models/`），进特征指纹；训练脚本开头校验它跟研究线 `track.json` 的评估掩码一致。
 """
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass, field, fields
 from typing import Any, Mapping, Optional
 
 # ---- 滚动时间表（单位：bar；研究周期 4h，一天 6 根）----
@@ -72,6 +76,51 @@ LGB_PARAMS: dict[str, Any] = {
     "data_random_seed": 0,
 }
 
+# ---- 模型架构 ----
+
+# 默认后端。LightGBM 模型的训练配置里不写 backend / backend_params 两项（`TrainConfig.to_dict`），V1–V4 的配置指纹因此不变。
+BACKEND: str = "lightgbm"
+
+# XGBoost：尽量对齐 LGB_PARAMS 的含义，两者差别只来自算法本身。按叶子数生长（lossguide + max_leaves 31 = num_leaves），
+# min_child_weight 500 ≈ min_data_in_leaf 500（IC_IR 损失的二阶导取常数 1，每行 hessian 都是 1），subsample / colsample /
+# lambda / max_bin 一一对应。base_score 0：自定义损失下初始打分是常数，IC 对平移不敏感，取 0 只是让模型文件好读。
+# 树的轮数、早停沿用 NUM_BOOST_ROUND / EARLY_STOPPING_ROUNDS。
+XGB_PARAMS: dict[str, Any] = {
+    "eta": 0.05,
+    "tree_method": "hist",
+    "grow_policy": "lossguide",
+    "max_leaves": 31,
+    "max_depth": 0,
+    "min_child_weight": 500.0,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "lambda": 10.0,
+    "max_bin": 63,
+    "base_score": 0.0,
+    "nthread": 0,  # 0 = 全部核，同 LGB_PARAMS 的 num_threads
+    "disable_default_eval_metric": 1,
+    "verbosity": 0,
+}
+
+# LSTM：每行看同一个币最近 seq_len 根 bar 的特征序列（含当前这根），**seq_len 没有默认值，模型类必须写明**——它同时决定
+# 推断要往回多看几根 bar（MLAlpha.min_lookback）。损失 = 每个 batch 内各期加权 IC 的 −IC_IR（跟树模型同一个定义，
+# 首尾加权同样生效）；按 epoch 早停（内部验证段 IC_IR 连续 patience 个 epoch 没刷新就停），再用整个窗口按最佳 epoch 数重训。
+LSTM_PARAMS: dict[str, Any] = {
+    "hidden_size": 32,
+    "num_layers": 1,
+    "dropout": 0.0,
+    "learning_rate": 1e-3,
+    "weight_decay": 1e-4,
+    "periods_per_batch": 32,  # 一个 batch 放几期（几根 bar）的全部截面行；IC_IR 在 batch 内的这几期上算
+    "max_epochs": 30,
+    "patience": 5,
+    "num_threads": 0,  # torch 线程数，0 = torch 默认
+}
+LSTM_REQUIRED: tuple[str, ...] = ("seq_len",)
+
+BACKEND_PARAMS: dict[str, dict[str, Any]] = {"lightgbm": {}, "xgboost": XGB_PARAMS, "lstm": LSTM_PARAMS}
+BACKEND_REQUIRED: dict[str, tuple[str, ...]] = {"lstm": LSTM_REQUIRED}
+
 
 def as_dict() -> dict[str, Any]:
     """默认训练配置（键 = `TrainConfig` 的字段，也是模型 `training_overrides` 能写的键）。"""
@@ -92,6 +141,8 @@ def as_dict() -> dict[str, Any]:
         "num_boost_round": NUM_BOOST_ROUND,
         "early_stopping_rounds": EARLY_STOPPING_ROUNDS,
         "lgb_params": LGB_PARAMS,
+        "backend": BACKEND,
+        "backend_params": {},
     }
 
 
@@ -115,9 +166,18 @@ class TrainConfig:
     num_boost_round: int
     early_stopping_rounds: int
     lgb_params: dict[str, Any]
+    backend: str = BACKEND
+    backend_params: dict[str, Any] = field(default_factory=dict)  # 非 LightGBM 后端的有效超参数（默认值 + 覆盖）
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        """写进模型清单、参与配置指纹的内容。LightGBM 不写 backend / backend_params（跟引入多后端之前逐字节相同，
+        已有模型不用重训）；其它后端不写 lgb_params（用不到，写进去只会让人误以为它生效）。"""
+        out = asdict(self)
+        if self.backend == "lightgbm":
+            del out["backend"], out["backend_params"]
+        else:
+            del out["lgb_params"]
+        return out
 
 
 def for_model(overrides: Mapping[str, Any]) -> TrainConfig:
@@ -128,4 +188,19 @@ def for_model(overrides: Mapping[str, Any]) -> TrainConfig:
         raise ValueError(f"training_overrides 里有不认识的键 {sorted(unknown)}，可选 {sorted(names)}")
     merged = {**as_dict(), **overrides}
     merged["seeds"] = list(merged["seeds"])
+    backend = merged["backend"]
+    if backend not in BACKEND_PARAMS:
+        raise ValueError(f"未知的 backend {backend!r}，可选 {sorted(BACKEND_PARAMS)}")
+    given = dict(merged["backend_params"])
+    if backend == "lightgbm" and given:
+        raise ValueError("LightGBM 的超参数写在 lgb_params，不用 backend_params")
+    defaults = BACKEND_PARAMS[backend]
+    required = BACKEND_REQUIRED.get(backend, ())
+    unknown = set(given) - set(defaults) - set(required)
+    if unknown:
+        raise ValueError(f"{backend} 的 backend_params 里有不认识的键 {sorted(unknown)}，可选 {sorted(set(defaults) | set(required))}")
+    missing = [k for k in required if k not in given]
+    if missing:
+        raise ValueError(f"{backend} 必须在 backend_params 里写明 {missing}")
+    merged["backend_params"] = {**defaults, **given}
     return TrainConfig(**merged)

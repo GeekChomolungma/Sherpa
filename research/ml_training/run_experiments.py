@@ -6,7 +6,7 @@
 
 跟正式训练（`run_training.py`）的关系：训练用的是同一套函数（`dataset.build_training_frame` / `plan_folds` /
 `split_inner_validation`、`trainer.train_fold` 两步训练），只是配置不从 `config.py` 读，而是每个 case 自己给；
-评估用 `evaluation.py`（关卡3 同口径的拷贝）。所以这里挑出来的配置，搬进 `config.py` / `models.py` 后走正式流水线，
+评估用 `evaluation.py`（关卡3 同口径的拷贝）。所以这里挑出来的配置，搬进 `config.py` / `models/` 后走正式流水线，
 结果应该一致（`v2_official` vs `v2_retrain` 两个 case 就是用来核对这一点的）。
 
 **怎么挑配置才不自欺**：每个模型都是滚动训练的，选择段和验证段的打分都是样本外的。汇总表按**选择段**的扣费净 Sharpe
@@ -41,6 +41,7 @@ import pandas as pd
 
 from sherpa.alpha.custom.ml import LgbmV1
 from sherpa.alpha.custom.ml import models as ml_models
+from sherpa.alpha.custom.ml.backends import get_backend, predict_ensemble
 from sherpa.backtest.attribution import attribute, period_stats, style_factor_returns
 from sherpa.backtest.score_backtest import cost_segment_rows, run_score_backtest, target_path
 from sherpa.alpha.custom.ml.features import (
@@ -89,8 +90,17 @@ class Case:
     min_train_bars: int = config.MIN_TRAIN_BARS
     min_percentile: float = 0.5                 # 流动性范围（特征排名 + 损失 + 评估）
     lgb_overrides: tuple[tuple[str, Any], ...] = ()
+    # 模型架构：config.BACKEND（lightgbm）/ "xgboost" / "lstm"；backend_params 覆盖 config.XGB_PARAMS / LSTM_PARAMS 的个别项
+    #（LSTM 必须写 seq_len）。有效超参数由 config.for_model 合并，跟正式训练同一个函数
+    backend: str = config.BACKEND
+    backend_params: tuple[tuple[str, Any], ...] = ()
     seeds: tuple[int, ...] = config.SEEDS
     model: Optional[str] = None                 # 绑定的正式模型类名（`model_case` 填），特征清单直接用它的 spec
+
+    @property
+    def train_config(self) -> config.TrainConfig:
+        """后端相关的有效训练配置（只用到 backend / backend_params 两项）。"""
+        return config.for_model({"backend": self.backend, "backend_params": dict(self.backend_params)})
 
     @property
     def spec(self) -> FeatureSpec:
@@ -108,7 +118,7 @@ def model_case(name: str, note: str, model: str, **overrides: Any) -> Case:
     训练配置 = `config.for_model(它的 training_overrides)`（正式训练 run_training.py 用的同一个函数）。`overrides` 只用来
     在它的基础上改一两项做对照（比如换种子），改了什么就是什么，其余跟正式模型一致。
 
-    探索里挑出来的配置要进正式流水线，先写成 models.py 里的子类，再用这个函数跑一次核对：同一份数据上它的打分应该跟
+    探索里挑出来的配置要进正式流水线，先写成 models/ 里的子类，再用这个函数跑一次核对：同一份数据上它的打分应该跟
     正式模型 `MLAlpha.compute` 的逐格相同（训练集分箱随机数固定之后，见 config.LGB_PARAMS）。
     """
     cls = getattr(ml_models, model)
@@ -121,6 +131,8 @@ def model_case(name: str, note: str, model: str, **overrides: Any) -> Case:
         seeds=tuple(cfg.seeds), min_percentile=cls.spec.liquidity.min_percentile,
         extras=cls.spec.extras, with_b=bool(cls.spec.alphas),
         lgb_overrides=tuple((k, v) for k, v in cfg.lgb_params.items() if lgb_defaults.get(k) != v),
+        backend=cfg.backend,
+        backend_params=tuple((k, v) for k, v in cls.training_overrides.get("backend_params", {}).items()),
         model=model,
     )
     unsupported = {
@@ -313,13 +325,15 @@ def train_case(panel, case: Case, case_dir: Path) -> pd.DataFrame:
         scope=scope, features=features,
     )
     cols = _keep_columns(frame.feature_names, case.drop_features)
-    frame = dataclasses.replace(frame, features=frame.features[:, cols], feature_names=[frame.feature_names[i] for i in cols])
+    inputs = frame.inputs.select_columns(cols)
+    frame = dataclasses.replace(frame, features=frame.features[:, cols], feature_names=[frame.feature_names[i] for i in cols],
+                                inputs=inputs)
+    train_cfg = case.train_config
+    backend = get_backend(train_cfg.backend)
 
     # 打分用全部范围内的行（不只是标签已知的行：标签未知的行，比如快下架的币，实盘时照样要打分）
     times = pd.DatetimeIndex(features.index.get_level_values("start_time"))
-    symbols = features.index.get_level_values("symbol")
-    in_scope = scope.to_numpy()[panel.close.index.get_indexer(times), panel.close.columns.get_indexer(symbols)]
-    matrix = features.to_numpy(dtype="float32")[:, cols]
+    in_scope = scope.to_numpy()[inputs.time_pos, inputs.symbol_pos]
     preds = np.full(len(features), np.nan)
 
     purge = case.horizon + EXECUTION_DELAY_BARS
@@ -330,7 +344,6 @@ def train_case(panel, case: Case, case_dir: Path) -> pd.DataFrame:
     )
     params = {**config.LGB_PARAMS, **dict(case.lgb_overrides)}
     fold_rows = []
-    import lightgbm as lgb
 
     for fold in folds:
         rows = frame.rows_between(fold.train_from, fold.train_until)
@@ -342,14 +355,14 @@ def train_case(panel, case: Case, case_dir: Path) -> pd.DataFrame:
             frame, fit, valid, case_dir / "models" / rel, full=rows, objective=case.objective, seeds=case.seeds,
             lgb_params=params, num_boost_round=config.NUM_BOOST_ROUND, early_stopping_rounds=config.EARLY_STOPPING_ROUNDS,
             min_period_rows=config.MIN_PERIOD_ROWS, rel_prefix=rel,
+            backend=train_cfg.backend, backend_params=train_cfg.backend_params,
         )
         lo, hi = times.searchsorted(fold.valid_from, "left"), times.searchsorted(fold.valid_until, "left")
         serve = np.zeros(len(features), dtype=bool)
         serve[lo:hi] = True
         serve &= in_scope
         if serve.any():
-            boosters = [lgb.Booster(model_file=str(case_dir / "models" / f)) for f in result.files]
-            preds[serve] = np.mean([b.predict(matrix[serve]) for b in boosters], axis=0)
+            preds[serve] = predict_ensemble(backend, case_dir / "models", result.files, inputs, np.flatnonzero(serve))
         fold_rows.append({"valid_from": fold.valid_from, "n_window_rows": rows.stop - rows.start,
                           "best_iterations": "|".join(map(str, result.best_iterations)),
                           "inner_valid_ic_ir": float(np.mean(result.metrics["inner_valid_ic_ir_by_seed"]))})

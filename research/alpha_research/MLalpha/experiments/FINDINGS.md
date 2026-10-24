@@ -4,7 +4,7 @@
 > 只看方向，不跟 `../CASES.md`、`../RESULT_READING.md` 和关卡3 的数字直接比；对应的探索产出没有保留。
 
 > 注意：本文的实验都是在研究起点 **2022-01-01** 下跑的。之后研究起点改到了 2023-01-01（`research_config.json`），
-> 结论被做成了正式基线 `LgbmV2`（`sherpa/alpha/custom/ml/models.py`），新起点下的正式结果在研究线
+> 结论被做成了正式基线 `LgbmV2`（`sherpa/alpha/custom/ml/models/lgbm.py`），新起点下的正式结果在研究线
 > `results_without_neutralization/` 里。本文的数字留作历史记录。
 
 工具：`research/ml_training/run_experiments.py`（case 定义 + 滚动训练 + 样本外打分）、`research/ml_training/evaluation.py`（关卡3

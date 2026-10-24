@@ -6,10 +6,10 @@
 
 | 模型 | 配置要点 | 产出 | 模型文件 |
 | --- | --- | --- | --- |
-| V1 | A+B+C 33 列；持有 1 根、排名标签、滑动 60 天、3 种子 | `results_without_neutralization__v1/` 等 | `models/lgbm_v1/` |
-| V2 | 同 V1 特征；持有 6 根、原始收益标签、扩展窗口、9 种子 | `…__v2` | `models/lgbm_v2/` |
-| V3 | V2 + 多空比 4（37 列）、18 种子 | `…__v3` | `models/lgbm_v3/` |
-| V4 | 去掉 B 组；A + 多空比 4 + OI 2 + 价量补充 4 + C（30 列）、18 种子 | `…__v4` | `models/lgbm_v4/` |
+| V1 | A+B+C 33 列；持有 1 根、排名标签、滑动 60 天、3 种子 | `runs/lgbm_v1/` | `models/lgbm_v1/` |
+| V2 | 同 V1 特征；持有 6 根、原始收益标签、扩展窗口、9 种子 | `runs/lgbm_v2/` | `models/lgbm_v2/` |
+| V3 | V2 + 多空比 4（37 列）、18 种子 | `runs/lgbm_v3/` | `models/lgbm_v3/` |
+| V4 | 去掉 B 组；A + 多空比 4 + OI 2 + 价量补充 4 + C（30 列）、18 种子 | `runs/lgbm_v4/` | `models/lgbm_v4/` |
 
 
 ---

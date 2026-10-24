@@ -14,6 +14,7 @@ from typing import Any, Mapping, Optional, Union
 import numpy as np
 import pandas as pd
 
+from sherpa.alpha.custom.ml.backends import ModelInputs
 from sherpa.alpha.custom.ml.features import FeatureSpec, build_features, cross_sectional_rank
 from sherpa.alpha.liquidity import LiquidityFilter
 from sherpa.backtest.style_exposure import default_style_exposures
@@ -36,6 +37,10 @@ class TrainingFrame:
     label: np.ndarray  # 原始标签（未来收益；开了标签中性化时是残差收益），算 RankIC 报告用
     times: pd.DatetimeIndex
     symbols: np.ndarray
+    # 全部特征行（不只是训练行：序列模型要取历史，历史里有掩码外、标签未知的行）；第 i 个训练行 = inputs 的第 source_rows[i] 行。
+    # 表格模型只用上面的 features（= inputs.matrix[source_rows]），推断 / 样本外评估统一走 inputs
+    inputs: Optional[ModelInputs] = None
+    source_rows: Optional[np.ndarray] = None
 
     def __len__(self) -> int:
         return len(self.y)
@@ -165,14 +170,17 @@ def build_training_frame(
     #   features[keep] = [[0.00, 0.1], [0.50, 0.3], [0.17, 0.4], [0.50, 0.5]]   形状 (m, K)=(4, 2)：整行留下 / 去掉
     #   y[keep]        = [0.5, 0.0, 0.5, 0.0]                                    形状 (m,)=(4,)
     #   times[keep] / symbols[keep] 记着每一行是哪个 (时间, 币)，后面按时间切重训时点、按期分组算 IC 都靠它。
+    inputs = ModelInputs.from_features(features, panel.close.index, panel.close.columns)
     return TrainingFrame(
-        features=features.to_numpy(dtype="float32")[keep],
+        features=inputs.matrix[keep],
         feature_names=list(features.columns),
         y=y[keep],
         weights=tail_weights(rank_y[keep], tail_quantile=tail_quantile, tail_weight=tail_weight),
         label=raw[keep],
         times=pd.DatetimeIndex(times[keep]),
         symbols=np.asarray(symbols[keep]),
+        inputs=inputs,
+        source_rows=np.flatnonzero(keep),
     )
 
 

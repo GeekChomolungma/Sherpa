@@ -1,4 +1,4 @@
-"""具体注册的模型 alpha。MLalpha 研究线（`research/alpha_research/MLalpha/`）按这个模块挑因子。
+"""LightGBM 模型家族（`backend` 默认 = lightgbm）：LgbmV1 – LgbmV4，当前基线是 `LgbmV4`。
 
 每个模型配置一个子类：特征清单（`FeatureSpec`）、模型名（= 模型文件目录名）都写在类属性上。特征清单变了就换
 `version` 或开新的模型名，旧模型文件不能拿新特征推断（`MLAlpha.manifest()` 会校验）。
@@ -10,10 +10,10 @@ import sherpa.alpha.worldquant  # noqa: F401  B 组特征要用世坤因子，�
 
 from sherpa.metrics.tradability import DEFAULT_LOOKBACK, SEASONING_PERIOD
 
-from ...base import register_alpha
-from ...liquidity import LiquidityFilter
-from .alpha import MLAlpha
-from .features import DERIVATIVES_LS, DERIVATIVES_OI, PRICE_VOLUME_EXTRAS, FeatureSpec
+from ....base import register_alpha
+from ....liquidity import LiquidityFilter
+from ..alpha import MLAlpha
+from ..features import DERIVATIVES_LS, DERIVATIVES_OI, PRICE_VOLUME_EXTRAS, FeatureSpec
 
 # B 组第一批：worldquant_101 研究线关卡1 去冗余后的候选并集（关卡2 L0 方案用的那 13 个，2026-10-01 取）。
 # 写死在这里而不是运行时读那份交接文件：世坤研究线重跑后名单会变，特征必须有固定版本。

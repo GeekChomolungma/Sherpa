@@ -59,6 +59,15 @@
 `preprocess.neutralize=false` 的对照模式整套换名：`regime_alpha_profile_without_neutralization.csv`、
 `handoff_without_neutralization/`、`results_without_neutralization/`，不会覆盖标准版本。
 
+**按 run 归档**（`track.json` 的 `"outputs": {"per_run": true}`，MLalpha 开着）：同一条研究线要反复评估不同模型时，上面三样
+产出改放进 `<track>/runs/<run_id>/`，不同模型、不同变体互不覆盖，可以同时跑：
+
+- `run_id` 默认 = 参评因子的 `model_name`（ML 模型，跟 `models/<model_name>/` 对齐）或 `name`，多个用 `+` 连接；
+- 编排脚本 `--alphas a,b` 临时指定这次评估哪些因子（覆盖 `alphas.include`），不用改 track.json；
+- `--variant <名字>` 标记非默认设置的变体：`run_id` 和 ML 模型目录都加 `__<名字>` 后缀。
+
+一次评估几十个因子的研究线（世坤 101 等）不开它，产出照旧直接放在研究线目录下。
+
 ## family 和 track 的区别
 
 - **family**（`worldquant` / `custom` …）：因子**从哪来**，是 sherpa 层的概念，写在因子类上。
@@ -94,6 +103,7 @@
 | `regime.dimensions` | 阶段一条件 IC 切哪些维度，取值见 `sherpa.metrics.regime.REGIME_STATES`；省略 = 全部四个。下游的 state 名单、关卡2 的路由维度都跟着候选集走 |
 | `report.matrix_top_k` / `report.min_abs_t` | 汇总报告每个 state 取前几名、显著性门槛（环境变量 `MIN_ABS_T` 可临时覆盖） |
 | `stages.orthogonalization.mode` / `stages.synthesis.mode` | `run`（默认）或 `passthrough`，见上表 |
+| `outputs.per_run` | 可选，默认 false。true = 产出按 run 归档进 `runs/<run_id>/`（见上一节），配合编排脚本的 `--alphas` / `--variant` |
 | `stages.synthesis.passthrough` | 关卡2 透传时出哪些配方：`singles`（true = 每个候选因子一个单因子配方；整数 N = 按全历史 \|IC_IR\| 取前 N 个）、`equal_weight`（`直通·G0` / `直通·L0`）、`routed`（每个维度一个 `直通·L2-<维度>`） |
 
 **track 不能覆盖的**：时间窗、IC 标签口径（horizon / delay）、大盘锚点、成本，统一在

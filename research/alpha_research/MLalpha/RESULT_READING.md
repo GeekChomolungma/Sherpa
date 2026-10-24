@@ -31,7 +31,7 @@
 ```text
 research/alpha_research/MLalpha/
   models/<模型名>/manifest.json                    每个重训时点的模型、早停轮数、内部验证 IC_IR
-  results_without_neutralization/
+  runs/<run_id>/results_without_neutralization/  一次运行的产出，run_id = 参评模型的 model_name（如 lgbm_v4）
     ml_training/<模型名>_folds.csv                 第 0 步：训练自检（每个重训时点）
     ml_training/<模型名>_oos_summary.csv           第 0 步：拼起来的样本外 RankIC
     report/                                       阶段一体检（按 regime 切片的 IC，诊断用）
@@ -42,7 +42,7 @@ research/alpha_research/MLalpha/
     friction/case_grids/<case>.csv                第 4 步：一个 case 的二维截面
 ```
 
-跑法：`bash research/alpha_research/MLalpha/run_track.sh`（训练是增量的；改了特征或训练配置要先
+跑法：`bash research/alpha_research/MLalpha/run_track.sh --alphas <模型的 qualified_name>`（不写 `--alphas` = 基线 V4；训练是增量的；改了特征或训练配置要先
 `python research/ml_training/run_training.py --track MLalpha --force`）。
 
 ---
@@ -88,7 +88,12 @@ research/alpha_research/MLalpha/
 04 是"横向换交易方式"，06 是"纵向换时间"。一个真正的边际应该在大多数季度为正，而不是一两个季度贡献大部分收益。
 看法：对 04 里表现好的那片组合，看它们的 `positive_quarter_frac`，再看是哪几个季度亏、亏得是否集中。
 
-### 第 3 步：`05_style_attribution.csv` —— 赚的是选币能力还是风格
+### 第 3 步：`05_style_attribution.csv` —— 赚的是选币能力还是风格（**诊断，不做门槛**）
+
+> 2026-10-24 起 05 只用来回答"赚的是什么钱"，**不作为淘汰或换基线的门槛**：主判据是 04 的原始净 Sharpe（`raw_sharpe` 就是 04
+> 里的那个数）和 06。原因：`alpha_sharpe` 把 6 种风格（含 BTC / 全市场方向）能解释的收益全部扣掉，而 beta 倾斜、低波动这类收益
+> 扣费后照样是真金白银，用它做门槛会把这部分收益当成"不算数"；β 还是在同一段上样本内拟合的，不是能交易的对冲。
+> 计算流程和产出列保持不变。
 
 每个 (case, 映射, 调仓频率) × 段一行：吃单净收益对 6 个风格收益做时间序列回归
 `r_t = α + Σ β_j · f_j,t + ε_t`。风格收益是用同一个回测器构造的简单多空组合：
@@ -107,7 +112,7 @@ research/alpha_research/MLalpha/
 | `beta[*]` | 风格暴露。`beta[low_vol]` 明显为正 = 收益有一部分只是"买低波动、卖高波动"，用一条规则就能复制 |
 | `r2` | 风格能解释的方差比例 |
 | `raw_sharpe` | 原始净 Sharpe（同 04 的那个数） |
-| `alpha_sharpe` | **剥离风格后**（`r − Σβ·f`）的 Sharpe = 选币能力的估计 |
+| `alpha_sharpe` | **剥离风格后**（`r − Σβ·f` = α + ε）的 Sharpe = α / std(ε) × √(每年 bar 数)，即相对 6 个风格的信息比率，选币能力的估计 |
 | `alpha_t` | α 的 t 值（普通 OLS，没做自相关修正，偏乐观，只作参考） |
 
 只对 BTC 回归（`beta[btc]` ≈ 0）只排除了"押大盘方向"一种解释，低波动 / 反转这些跟大盘无关的风格要一起看。
@@ -118,8 +123,9 @@ research/alpha_research/MLalpha/
 
 ### 第 5 步：跟基线比
 
-固定同一套网格、同一个起点，跟 §5 的 `LgbmV4` 数字逐项比：04 的两段中位数和 `both_positive_frac`、06 的
-`positive_quarter_frac`、05 的 `alpha_sharpe`。只有这几项一起更好，才算新模型更好。
+固定同一套网格、同一个起点，跟 §5 的 `LgbmV4` 数字逐项比：04 的两段中位数（原始净 Sharpe）和 `both_positive_frac`、06 的
+`positive_quarter_frac`。只有这几项一起更好，才算新模型更好。05 的 `alpha_sharpe` / `beta[*]` 照常列出来对比，用来说明
+新模型的收益来源变了没有（比如更多来自 beta 倾斜或低波动），不参与输赢判定。
 
 ---
 
@@ -132,21 +138,22 @@ research/alpha_research/MLalpha/
 | 扣费后能不能赚钱 | 04 的 `all_taker` 行 | **两段中位数都 > 0，`both_positive_frac` ≥ 0.5** |
 | 成本多敏感 | 04 的 `all_maker` / `stress` 行、02 的 `breakeven_cost_bps` | 保本成本明显高于 8 bps |
 | 时间上稳不稳 | 06 的 `positive_quarter_frac` | 稳健区域的组合 ≥ 0.6 |
-| 是不是选币能力 | 05 的 `alpha_sharpe`、`alpha_t`、`beta[*]` | `alpha_sharpe` 中位数 > 0.5，风格 β 不主导收益 |
-| 能不能进阶段二 | 全部 + 关卡3 红线 | 吃单验证段净 Sharpe ≥ 2.5、换手衰减 < 40%，且上面各项通过，最后 holdout 只跑一次 |
+| 赚的是什么钱（诊断） | 05 的 `alpha_sharpe`、`alpha_t`、`beta[*]`、`r2` | **不设门槛**（2026-10-24 起）：照常报告，用来解释收益来源 |
+| 能不能进阶段二 | 全部 + 关卡3 红线 | 吃单验证段净 Sharpe ≥ 2.5、换手衰减 < 40%，且上面带门槛的各项通过，最后 holdout 只跑一次 |
 
-门槛是 2026-10-05 定的经验值，第一版基线还没全部达到；以后有更多模型可比时再收紧。
+门槛是 2026-10-05 定的经验值，第一版基线还没全部达到；以后有更多模型可比时再收紧。2026-10-24 去掉了 05 `alpha_sharpe` 中位数 > 0.5
+的门槛，判定统一用原始净 Sharpe（04）。
 
 ---
 
 ## 5. 当前基线：`LgbmV4`（2026-10-11 封版，研究起点 2023-01-01，4h）
 
-**之后所有新模型 / 新 alpha 都要在下表各个维度上战胜它。** 配置：去掉 B 组（世坤因子），A 组 12 列 + 多空比 4 + OI 2 + 价量补充 4
-+ C 组 8 列（共 30 列）；持有 6 根、原始收益标签、扩展窗口、18 个种子（`sherpa/alpha/custom/ml/models.py`）。模型文件 `models/lgbm_v4/`，
-结果 `results_without_neutralization__v4/`。
+**之后所有新模型 / 新 alpha 都要在下表的 04 / 06 / 02 各项上战胜它**（05 两行只作收益来源的对照，不参与判定，见 §3 第 3 步）。配置：去掉 B 组（世坤因子），A 组 12 列 + 多空比 4 + OI 2 + 价量补充 4
++ C 组 8 列（共 30 列）；持有 6 根、原始收益标签、扩展窗口、18 个种子（`sherpa/alpha/custom/ml/models/lgbm.py`）。模型文件 `models/lgbm_v4/`，
+结果 `runs/lgbm_v4/`。
 
 V1–V4 横比（同一套数据、研究窗口、训练流程和关卡3 网格，各自纯模式跑完整研究线；细节见
-[`results_v1_v4_comparison/README.md`](results_v1_v4_comparison/README.md)）：
+[`comparisons/v1_v4/README.md`](comparisons/v1_v4/README.md)）：
 
 | 吃单（主口径） | V1 | V2 | V3 | **V4（基线）** |
 | --- | --- | --- | --- | --- |
@@ -154,8 +161,8 @@ V1–V4 横比（同一套数据、研究窗口、训练流程和关卡3 网格�
 | 04 两段都为正 | 0% | 49% | 46% | **69%** |
 | 04 挂单 选 / 验 | −2.10 / 0.44 | 1.12 / 1.37 | 1.19 / 1.14 | **1.72 / 1.27** |
 | 04 压力 选 / 验 | −4.87 / −2.36 | −1.03 / −0.66 | −0.84 / −0.57 | **0.08 / −0.25** |
-| 05 alpha_sharpe 选 / 验 | −3.91 / −1.14 | 0.11 / 0.35 | 0.26 / 0.49 | **0.98 / 0.63** |
-| 05 β[低波动] 选 / 验 | 0.31 / 0.43 | 0.23 / 0.39 | 0.19 / 0.42 | **0.17 / 0.38** |
+| 05 alpha_sharpe 选 / 验（诊断） | −3.91 / −1.14 | 0.11 / 0.35 | 0.26 / 0.49 | 0.98 / 0.63 |
+| 05 β[低波动] 选 / 验（诊断） | 0.31 / 0.43 | 0.23 / 0.39 | 0.19 / 0.42 | 0.17 / 0.38 |
 | 06 赚钱季度占比中位数 | 0.18 | 0.55 | 0.55 | **0.64** |
 | 02 验证段换手 / 根、保本成本（中位数） | 0.30、3.5 bps | 0.21、10.0 | 0.19、11.4 | **0.15、13.0** |
 
@@ -176,9 +183,9 @@ V1–V4 横比（同一套数据、研究窗口、训练流程和关卡3 网格�
    - 一次只改一件事（一组特征 / 一种损失 / 一种模型），多种子集成；比较要同批、同种子组、同窗口
    - 探索的执行层（39 个组合、成本、04/05/06 口径）跟关卡3 完全相同（CASES.md §0.2、§3），summary.csv 的列直接对应 04/05/06
    - 挑配置只看选择段，验证段只用来确认；看中位数和两段都为正，不看最高格
-2. 定型：把结论写成 models.py 里一个新的 MLAlpha 子类（spec + training_overrides），再用 model_case 绑定它在探索里跑一次
-3. 确认（正式）：track.json 的 alphas.include 只放新模型，run_track.sh 跑完整研究线；结果应跟第 2 步的探索逐位一致。
-   按本文 §3 读 04 → 06 → 05 → 02，跟 §5 的 V4 基线逐项比
+2. 定型：把结论写成 models/ 里一个新的 MLAlpha 子类（spec + training_overrides），再用 model_case 绑定它在探索里跑一次
+3. 确认（正式）：`run_track.sh --alphas <新模型>` 跑完整研究线（产出在 `runs/<model_name>/`）；结果应跟第 2 步的探索逐位一致。
+   按本文 §3 读 04 → 06 → 05 → 02，跟 §5 的 V4 基线逐项比（05 只诊断）
 4. 全部定下来之后，holdout 只跑一次
 ```
 

@@ -17,6 +17,11 @@ dev = [
 # 机器学习 alpha（sherpa/alpha/custom/ml/）：推断和 research/ml_training/ 的训练都要。`pip install -e .[ml]`
 ml = [
     "lightgbm>=4.0",
+    "xgboost>=2.0",
+]
+# 神经网络后端（LSTM，sherpa/alpha/custom/ml/nets.py）：体积大，单独装。`pip install -e .[ml,nn]`
+nn = [
+    "torch>=2.1",
 ]
 
 [build-system]

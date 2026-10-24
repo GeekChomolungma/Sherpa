@@ -4,7 +4,7 @@
 > 只看方向，不跟 `../CASES.md`、`../RESULT_READING.md` 和关卡3 的数字直接比；对应的探索产出没有保留。当前口径的正式结果见 §5。
 
 > 目标：V4 去掉 B 组（世坤 L0 并集），只用 A + C，定 A 组要加哪些可选特征；同时评估研究起点能不能从 2023-01-01 往后挪。
-> 结论做成 `LgbmV4`（`sherpa/alpha/custom/ml/models.py`），2026-10-11 封版为基线；holdout 没碰。
+> 结论做成 `LgbmV4`（`sherpa/alpha/custom/ml/models/lgbm.py`），2026-10-11 封版为基线；holdout 没碰。
 > case 定义在 `research/ml_training/run_experiments.py` 第七批（`w_*` / `v4_*`：2024 窗口；`v4h_*`：2023 窗口）。
 
 ---

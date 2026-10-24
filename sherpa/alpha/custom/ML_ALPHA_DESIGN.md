@@ -124,14 +124,17 @@ sherpa/alpha/custom/ml/                 机器学习 alpha 主题（研究线按
     features.py     FeatureSpec + build_features(panel, spec) -> 长表；训练和推断共用，只依赖 pandas/numpy
     manifest.py     模型清单的读写与"按时间取模型"（纯 JSON，不依赖 ML 库）
     alpha.py        MLAlpha(CustomAlpha)：读清单、按行选模型、推断；lightgbm/torch 在加载模型时才 import
-    models.py       具体注册的模型 alpha，比如 @register_alpha class LgbmV1(MLAlpha)
+    backends/       （2026-10-24）模型架构的推断，一种架构一个文件：lgb.py / xgb.py / lstm.py（LSTM 的网络和预处理也在里面），
+                    共用的 ModelInputs（表格行 / 历史序列）和 Backend 接口在 base.py
+    models/         具体注册的模型 alpha，一个模型家族一个文件，比如 models/lgbm.py 的 @register_alpha class LgbmV1(MLAlpha)
 
 research/ml_training/                   离线训练（新的研究子目录，跟各关卡平级）
     run_training.py   按研究线配置做滚动训练，写模型文件和清单，输出每个重训时点的样本外 RankIC
     config.py         重训频率、训练窗口、损失、超参数等
     dataset.py        标签 + 训练集构建（只在训练时用）+ 滚动时间表
     objective.py      IC_IR 损失（LightGBM 自定义损失和早停指标）
-    trainer.py        单个重训时点的训练 / 评估
+    trainer.py        单个重训时点训练的统一入口（按后端分派）/ 评估
+    trainers/         （2026-10-24）各后端的训练实现：lgb.py / xgb.py / lstm.py
     data.py           取数
 ```
 
@@ -352,7 +355,7 @@ latest(panel):  只用"valid_from <= 最后一根 bar 时间"的最新模型推�
 | 问题 | 决定 | 落在哪 |
 | --- | --- | --- |
 | 重训频率 / 训练窗口 | 每 20 天重训；最短训练 180 天；2026-10-05 起滑动 60 天窗口，验证段固定最近 20 天，早停后整窗重训 | `research/ml_training/config.py` |
-| 特征 | A、C 组全上；B 组用 worldquant_101 研究线关卡1 后的候选并集（13 个，关卡2 L0 用的那套），不放 custom 因子 | `sherpa/alpha/custom/ml/models.py` 的 `WORLDQUANT_L0_UNION` |
+| 特征 | A、C 组全上；B 组用 worldquant_101 研究线关卡1 后的候选并集（13 个，关卡2 L0 用的那套），不放 custom 因子 | `sherpa/alpha/custom/ml/models/lgbm.py` 的 `WORLDQUANT_L0_UNION` |
 | 标签中性化 | 留开关，默认不做；研究线外层也不中性化（`neutralize: false`） | `config.NEUTRALIZE_LABEL`、`MLalpha/track.json` |
 | 依赖 / 模型文件 | `pip install -e .[ml]`（lightgbm）；模型文件在 `research/alpha_research/MLalpha/models/<模型名>/`，不进 git，`manifest.json` 进 | `pyproject.toml`、`.gitignore` |
 | 损失 | 只看 IC_IR，不加换手惩罚；首尾加权；**计算损失前先套截面掩码**，直接用研究线的 `tradable_mask`，MLalpha 研究线设成成交额截面前一半（`min_percentile: 0.5`），流动性差的币不参与 | `objective.py`、`MLalpha/track.json` |

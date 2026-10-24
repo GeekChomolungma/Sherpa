@@ -2,7 +2,7 @@
 #
 # 调用方在 source 之前设好 TRACK_DIR（研究线目录的绝对路径），可选设 TRACK_WITH_FLAGS（空格分隔，这条
 # 研究线支持的可选步骤开关名，比如 "calibration"，对应命令行 --with-calibration）。source 之后：
-#   track_init "$@"              解析 --from-step N / --dry-run / --with-<名字> / -h，设好 PYTHONPATH 等环境
+#   track_init "$@"              解析 --from-step N / --dry-run / --with-<名字> / --alphas / --variant / -h，设好 PYTHONPATH 等环境
 #   with_flag <名字>             命令行给了 --with-<名字> 就返回真
 #   require_ch_host 1 3 ...      列出要连 ClickHouse 的步骤号，会跑到其中任何一步却没设 CH_HOST 就提前退出
 #   gate_db_steps <首个步骤号>   run_gate_stages 里要连库的步骤号（关卡1/2 透传时不连库），喂给 require_ch_host
@@ -14,6 +14,12 @@
 #
 # 提供的变量：ROOT（仓库根目录）、ROOT_NATIVE / TRACK_DIR_NATIVE（给 Windows python 用的原生路径）、
 # PIPELINE_DIR、TRACK（研究线 id）、PYTHON。
+#
+# 按 run 归档的研究线（track.json 的 outputs.per_run = true，比如 MLalpha）支持两个开关，各阶段的 python 进程通过
+# 环境变量读到同一份（research/_shared/track.py）：
+#   --alphas a,b      这次评估哪些因子（qualified_name，逗号分隔），覆盖 track.json 的 alphas.include -> SHERPA_TRACK_ALPHAS
+#   --variant <名字>  非默认设置的变体（比如临时改了研究起点）：产出目录、ML 模型目录都加 __<名字> 后缀 -> SHERPA_RUN_VARIANT
+# 产出在 <研究线>/runs/<run_id>/，run_id 默认 = 参评模型的 model_name，所以不同模型 / 变体可以同时跑、互不覆盖。
 
 set -Eeuo pipefail
 
@@ -54,6 +60,8 @@ track_init() {
     case "$1" in
       --dry-run) DRY=1 ;;
       --from-step) shift; FROM="${1:?--from-step 需要一个步骤编号}" ;;
+      --alphas) shift; export SHERPA_TRACK_ALPHAS="${1:?--alphas 需要逗号分隔的 qualified_name}" ;;
+      --variant) shift; export SHERPA_RUN_VARIANT="${1:?--variant 需要一个名字}" ;;
       --with-*)
         local name="${1#--with-}"
         case " $TRACK_WITH_FLAGS " in
@@ -69,6 +77,11 @@ track_init() {
   echo "[研究线] $TRACK（$TRACK_DIR）"
   echo "[研究配置] $(tr -d ' \r\n' < "$ROOT/research/research_config.json")"
   echo "[关卡模式] 关卡1=$(track_get mode.orthogonalization)，关卡2=$(track_get mode.synthesis)，关卡3=run；中性化=$(track_get neutralize)"
+  local run_id
+  run_id="$(track_get run_id)"
+  if [ -n "$run_id" ]; then
+    echo "[本次 run] $run_id（参评：${SHERPA_TRACK_ALPHAS:-track.json 的 alphas.include}${SHERPA_RUN_VARIANT:+，变体 $SHERPA_RUN_VARIANT}）-> $(track_get output_dir)"
+  fi
 }
 
 _track_on_exit() {

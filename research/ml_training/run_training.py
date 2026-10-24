@@ -37,7 +37,8 @@ import numpy as np
 import pandas as pd
 
 from sherpa.alpha import registry
-from sherpa.alpha.custom.ml.alpha import MLAlpha, load_booster
+from sherpa.alpha.custom.ml.alpha import MLAlpha
+from sherpa.alpha.custom.ml.backends import get_backend, predict_ensemble
 from sherpa.alpha.custom.ml.manifest import Manifest, ModelEntry, fold_dir_name, format_ts, load_manifest, save_manifest
 
 import config
@@ -87,7 +88,7 @@ def _check_liquidity(track: Track, alpha: MLAlpha) -> None:
             f"{alpha.qualified_name} 的流动性范围跟研究线 {track.id} 的评估掩码不一致：\n"
             f"  模型 spec.liquidity             = {alpha.spec.liquidity}\n"
             f"  track.json 的 tradable_mask 换算 = {evaluation}\n"
-            "两边改成一样再训练（模型在 sherpa/alpha/custom/ml/models.py，研究线在 track.json 的 preprocess.tradable_mask）"
+            "两边改成一样再训练（模型在 sherpa/alpha/custom/ml/models/，研究线在 track.json 的 preprocess.tradable_mask）"
         )
 
 
@@ -168,6 +169,8 @@ def train_alpha(
         result = train_fold(
             frame, fit, valid, alpha.model_dir / rel,
             full=rows if cfg.refit_on_full_window else None,
+            backend=cfg.backend,
+            backend_params=cfg.backend_params,
             objective=cfg.objective,
             seeds=cfg.seeds,
             lgb_params=cfg.lgb_params,
@@ -200,6 +203,7 @@ def evaluate(
     """清单里每个模型只预测它服务的那段时间（样本外），逐期 RankIC。"""
     entries = manifest.sorted_entries()
     assigned = manifest.assign(frame.times)
+    backend = get_backend(manifest.backend)
     pred = np.full(len(frame), np.nan)
     fold_rows = []
     for i, entry in enumerate(entries):
@@ -208,7 +212,7 @@ def evaluate(
                "best_iterations": "|".join(map(str, entry.best_iterations)),
                "inner_valid_ic_ir": float(np.mean(entry.metrics.get("inner_valid_ic_ir_by_seed", [np.nan])))}
         if rows.any():
-            pred[rows] = np.mean([load_booster(alpha.model_dir / f).predict(frame.features[rows]) for f in entry.files], axis=0)
+            pred[rows] = predict_ensemble(backend, alpha.model_dir, entry.files, frame.inputs, frame.source_rows[rows])
             try:
                 row.update(ic_stats(spearman_by_period(pred[rows], frame.label[rows], frame.times[rows],
                                                        min_period_rows=cfg.min_period_rows)))
@@ -258,7 +262,7 @@ def main(argv: list[str] | None = None) -> None:
         print(f"\n== {alpha.qualified_name}：{len(alpha.spec.feature_names)} 个特征，模型目录 {alpha.model_dir} ==")
         print(f"  流动性范围（特征排名 + 损失掩码 + 推断，跟研究线评估掩码已校验一致）：{alpha.spec.liquidity}")
         cfg = configs[alpha.qualified_name]
-        print(f"  训练配置（默认值 + 覆盖 {dict(alpha.training_overrides)}）：标签持有 {_label_horizon(cfg)} 根、{cfg.label_transform}；"
+        print(f"  训练配置（默认值 + 覆盖 {dict(alpha.training_overrides)}）：后端 {cfg.backend}；标签持有 {_label_horizon(cfg)} 根、{cfg.label_transform}；"
               f"目标 {cfg.objective}；窗口 {cfg.train_window_bars or '扩展'}；种子 {len(cfg.seeds)} 个；"
               f"首尾加权 {cfg.tail_quantile:.0%} × {cfg.tail_weight}；标签中性化 {cfg.neutralize_label}")
         started = time.monotonic()

@@ -4,7 +4,7 @@
 > 只看方向，不跟 `../CASES.md`、`../RESULT_READING.md` 和关卡3 的数字直接比；对应的探索产出没有保留。
 
 > 研究起点 **2023-01-01**（`research_config.json`），选择段 2023-01-01 ~ 2024-06-30、验证段 2024-06-30 ~ 2026-03-15，
-> holdout 没碰。结论已做成 `LgbmV3`（`sherpa/alpha/custom/ml/models.py`）；特征公式在 `sherpa/alpha/custom/ml/features.py`
+> holdout 没碰。结论已做成 `LgbmV3`（`sherpa/alpha/custom/ml/models/lgbm.py`）；特征公式在 `sherpa/alpha/custom/ml/features.py`
 > 的 `DERIVATIVE_FEATURES`。2026-10-10 正式流水线跑完 V3，结果见 §5：**验证段明显提升，选择段持平**——没有探索实验里那么干净。
 
 ---

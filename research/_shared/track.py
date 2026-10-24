@@ -8,6 +8,19 @@ family（worldquant / custom …）回答"因子从哪来"，是 sherpa 层的�
 研究线目录下：`results/<阶段>/`（各阶段的明细产出）和 `handoff/<阶段>.json`（阶段之间的交接文件，见
 `handoff.py`）。各关卡目录只放代码，不再放某条研究线的结果，不同研究线互不覆盖。
 
+**按 run 归档**（`track.json` 的 `"outputs": {"per_run": true}`，MLalpha 用）：同一条研究线反复评估不同模型时，
+每次评估（run）的产出放进 `runs/<run_id>/`，里面还是 `regime_alpha_profile*.csv` / `results*/` / `handoff*/` 三样，
+不同模型、不同变体互不覆盖：
+
+- `run_id` 默认由参评的因子自动得出：每个因子取 `model_name`（ML 模型，跟 `models/<model_name>/` 对齐）或 `name`，
+  多个用 `+` 连接；
+- 环境变量 `SHERPA_TRACK_ALPHAS`（逗号分隔的 qualified_name，编排脚本的 `--alphas`）临时覆盖 `alphas.include`，
+  不用为了换模型去改 track.json；
+- 环境变量 `SHERPA_RUN_VARIANT`（编排脚本的 `--variant`）标记非默认设置的变体：`run_id` 加 `__<variant>` 后缀，
+  ML 模型的模型目录也加同一个后缀（`sherpa.alpha.custom.ml.alpha.MLAlpha.model_dir`），变体训练的模型不会覆盖正式模型。
+
+没开 per_run 的研究线（一次评估几十个因子的世坤 101 等）产出直接放在研究线目录下，跟以前一样。
+
 跟 `research_config.json` 的分工：时间窗（window）、IC 标签口径（label）、大盘锚点（market）、成本
 （costs）是**全局**的，track 不能覆盖——不同研究线的结论要能横向比较，这几项必须一致。
 
@@ -16,14 +29,16 @@ family（worldquant / custom …）回答"因子从哪来"，是 sherpa 层的�
 
 也可以当命令行工具用，给编排脚本读字段：
     python track.py <track_id 或目录> <字段>
-字段：id / dir / profile_path / results_dir / handoff_dir / neutralize / matrix_top_k / min_abs_t /
-      mode.orthogonalization / mode.synthesis
+字段：id / dir / output_dir / run_id / profile_path / results_dir / handoff_dir / neutralize / matrix_top_k /
+      min_abs_t / mode.orthogonalization / mode.synthesis
 """
 
 from __future__ import annotations
 
 import importlib
 import json
+import os
+import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -42,6 +57,12 @@ OPTIONAL_GATES = ("orthogonalization", "synthesis")
 # 关卡2 透传时，把候选集直接变成哪些配方（`factor_synthesis/passthrough.py`）。
 DEFAULT_SYNTHESIS_PASSTHROUGH: dict[str, Any] = {"singles": True, "equal_weight": True, "routed": True}
 
+# 按 run 归档时的两个运行期开关（编排脚本 `--alphas` / `--variant` 设置，各阶段的 python 进程都读同一份）。
+ALPHAS_ENV = "SHERPA_TRACK_ALPHAS"
+VARIANT_ENV = "SHERPA_RUN_VARIANT"  # 同名常量在 sherpa/alpha/custom/ml/alpha.py，两边要一致
+RUNS_DIR = "runs"
+_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]*$")
+
 
 @dataclass(frozen=True)
 class Track:
@@ -58,6 +79,8 @@ class Track:
     min_abs_t: float
     gate_modes: Mapping[str, str] = field(default_factory=dict)
     synthesis_passthrough: Mapping[str, Any] = field(default_factory=dict)
+    per_run: bool = False
+    run_variant: str = ""
 
     @property
     def _variant(self) -> str:
@@ -65,17 +88,33 @@ class Track:
         return "" if self.neutralize else "_without_neutralization"
 
     @property
+    def run_id(self) -> str:
+        """这次评估的名字（只在 per_run 研究线上有意义）：参评因子的 `model_name` / `name`，加 `__<变体>` 后缀。"""
+        if not self.per_run:
+            return ""
+        labels = []
+        for name in self.select_alphas():
+            cls = registry.get(name)
+            labels.append(str(getattr(cls, "model_name", None) or cls.name))
+        return "+".join(labels) + (f"__{self.run_variant}" if self.run_variant else "")
+
+    @property
+    def output_dir(self) -> Path:
+        """整条流水线产出的根目录：per_run 研究线是 `runs/<run_id>/`，否则就是研究线目录本身。"""
+        return self.dir / RUNS_DIR / self.run_id if self.per_run else self.dir
+
+    @property
     def profile_path(self) -> Path:
         """阶段一长表。"""
-        return self.dir / f"regime_alpha_profile{self._variant}.csv"
+        return self.output_dir / f"regime_alpha_profile{self._variant}.csv"
 
     @property
     def results_dir(self) -> Path:
-        return self.dir / f"results{self._variant}"
+        return self.output_dir / f"results{self._variant}"
 
     @property
     def handoff_dir(self) -> Path:
-        return self.dir / f"handoff{self._variant}"
+        return self.output_dir / f"handoff{self._variant}"
 
     def stage_results_dir(self, stage: str) -> Path:
         """某个阶段（report / orthogonalization / synthesis / friction）的明细产出目录。"""
@@ -149,6 +188,19 @@ def load_track(name_or_path: Union[str, Path]) -> Track:
     include = alphas.get("include")
     if include is not None and (isinstance(include, str) or not include):
         raise SystemExit(f"track {track_id!r}：alphas.include 必须是非空的 qualified_name 列表（不限制就别写）")
+    override = os.environ.get(ALPHAS_ENV, "").strip()
+    if override:
+        include = [name.strip() for name in override.split(",") if name.strip()]
+
+    per_run = bool(raw.get("outputs", {}).get("per_run", False))
+    variant = os.environ.get(VARIANT_ENV, "").strip()
+    if variant and not per_run:
+        raise SystemExit(
+            f"track {track_id!r} 没有开 outputs.per_run，{VARIANT_ENV}={variant!r}（--variant）会让产出覆盖默认结果；"
+            "要分开归档就在 track.json 里加 \"outputs\": {\"per_run\": true}"
+        )
+    if variant and not _NAME_PATTERN.match(variant):
+        raise SystemExit(f"{VARIANT_ENV}={variant!r} 只能用字母、数字和 _ . + -")
 
     preprocess = raw.get("preprocess", {})
     tradable = preprocess.get("tradable_mask", True)
@@ -190,11 +242,14 @@ def load_track(name_or_path: Union[str, Path]) -> Track:
         min_abs_t=float(report.get("min_abs_t", 3.0)),
         gate_modes=gate_modes,
         synthesis_passthrough=synthesis_passthrough,
+        per_run=per_run,
+        run_variant=variant,
     )
 
 
 _CLI_FIELDS = {
-    "id", "dir", "profile_path", "results_dir", "handoff_dir", "neutralize", "matrix_top_k", "min_abs_t",
+    "id", "dir", "output_dir", "run_id", "profile_path", "results_dir", "handoff_dir", "neutralize", "matrix_top_k",
+    "min_abs_t",
 }
 
 

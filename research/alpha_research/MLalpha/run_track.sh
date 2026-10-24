@@ -1,23 +1,28 @@
 #!/usr/bin/env bash
 # MLalpha 研究线编排：机器学习模型 alpha（sherpa/alpha/custom/ml/，设计见 sherpa/alpha/custom/ML_ALPHA_DESIGN.md）。
-# 研究线配置见同目录 track.json；模型文件在 models/<模型名>/（不进 git，manifest.json 进），其余产出在 results*/ 和 handoff*/ 下。
+# 研究线配置见同目录 track.json；模型文件在 models/<模型名>/（不进 git，manifest.json 进），其余产出按 run 归档在
+# runs/<run_id>/ 下（results*/、handoff*/、阶段一长表），run_id 默认 = 参评模型的 model_name，不同模型互不覆盖。
 #
 # 需要先设好 ClickHouse 连接环境变量（只有 CH_HOST 是必填），用 Git Bash 跑：
 #   bash research/alpha_research/MLalpha/run_track.sh [参数]
 #
 # 流程（各阶段只靠 handoff/*.json 交接；本线关卡1/2 都透传，模型打分直接变成权重 +1 的单因子配方）：
-#   0  滚动训练                        -> models/<模型名>/ + results/ml_training/（每个重训时点的样本外 RankIC）
-#   1  阶段一 · Regime 条件 IC 体检   -> regime_alpha_profile.csv（这里的 regime 切片只做诊断，不决定方向）
-#   2  汇总报告                        -> results/report/ + handoff/report.json
+#   0  滚动训练                        -> models/<模型名>/ + runs/<run_id>/results/ml_training/（每个重训时点的样本外 RankIC）
+#   1  阶段一 · Regime 条件 IC 体检   -> runs/<run_id>/regime_alpha_profile.csv（这里的 regime 切片只做诊断，不决定方向）
+#   2  汇总报告                        -> runs/<run_id>/results/report/ + handoff/report.json
 #   3  关卡1 · 正交化（透传）
 #   4  关卡2 · 合成（透传）
-#   5  关卡3 · 扣费回测                -> results/friction/
+#   5  关卡3 · 扣费回测                -> runs/<run_id>/results/friction/
 #
 # 本线 neutralize=false（标签默认不中性化，外层也不做），所以 results / handoff 目录都带 _without_neutralization 后缀。
 # 步骤 0 是增量的：已经训练好的重训时点直接跳过；特征清单或训练配置（research/ml_training/config.py）变了会拒绝续训，
 # 要全部重训就单独跑 `python research/ml_training/run_training.py --track MLalpha --force`。
 #
 # 参数：
+#   --alphas a,b     这次评估哪些模型（qualified_name，逗号分隔），不写 = track.json 的 alphas.include（当前基线）
+#                    例：--alphas custom.ml_xgb_v5   -> runs/xgb_v5/，不用改 track.json，可以跟别的模型同时跑
+#   --variant <名字> 非默认设置的变体（比如临时改了 research_config.json 的研究起点）：run_id 和模型目录都加 __<名字>
+#                    例：--variant start2024         -> runs/lgbm_v4__start2024/、models/lgbm_v4__start2024/
 #   --from-step N    从第 N 步开始（比如模型已经训练好，--from-step 1 直接评估）
 #   --dry-run        只打印每一步要执行的命令，不真的跑
 #   -h | --help      显示本说明

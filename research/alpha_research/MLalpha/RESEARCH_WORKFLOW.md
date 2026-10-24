@@ -14,7 +14,7 @@
 | --- | --- | --- |
 | 是什么 | 用什么特征 / 标签 / 窗口 / 种子训练，产出一张 (T, N) 打分表 | 同一张打分 → 39 个组合（13 种"选几个、何时平仓" × 3 种调仓间隔）× 4 种成本 × 2 段 |
 | 探索实验 | **变**：每个 case 一个模型变体 | 跟关卡3 完全相同 |
-| 正式工作流（关卡3） | **固定**：写死在 `models.py` 的模型类里 | 同上 |
+| 正式工作流（关卡3） | **固定**：写死在 `models/` 里的模型类上 | 同上 |
 
 所以：**探索负责找模型，正式工作流负责给选定的模型做最终鉴定**，两边看同一套 04 / 05 / 06 指标，同一个配置两边结果逐位相同。
 
@@ -32,13 +32,13 @@
 ① 探索      research/ml_training/run_experiments.py      加 case，跟基线 m_v4 同批比较
   │            （赢了？两组种子都成立？）
   ▼
-② 定型      sherpa/alpha/custom/ml/models.py             写成新模型类 LgbmV5；探索里用 model_case 跑一次
+② 定型      sherpa/alpha/custom/ml/models/<家族>.py    写成新模型类（如 XgbV5）；探索里用 model_case 跑一次
   │
   ▼
-③ 正式      research/alpha_research/MLalpha/run_track.sh  track.json 只放 V5，跑完整研究线
+③ 正式      run_track.sh --alphas custom.ml_xgb_v5        跑完整研究线，产出自动进 runs/xgb_v5/
   │            （结果跟 ② 逐位一致？）
   ▼
-④ 归档      results_…__v5 / handoff_…__v5 / regime_…__v5   复制通用目录，恢复 track.json 为基线
+④ 归档      runs/<model_name>/ 已经按模型分开，不用复制改名；关键数字写进文档
   │
   ▼
 ⑤ 比基线    04 → 06 → 05 → 02，跟 RESULT_READING §5 的 V4 逐项比
@@ -71,7 +71,8 @@ python research/ml_training/run_experiments.py --cases m_v4,x_new_feat,x_new_fea
 
 - **一次只改一件事**（一组特征 / 一种损失 / 一个训练参数）；
 - **同批、同种子组、同研究窗口**才可比；
-- **只用选择段挑**（`taker_sel`、`alpha_sel`），验证段（`taker_val`）只确认；看中位数和 `taker_both_pos`，不看最高格；
+- **只用选择段挑**（`taker_sel`），验证段（`taker_val`）只确认；看中位数和 `taker_both_pos`，不看最高格；`alpha_sel` / `alpha_val`
+  （05 剥离风格后的 Sharpe）只看收益来源，不参与挑选（`RESULT_READING.md` §3 第 3 步）；
 - **差距小于 ±0.15–0.2 不算赢**（同配置只换训练随机性就会动这么多），结论要两组不重叠的种子都成立。
 
 新特征先写进 `sherpa/alpha/custom/ml/features.py` 的 `EXTRA_SYMBOL_FEATURES`（可选项，默认不带，不影响已有模型的指纹），要有
@@ -79,37 +80,50 @@ point-in-time 单测。
 
 ### ② 定型：写成模型类
 
-在 `sherpa/alpha/custom/ml/models.py` 加一个 `MLAlpha` 子类（照 `LgbmV4` 抄）：`name` / `model_name` / `spec`（特征清单、流动性范围）/
-`training_overrides`（训练配置）。**配置只写在类属性上**——正式工作流按名字无参实例化它。
+在 `sherpa/alpha/custom/ml/models/` 下对应家族的文件里加一个 `MLAlpha` 子类（照 `models/lgbm.py` 的 `LgbmV4` 抄；新家族新建一个文件，在 `models/__init__.py` 里 import）：`name` / `model_name` / `spec`（特征清单、流动性范围）/
+`training_overrides`（训练配置，含模型架构 `backend`：`lightgbm` / `xgboost` / `lstm`，见 `research/ml_training/README.md` §8.1）。
+**配置只写在类属性上**——正式工作流按名字无参实例化它。只换架构、不换特征时 `spec` 直接复用 `LgbmV4.spec`，`model_name` 换一个新的。
 
 然后在探索里用 `model_case("m_v5", "...", "LgbmV5")` 再跑一次。这个 case 跟正式工作流里的 V5 是同一个模型。
 
 ### ③ 正式工作流：纯模式跑完整研究线
 
 ```bash
-# track.json 的 alphas.include 改成 ["custom.ml_lgbm_v5"]（只评估这一个模型，关卡2 只透传单因子）
-bash research/alpha_research/MLalpha/run_track.sh --dry-run    # 先看要跑哪些步骤
-CH_HOST=... CH_PASSWORD=... bash research/alpha_research/MLalpha/run_track.sh
+# --alphas 指定这次只评估新模型（关卡2 只透传单因子），不用改 track.json；不写 = track.json 的 include（当前基线 V4）
+bash research/alpha_research/MLalpha/run_track.sh --alphas custom.ml_xgb_v5 --dry-run    # 先看要跑哪些步骤、产出去哪
+CH_HOST=... CH_PASSWORD=... bash research/alpha_research/MLalpha/run_track.sh --alphas custom.ml_xgb_v5
 ```
 
-依次跑：步骤 0 训练（`models/lgbm_v5/`）→ 阶段一 Regime 体检 → 汇总报告 → 关卡1 / 2 透传 → 关卡3 扣费回测。约 40–50 分钟（18 种子）。
+不同模型的 run 互不覆盖，可以开几个终端同时跑（比如 XGBoost 和 LSTM 各一个）。
+
+依次跑：步骤 0 训练（`models/xgb_v5/`）→ 阶段一 Regime 体检 → 汇总报告 → 关卡1 / 2 透传 → 关卡3 扣费回测。约 40–50 分钟（18 种子）。
 
 **核对**：关卡3 的 `04_robustness.csv` 应该跟 ② 里 `m_v5` 的 `robustness.csv` 逐位相同。对不上说明某个环节口径不一致，先查清楚再往下走。
 
 ### ④ 归档
 
-工作流总是写到通用目录，跑完复制一份加后缀，再把 `track.json` 的 `include` 恢复成当前基线：
+2026-10-24 起不用手动归档：MLalpha 研究线按 run 归档（`track.json` 的 `outputs.per_run`），每次运行的三样产出直接写进
+`runs/<run_id>/`，`run_id` = 参评模型的 `model_name`：
 
-| 形式 | 含义 |
-| --- | --- |
-| 不带后缀（`results_without_neutralization/` 等） | 当前基线 |
-| `__v{N}` | 模型 VN，纯模式，默认研究窗口 |
-| `__v{N}_<改了什么>`（如 `__v4_start2024`） | 非默认设置的变体，后缀写明改动 |
-| `models/lgbm_v{N}/`、`models/lgbm_v{N}__<改了什么>/` | 模型文件，同上 |
+```text
+MLalpha/
+  models/<model_name>/                       模型文件（不进 git，manifest.json 进）
+  runs/<run_id>/                             一次正式运行的全部产出
+    regime_alpha_profile_without_neutralization.csv    阶段一长表
+    handoff_without_neutralization/                    report / orthogonalization / synthesis.json
+    results_without_neutralization/                    ml_training/ report/ friction/
+  comparisons/<主题>/                        跨 run 的横比文档（v1_v4、v4_start）
+  experiments/<case>/                        探索实验（本来就按 case 分开）
+```
 
-一次运行的三样产出共用一个后缀：`results_without_neutralization`、`handoff_without_neutralization`、
-`regime_alpha_profile_without_neutralization.csv`。git 里只提交其中的 md / json 和 `manifest.json`；04–06 的 CSV、模型文件只留本地，
-关键数字写进文档。
+| run 名 | 含义 | 怎么跑出来 |
+| --- | --- | --- |
+| `lgbm_v4`（当前基线）、`lgbm_v1` … | 模型纯模式、默认研究窗口 | `--alphas custom.ml_lgbm_v4`（或不写，用 track.json 的 include） |
+| `<model_name>__<变体>`（如 `lgbm_v4__start2024`） | 非默认设置的变体（比如临时改了研究起点），后缀写明改了什么 | 再加 `--variant start2024`；模型文件也自动进 `models/lgbm_v4__start2024/`，不会覆盖正式模型 |
+| `a+b` | 一次评估多个模型（关卡2 透传出的等权等配方） | `--alphas custom.ml_a,custom.ml_b` |
+
+哪个 run 是基线写在 `RESULT_READING.md` §5，不再靠"不带后缀的目录"表示。git 里只提交其中的 md / json 和 `manifest.json`；
+04–06 的 CSV、模型文件只留本地，关键数字写进文档。
 
 ### ⑤ 跟基线比
 
@@ -119,12 +133,12 @@ CH_HOST=... CH_PASSWORD=... bash research/alpha_research/MLalpha/run_track.sh
 | --- | --- | --- | --- |
 | 1 | `04_robustness.csv` | 吃单两段中位数、两段都为正 | 0.88 / 0.49，69% |
 | 2 | `06_quarterly.csv` | 赚钱季度占比 | 0.64 |
-| 3 | `05_style_attribution.csv` | 剥离风格后的 alpha_sharpe、低波动暴露 | 0.98 / 0.63；β[低波动] 0.17 / 0.38 |
+| 3 | `05_style_attribution.csv` | **诊断，不判输赢**：剥离风格后的 alpha_sharpe、各风格 β，看收益来源有没有变 | 0.98 / 0.63；β[低波动] 0.17 / 0.38 |
 | 4 | `02_validation_base_cost.csv` | 具体组合、换手、保本成本 | 换手 0.15 / 根，保本 13.0 bps |
 
 ### ⑥ 换基线 / holdout
 
-各维度都赢（且超过随机波动）才换基线：更新 `RESULT_READING.md` §5、通用目录换成新模型。关卡3 红线（吃单验证段净 Sharpe ≥ 2.5、
+04 / 06 / 02 各项都赢（且超过随机波动）才换基线，05 不参与判定：更新 `RESULT_READING.md` §5（基线指向新模型的 `runs/<model_name>/`），`track.json` 的 `alphas.include` 改成新模型（不写 `--alphas` 时默认跑基线）。关卡3 红线（吃单验证段净 Sharpe ≥ 2.5、
 换手衰减 < 40%）是"能不能进下一阶段"的门槛，目前没有模型过。研究结论全部定下来之后，holdout 只跑一次。
 
 ---

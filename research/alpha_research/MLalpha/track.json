@@ -6,6 +6,9 @@
     "family": "custom",
     "include": ["custom.ml_lgbm_v4"]
   },
+  "outputs": {
+    "per_run": true
+  },
   "preprocess": {
     "tradable_mask": {"min_percentile": 0.5, "min_quote_volume": 0, "min_trades_count": 0},
     "neutralize": false

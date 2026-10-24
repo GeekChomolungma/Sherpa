@@ -61,7 +61,7 @@ bash research/alpha_research/MLalpha/run_track.sh --from-step 1
 - `model_name`：模型文件放在 `research/alpha_research/MLalpha/models/<model_name>/`。
 
 研究流水线按名字无参创建 alpha，所以模型配置只能写在类属性上，不能靠构造参数。想换特征或另起一个模型，就在
-`models.py` 里再注册一个子类。
+`models/` 里再注册一个子类。
 
 ### ② 取数
 
@@ -70,7 +70,7 @@ bash research/alpha_research/MLalpha/run_track.sh --from-step 1
 
 ### ③ 流动性范围（损失掩码）：只有一个来源，`spec.liquidity`
 
-流动性范围写在模型的 `FeatureSpec.liquidity` 上（`models.py`，`LiquidityFilter`，门槛参数同 `tradable_mask`）。LgbmV1
+流动性范围写在模型的 `FeatureSpec.liquidity` 上（`models/lgbm.py`，`LiquidityFilter`，门槛参数同 `tradable_mask`）。LgbmV1
 设成：滚动 120 根成交额中位数排在截面前一半、不设绝对地板、上线满 20 根。流动性差的币做 Last-K 实际成交不了，不该
 影响模型。这一份范围在三处共用：
 
@@ -165,7 +165,7 @@ main()                                        run_training.py
  │    └─ 每个还没训练的重训时点：
  │         rows_between                       dataset.py：取 τ − 2 根 bar 及以前的训练行（purge）
  │         split_inner_validation             dataset.py：拟合段 / 内部验证段（最近 20 天），中间隔 2 根 bar
- │         train_fold                         trainer.py：每个种子 ① 拟合段上 lgb.train + 早停 → 轮数 k
+ │         train_fold                         trainer.py → trainers/lgb.py：每个种子 ① 拟合段上 lgb.train + 早停 → 轮数 k
  │                                                        ② 整个窗口 lgb.train k 轮 → 存模型文件（损失 = objective.ICIRObjective）
  │         save_manifest                      sherpa/alpha/custom/ml/manifest.py：追加一条，立即落盘
  └─ evaluate                                  run_training.py：每个模型预测它负责的 20 天 → 逐期 RankIC → 写 CSV
@@ -187,9 +187,10 @@ main()                                        run_training.py
 | `data.py` | 取数 | ClickHouse |
 | `dataset.py` | 标签、训练集、时间表、内部验证切分 | `features.py`、`objective.py` |
 | `objective.py` | IC_IR 损失和梯度、首尾权重 | 只有 numpy |
-| `trainer.py` | 单个重训时点的训练、逐期 RankIC | lightgbm |
+| `trainer.py` | 单个重训时点训练的统一入口（按后端分派到 `trainers/`）、逐期 RankIC | 无 |
+| `trainers/` | 各后端的训练实现，一种架构一个文件：`lgb.py` / `xgb.py` / `lstm.py`，共用部分在 `common.py` | lightgbm / xgboost / torch（用到时才 import） |
 
-`dataset.py` / `objective.py` / `trainer.py` 都是纯函数，不连数据库、不读写清单，单测直接喂合成面板。
+`dataset.py` / `objective.py` / `trainer.py` / `trainers/` 都是纯函数，不连数据库、不读写清单，单测直接喂合成面板。
 
 ---
 
@@ -247,7 +248,7 @@ models/lgbm_v1/20240709T0000/seed0.txt
 
 ### 5.3 训练报告（CSV，不进 git）
 
-`<研究线>/results*/ml_training/` 下（MLalpha 研究线 `neutralize: false`，所以是 `results_without_neutralization/`）：
+`<研究线>/runs/<run_id>/results*/ml_training/` 下（MLalpha 研究线按 run 归档、`neutralize: false`，所以是 `runs/lgbm_v4/results_without_neutralization/` 这样）：
 
 | 文件 | 内容 |
 | --- | --- |
@@ -264,7 +265,8 @@ models/lgbm_v1/20240709T0000/seed0.txt
 alpha.py           MLAlpha.compute(panel)：下面 ①~⑤
  ├─ manifest.py    load_manifest / Manifest.assign：读清单、给每一行分配模型
  ├─ features.py    build_features：算特征（和训练用的是同一个函数）
- └─ models.py      LgbmV1：类属性给出特征清单 spec 和模型名 model_name
+ ├─ backends/      按清单记录的后端加载模型、打分
+ └─ models/        LgbmV1…：类属性给出特征清单 spec 和模型名 model_name
 ```
 
 逻辑上是"每一行找负责它的模型"，但实现上**不逐 bar 循环**，而是向量化一次分好组，再按模型循环（最多 68 次）：
@@ -332,6 +334,8 @@ compute(panel):
 | `SEEDS` | (0, 1, 2) | 每个重训时点几个随机种子，推断取平均 |
 | `NUM_BOOST_ROUND` / `EARLY_STOPPING_ROUNDS` | 500 / 50 | 最多多少棵树、多少轮不提升就停 |
 | `LGB_PARAMS` | 见文件 | LightGBM 超参数，第一版是经验值，没调过 |
+| `BACKEND` | `"lightgbm"` | 模型架构，见 §8.1 |
+| `XGB_PARAMS` / `LSTM_PARAMS` | 见文件 | XGBoost / LSTM 的超参数默认值（§8.1） |
 
 流动性范围（损失掩码）不在这里，在模型的 `spec.liquidity`（见 §3 ③）。改任何一项都要 `--force` 重训。
 
@@ -340,7 +344,7 @@ compute(panel):
 **按模型覆盖**：上表是默认值。某个模型要不一样，在它的类上写 `training_overrides`（键 = `config.as_dict()` 的键，拼错直接报错），`config.for_model()` 合并出这个模型的有效配置，写进它自己的清单、参与它自己的配置指纹。同一条研究线里的几个模型可以用不同的标签 / 种子 / 窗口，比如：
 
 ```python
-class LgbmV2(MLAlpha):            # sherpa/alpha/custom/ml/models.py
+class LgbmV2(MLAlpha):            # sherpa/alpha/custom/ml/models/lgbm.py
     training_overrides = {"label_horizon_bars": 6, "label_transform": "raw_clip",
                           "seeds": list(range(9)), "train_window_bars": None}
 ```
@@ -349,6 +353,48 @@ class LgbmV2(MLAlpha):            # sherpa/alpha/custom/ml/models.py
 | --- | --- | --- | --- | --- |
 | `LgbmV1`（`custom.ml_lgbm_v1`） | 持有 1 根、截面排名 | 滑动 60 天 | 3 | 第一 / 第二版，全用默认值 |
 | `LgbmV2`（`custom.ml_lgbm_v2`） | 持有 6 根、原始收益截尾 | 扩展 | 9 | 基线：探索实验结论（`MLalpha/experiments/FINDINGS.md`），之后的新模型都先跟它比 |
+
+### 8.1 模型架构（后端）：LightGBM / XGBoost / LSTM
+
+模型架构是训练配置的一项，跟标签、窗口一样按模型覆盖。**只换"模型本身"**，下面这些对所有架构都相同：特征（`FeatureSpec`）、
+标签、IC_IR 损失和首尾加权、滚动时间表、两步训练（早停 → 整窗重训）、种子集成（原始预测平均）、模型清单、关卡3 的评估。
+
+```python
+@register_alpha
+class XgbV5(MLAlpha):                    # sherpa/alpha/custom/ml/models/xgb.py（新家族新文件，在 models/__init__.py 里 import）
+    name = "ml_xgb_v5"
+    model_name = "xgb_v5"
+    spec = LgbmV4.spec                   # 同一套特征，只换模型时直接复用（特征指纹相同）
+    training_overrides = {**LgbmV4.training_overrides,
+                          "backend": "xgboost", "backend_params": {"eta": 0.03}}   # 只写要改的超参数
+
+@register_alpha
+class LstmV5(MLAlpha):
+    name = "ml_lstm_v5"
+    model_name = "lstm_v5"
+    spec = LgbmV4.spec
+    training_overrides = {**LgbmV4.training_overrides,
+                          "backend": "lstm", "backend_params": {"seq_len": 30}, "seeds": list(range(5))}
+```
+
+| 后端 | 输入 | 损失怎么接 | "轮数" | 超参数默认值 | 模型文件 |
+| --- | --- | --- | --- | --- | --- |
+| `lightgbm` | 当前这一行的 K 个特征 | 自定义损失：`ICIRObjective` 的解析梯度 | 树的棵数 | `LGB_PARAMS` | `seed<k>.txt` |
+| `xgboost` | 同上 | 同一个梯度函数（签名相同） | 树的棵数 | `XGB_PARAMS`（按含义对齐 `LGB_PARAMS`） | `seed<k>.json` |
+| `lstm` | 同一个币最近 `seq_len` 根 bar 的特征序列（`ModelInputs.sequences`） | torch 版的同一个加权 IC_IR，自动求导（`trainers/lstm.py` 的 `ic_ir_loss`） | epoch 数 | `LSTM_PARAMS`，`seq_len` 必须写明 | `seed<k>.pt` |
+
+- **配置指纹**：LightGBM 模型的配置里不写 `backend` / `backend_params`，跟引入多后端之前逐字节相同，V1–V4 不用重训；其它后端
+  写有效超参数（默认值 + 覆盖）、不写 `lgb_params`。`backend_params` 的键拼错、LSTM 没写 `seq_len` 都直接报错；
+- **推断**：`MLAlpha` 按模型清单里记录的后端加载模型（`sherpa/alpha/custom/ml/backends/`），跟代码里写的后端不一致会报错；
+  序列模型的 `min_lookback` 自动加上 `seq_len − 1`；
+- **LSTM 的输入预处理**（`backends/lstm.py` 的 `prepare`，训练推断共用）：按训练行的均值 / 标准差标准化（存进模型文件），缺失填 0，再加一个
+  "这一步有没有数据"的通道。序列只往回看，point-in-time 单测同样覆盖（`tests/research/test_ml_backends.py`）；
+- **可复现**：同一配置、同一个种子，不管前面先训了哪个种子，结果都一样（三个后端都有单测）；
+- **代价**：LSTM 训练比树模型慢一到两个数量级（每个 epoch 要过一遍窗口里的全部行，每行一条 `seq_len` 长的序列）。18 种子 ×
+  每 20 天重训在 CPU 上很重，先少用几个种子、短一点的 `seq_len` 在探索里试；
+- **依赖**：`pip install -e .[ml]` 装 lightgbm + xgboost，LSTM 另外 `pip install -e .[nn]`（torch）。
+
+探索脚本里同样能选：`Case(..., backend="lstm", backend_params=(("seq_len", 30),))`；`model_case` 绑定正式模型时自动带上它的后端。
 
 ---
 
@@ -361,17 +407,29 @@ research/ml_training/
   config.py         训练参数（§8）
   data.py           取数（从 friction_test/data.py 拷贝后独立维护）
   dataset.py        标签、训练集、滚动时间表、内部验证切分
-  objective.py      IC_IR 损失（LightGBM 自定义损失 + 早停指标）
-  trainer.py        单个重训时点的训练；逐期 RankIC
+  objective.py      IC_IR 损失（树模型的自定义损失 + 所有后端共用的早停指标）
+  trainer.py        单个重训时点训练的统一入口（按后端分派）；逐期 RankIC
+  trainers/         各后端的训练实现，一种架构一个文件
+    common.py         FoldResult、共用小工具
+    lgb.py            LightGBM（V1–V4）
+    xgb.py            XGBoost
+    lstm.py           LSTM 训练循环（torch）
 
 sherpa/alpha/custom/ml/   推断侧（训练也用到其中的特征构建和清单读写）
   features.py       特征构建（训练和推断共用）
-  manifest.py       模型清单
-  alpha.py          MLAlpha：compute() = 算特征 → 每行找模型 → 推断
-  models.py         注册的具体模型（LgbmV1、B 组世坤因子名单）
+  manifest.py       模型清单（记录训练用的后端）
+  backends/         模型架构（推断），一种架构一个文件
+    __init__.py       后端注册表 get_backend（按需 import）
+    base.py           ModelInputs（表格行 / 历史序列）、Backend 接口、多种子集成
+    lgb.py / xgb.py   LightGBM / XGBoost
+    lstm.py           LSTM：网络结构、输入预处理、checkpoint（训练和推断共用）
+  alpha.py          MLAlpha：compute() = 算特征 → 每行找模型 → 按后端推断
+  models/           注册的具体模型，一个模型家族一个文件
+    lgbm.py           LgbmV1–V4、B 组世坤因子名单
 ```
 
-测试：`tests/research/test_ml_training.py`（损失梯度、时间表、训练到推断端到端）、`tests/alpha/test_ml_alpha.py`
+测试：`tests/research/test_ml_training.py`（损失梯度、时间表、训练到推断端到端）、`tests/research/test_ml_backends.py`
+（序列输入、后端配置、XGBoost / LSTM 训练到推断端到端和 point-in-time、种子可复现）、`tests/alpha/test_ml_alpha.py`
 （特征的 point-in-time、多几列未上线币不变、清单、MLAlpha 报错）。
 
 ---
