@@ -274,6 +274,24 @@ CASES += [
     model_case("m_v4", "跟 LgbmV4 完全相同的配置（model_case），本脚本训练", "LgbmV4"),
     Case("m_v4_official", "LgbmV4 正式模型的打分（MLAlpha.compute），应跟 m_v4 逐格相同", source="official:LgbmV4", horizon=6),
 ]
+# ---- 第九批（2026-10-24）：换模型架构。特征、标签、训练窗口、种子集成都跟 LgbmV4 相同（model_case 绑定 V4），只换后端，
+# 跟第八批的 m_v4 同数据同窗口直接比。每个架构两组不重叠的种子各跑一次，再取两组打分的平均（blend）。
+# 两个进程并行跑，各限 8 个线程。选择段快速探测（6 个重训时点 × 3 种子）：XGBoost 跟 LightGBM 相当，LSTM RankIC 略高，
+# seq_len=30 的首尾价差最大。
+_XGB = dict(backend="xgboost", backend_params=(("nthread", 8),))
+_L30 = dict(backend="lstm", backend_params=(("seq_len", 30), ("num_threads", 8)))
+_L6 = dict(backend="lstm", backend_params=(("seq_len", 6), ("num_threads", 8)))
+CASES += [
+    model_case("x_v4_a", "V4 配置换 XGBoost，种子 0-8", "LgbmV4", seeds=tuple(range(9)), **_XGB),
+    model_case("x_v4_b", "V4 配置换 XGBoost，种子 9-17", "LgbmV4", seeds=tuple(range(9, 18)), **_XGB),
+    model_case("x_v4", "x_v4_a + x_v4_b 共 18 个模型", "LgbmV4", source="blend:x_v4_a+x_v4_b", **_XGB),
+    model_case("l30_a", "V4 配置换 LSTM（看最近 30 根 = 5 天），种子 0-5", "LgbmV4", seeds=tuple(range(6)), **_L30),
+    model_case("l30_b", "同上，种子 6-11", "LgbmV4", seeds=tuple(range(6, 12)), **_L30),
+    model_case("l30", "l30_a + l30_b 共 12 个模型", "LgbmV4", source="blend:l30_a+l30_b", **_L30),
+    model_case("l6_a", "V4 配置换 LSTM（看最近 6 根 = 1 天），种子 0-5", "LgbmV4", seeds=tuple(range(6)), **_L6),
+    model_case("l6_b", "同上，种子 6-11", "LgbmV4", seeds=tuple(range(6, 12)), **_L6),
+    model_case("l6", "l6_a + l6_b 共 12 个模型", "LgbmV4", source="blend:l6_a+l6_b", **_L6),
+]
 
 
 # ---------------------------------------------------------------------------
@@ -344,8 +362,9 @@ def train_case(panel, case: Case, case_dir: Path) -> pd.DataFrame:
     )
     params = {**config.LGB_PARAMS, **dict(case.lgb_overrides)}
     fold_rows = []
+    started = time.monotonic()
 
-    for fold in folds:
+    for k, fold in enumerate(folds, 1):
         rows = frame.rows_between(fold.train_from, fold.train_until)
         fit, valid = split_inner_validation(
             frame, rows, train_until=fold.train_until, valid_bars=case.valid_bars, purge_bars=purge, interval=INTERVAL
@@ -363,6 +382,9 @@ def train_case(panel, case: Case, case_dir: Path) -> pd.DataFrame:
         serve &= in_scope
         if serve.any():
             preds[serve] = predict_ensemble(backend, case_dir / "models", result.files, inputs, np.flatnonzero(serve))
+        if k % 10 == 0 or k == len(folds):
+            print(f"  {case.name}：{k}/{len(folds)} 个重训时点，已用时 {(time.monotonic() - started) / 60:.1f} 分钟，"
+                  f"本时点轮数 {result.best_iterations}", flush=True)
         fold_rows.append({"valid_from": fold.valid_from, "n_window_rows": rows.stop - rows.start,
                           "best_iterations": "|".join(map(str, result.best_iterations)),
                           "inner_valid_ic_ir": float(np.mean(result.metrics["inner_valid_ic_ir_by_seed"]))})
