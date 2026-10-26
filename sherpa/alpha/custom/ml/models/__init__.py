@@ -4,6 +4,7 @@
 | 文件 | 家族 | 模型 |
 | --- | --- | --- |
 | `lgbm.py` | LightGBM | `LgbmV1` – `LgbmV4`（基线 V4） |
+| `lstm.py` | LSTM | `LstmV5`（V4 的特征 + LSTM 看 1 天） |
 
 **加一个新家族**（比如 XGBoost / LSTM）：新建 `xgb.py` / `lstm.py`，照 `lgbm.py` 写 `MLAlpha` 子类，`training_overrides` 里写
 `"backend": "xgboost"` / `"lstm"`（模型架构本身在 `../backends/`）；然后在下面 import 它、加进 `__all__`——import 才会触发
@@ -11,5 +12,6 @@
 """
 
 from .lgbm import WORLDQUANT_L0_UNION, LgbmV1, LgbmV2, LgbmV3, LgbmV4
+from .lstm import LstmV5
 
-__all__ = ["WORLDQUANT_L0_UNION", "LgbmV1", "LgbmV2", "LgbmV3", "LgbmV4"]
+__all__ = ["WORLDQUANT_L0_UNION", "LgbmV1", "LgbmV2", "LgbmV3", "LgbmV4", "LstmV5"]

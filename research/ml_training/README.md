@@ -390,6 +390,7 @@ class LstmV5(MLAlpha):
 - **LSTM 的输入预处理**（`backends/lstm.py` 的 `prepare`，训练推断共用）：按训练行的均值 / 标准差标准化（存进模型文件），缺失填 0，再加一个
   "这一步有没有数据"的通道。序列只往回看，point-in-time 单测同样覆盖（`tests/research/test_ml_backends.py`）；
 - **可复现**：同一配置、同一个种子，不管前面先训了哪个种子，结果都一样（三个后端都有单测）；
+- **可复现性**：LightGBM / XGBoost 逐位可复现；LSTM 在同一环境、同样线程数下逐位可复现，但 CPU 多线程浮点累加顺序会随实际线程数变（机器过载时会变），换环境只能做到打分截面相关 ≥ 0.999。要逐位相同就把 `num_threads` 设为 1（慢很多）；
 - **代价**：LSTM 训练比树模型慢一到两个数量级（每个 epoch 要过一遍窗口里的全部行，每行一条 `seq_len` 长的序列）。18 种子 ×
   每 20 天重训在 CPU 上很重，先少用几个种子、短一点的 `seq_len` 在探索里试；
 - **依赖**：`pip install -e .[ml]` 装 lightgbm + xgboost，LSTM 另外 `pip install -e .[nn]`（torch）。

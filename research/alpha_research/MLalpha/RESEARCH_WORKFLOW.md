@@ -154,6 +154,7 @@ MLalpha/
 | 探索里手写一份"差不多"的配置去代表正式模型 | 用 `model_case` 绑定模型类 |
 | 研究起点往后挪来"避开币少的年份" | 起点就是训练数据起点，挪了会让模型训练历史变短、两段都变差（`results_v4_start_comparison/`）；嫌早期币少只在评估时单看后段 |
 | 改了 `evaluation.py` 的网格 / 成本 | 它是关卡3 `friction_test/config.py` 的拷贝，两边一起改，单测会拦 |
+| LSTM 的探索和正式结果没有逐位相同 | CPU 多线程浮点累加顺序会随实际线程数变，机器过载时就会变（`comparisons/v4_lstm_v5/README.md` §4）。LSTM 的核对标准是打分截面相关 ≥ 0.999、04 差距 ±0.05 以内；跑 LSTM 时不要和别的重任务并行 |
 | 改了 `ml_training/config.py` 或模型的 `training_overrides` | 配置指纹变了，已有模型不能续训，要 `run_training.py --force` 重训 |
 
 ---
