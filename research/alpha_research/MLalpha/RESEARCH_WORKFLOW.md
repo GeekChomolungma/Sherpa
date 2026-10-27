@@ -2,7 +2,7 @@
 
 > 给第一次做 MLalpha 研究的人：先读本文知道"按什么顺序做什么"，细节再按需查——概念（case、组合、两层）见
 > [`CASES.md`](CASES.md)，结果怎么读见 [`RESULT_READING.md`](RESULT_READING.md)，训练这一步见
-> [`../../ml_training/README.md`](../../ml_training/README.md)。当前基线是 **`LgbmV4`**（`RESULT_READING.md` §5）。
+> [`../../ml_training/README.md`](../../ml_training/README.md)。当前基线是 **`LgbmV4`**（`RESULT_READING.md` §6）。
 
 ---
 
@@ -41,10 +41,10 @@
 ④ 归档      runs/<model_name>/ 已经按模型分开，不用复制改名；关键数字写进文档
   │
   ▼
-⑤ 比基线    04 → 06 → 05 → 02，跟 RESULT_READING §5 的 V4 逐项比
+⑤ 比基线    先 RankIC 时间序列配对横比，再 04 → 06 → 05 → 02 确认（RESULT_READING §5）
   │            （各维度都赢？）
   ▼
-⑥ 换基线    更新 RESULT_READING §5；全部定下来后 holdout 只跑一次
+⑥ 换基线    更新 RESULT_READING §6；全部定下来后 holdout 只跑一次
 ```
 
 ---
@@ -72,7 +72,7 @@ python research/ml_training/run_experiments.py --cases m_v4,x_new_feat,x_new_fea
 - **一次只改一件事**（一组特征 / 一种损失 / 一个训练参数）；
 - **同批、同种子组、同研究窗口**才可比；
 - **只用选择段挑**（`taker_sel`），验证段（`taker_val`）只确认；看中位数和 `taker_both_pos`，不看最高格；`alpha_sel` / `alpha_val`
-  （05 剥离风格后的 Sharpe）只看收益来源，不参与挑选（`RESULT_READING.md` §3 第 3 步）；
+  （05 剥离风格后的 Sharpe）只看收益来源，不参与挑选（`RESULT_READING.md` §4 第 4 步）；
 - **差距小于 ±0.15–0.2 不算赢**（同配置只换训练随机性就会动这么多），结论要两组不重叠的种子都成立。
 
 新特征先写进 `sherpa/alpha/custom/ml/features.py` 的 `EXTRA_SYMBOL_FEATURES`（可选项，默认不带，不影响已有模型的指纹），要有
@@ -122,23 +122,26 @@ MLalpha/
 | `<model_name>__<变体>`（如 `lgbm_v4__start2024`） | 非默认设置的变体（比如临时改了研究起点），后缀写明改了什么 | 再加 `--variant start2024`；模型文件也自动进 `models/lgbm_v4__start2024/`，不会覆盖正式模型 |
 | `a+b` | 一次评估多个模型（关卡2 透传出的等权等配方） | `--alphas custom.ml_a,custom.ml_b` |
 
-哪个 run 是基线写在 `RESULT_READING.md` §5，不再靠"不带后缀的目录"表示。git 里只提交其中的 md / json 和 `manifest.json`；
+哪个 run 是基线写在 `RESULT_READING.md` §6，不再靠"不带后缀的目录"表示。git 里只提交其中的 md / json 和 `manifest.json`；
 04–06 的 CSV、模型文件只留本地，关键数字写进文档。
 
 ### ⑤ 跟基线比
 
-按 `RESULT_READING.md` §3 的顺序读，跟 §5 的 V4 逐项比：
+按 `RESULT_READING.md` §5 横比：**RankIC 是主判据**，04 ~ 06 是确认（§0）。
 
-| 顺序 | 表 | 看什么 | V4 基线（吃单，选 / 验） |
+| 顺序 | 表 | 看什么 | V4 基线 |
 | --- | --- | --- | --- |
-| 1 | `04_robustness.csv` | 吃单两段中位数、两段都为正 | 0.88 / 0.49，69% |
-| 2 | `06_quarterly.csv` | 赚钱季度占比 | 0.64 |
-| 3 | `05_style_attribution.csv` | **诊断，不判输赢**：剥离风格后的 alpha_sharpe、各风格 β，看收益来源有没有变 | 0.98 / 0.63；β[低波动] 0.17 / 0.38 |
-| 4 | `02_validation_base_cost.csv` | 具体组合、换手、保本成本 | 换手 0.15 / 根，保本 13.0 bps |
+| 1 | `ml_training/<model>_folds.csv` | **逐 fold 配对的 RankIC 差**（选择段 / 验证段 / 最近 1 年 / 最近 8 个月的均值、t、胜出数），以及趋势（线性斜率、前后对比、滚动均值） | 6 根 RankIC 选 / 验 0.065 / 0.069，趋势平稳（+0.001 / 年） |
+| 2 | 季度 RankIC vs `06` 季度收益 | 挂钩检查：收益是不是跟着 RankIC 走 | 相关 +0.32 |
+| 3 | `04_robustness.csv` | 吃单两段中位数、两段都为正 | 0.88 / 0.49，69% |
+| 4 | `06_quarterly.csv` | 赚钱季度占比 | 0.64 |
+| 5 | `05_style_attribution.csv` | **诊断，不判输赢**：收益来源有没有变 | alpha_sharpe 0.98 / 0.63；β[低波动] 0.17 / 0.38 |
+| 6 | `02_validation_base_cost.csv` | 具体组合、换手、保本成本 | 换手 0.15 / 根，保本 13.0 bps |
 
 ### ⑥ 换基线 / holdout
 
-04 / 06 / 02 各项都赢（且超过随机波动）才换基线，05 不参与判定：更新 `RESULT_READING.md` §5（基线指向新模型的 `runs/<model_name>/`），`track.json` 的 `alphas.include` 改成新模型（不写 `--alphas` 时默认跑基线）。关卡3 红线（吃单验证段净 Sharpe ≥ 2.5、
+RankIC 先赢（选择段配对显著领先、验证段和近期不落后、没有衰减趋势），04 / 06 / 02 再确认（领先超过随机波动）才换基线，05 不参与判定：
+更新 `RESULT_READING.md` §6（基线指向新模型的 `runs/<model_name>/`），`track.json` 的 `alphas.include` 改成新模型（不写 `--alphas` 时默认跑基线）。关卡3 红线（吃单验证段净 Sharpe ≥ 2.5、
 换手衰减 < 40%）是"能不能进下一阶段"的门槛，目前没有模型过。研究结论全部定下来之后，holdout 只跑一次。
 
 ---
@@ -154,7 +157,7 @@ MLalpha/
 | 探索里手写一份"差不多"的配置去代表正式模型 | 用 `model_case` 绑定模型类 |
 | 研究起点往后挪来"避开币少的年份" | 起点就是训练数据起点，挪了会让模型训练历史变短、两段都变差（`results_v4_start_comparison/`）；嫌早期币少只在评估时单看后段 |
 | 改了 `evaluation.py` 的网格 / 成本 | 它是关卡3 `friction_test/config.py` 的拷贝，两边一起改，单测会拦 |
-| LSTM 的探索和正式结果没有逐位相同 | CPU 多线程浮点累加顺序会随实际线程数变，机器过载时就会变（`comparisons/v4_lstm_v5/README.md` §4）。LSTM 的核对标准是打分截面相关 ≥ 0.999、04 差距 ±0.05 以内；跑 LSTM 时不要和别的重任务并行 |
+| LSTM 的探索和正式结果没有逐位相同 | CPU 多线程浮点累加顺序会随实际线程数变，机器过载时就会变（`comparisons/v4_lstm_v5/README.md` §4）。LSTM 的核对标准是打分截面相关 ≥ 0.999、04 差距 ±0.05 以内。2026-10-27 起 LSTM 默认 GPU 训练（确定性模式，同配置同种子逐位相同），这个问题只在显式 `device: cpu` 时存在 |
 | 改了 `ml_training/config.py` 或模型的 `training_overrides` | 配置指纹变了，已有模型不能续训，要 `run_training.py --force` 重训 |
 
 ---
