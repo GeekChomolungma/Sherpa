@@ -1,0 +1,51 @@
+{
+  "alpha": "custom.ml_lstm_v5_win60_seq42",
+  "model_dir": "D:\\code-repo\\Chomo\\Sherpa\\research\\alpha_research\\MLalpha\\models\\lstm_v5__win60_seq42",
+  "feature_fingerprint": "0bd06a38fb011662",
+  "config_fingerprint": "131e976601a763a7",
+  "train_window": "滑动 360 根 bar（60 天）",
+  "config": {
+    "retrain_every_bars": 120,
+    "min_train_bars": 1080,
+    "train_window_bars": 360,
+    "inner_valid_bars": 120,
+    "refit_on_full_window": true,
+    "label_horizon_bars": 6,
+    "label_transform": "raw_clip",
+    "neutralize_label": false,
+    "objective": "ic_ir",
+    "tail_quantile": 0.2,
+    "tail_weight": 3.0,
+    "min_period_rows": 20,
+    "seeds": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "num_boost_round": 500,
+    "early_stopping_rounds": 50,
+    "backend": "lstm",
+    "backend_params": {
+      "hidden_size": 32,
+      "num_layers": 1,
+      "dropout": 0.0,
+      "learning_rate": 0.001,
+      "weight_decay": 0.0001,
+      "periods_per_batch": 32,
+      "max_epochs": 30,
+      "patience": 5,
+      "num_threads": 8,
+      "device": "cuda",
+      "seq_len": 42
+    },
+    "interval": "4h",
+    "research_start": "2023-01-01",
+    "execution_delay_bars": 1,
+    "benchmark_symbol": "BTCUSDT"
+  }
+}

@@ -252,7 +252,8 @@ models/lgbm_v1/20240709T0000/seed0.txt
 
 | 文件 | 内容 |
 | --- | --- |
-| `<model_name>_folds.csv` | 每个重训时点一行：训练行数、早停轮数、内部验证 IC_IR、它负责那 20 天的样本外 RankIC |
+| `<model_name>_folds.csv` | 每个重训时点一行：训练窗口起止和天数（`train_from` / `train_until` / `train_days`）、训练行数、早停轮数、内部验证 IC_IR、它负责那 20 天的样本外 RankIC |
+| `<model_name>_train_config.json` | 这个模型实际用的完整训练配置（`train_window` 一行写明扩展还是滑动多少天，`config` 是跟模型清单同一份的全部参数） |
 | `<model_name>_oos_summary.csv` | 拼起来的样本外 RankIC，按选择段 / 验证段汇总 |
 
 ---

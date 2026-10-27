@@ -3,7 +3,7 @@
   "schema_version": 1,
   "track": "MLalpha",
   "producer": "report",
-  "created_at": "2026-10-26T00:40:15Z",
+  "created_at": "2026-10-26T22:56:09Z",
   "meta": {
     "source_profile": "D:\\code-repo\\Chomo\\Sherpa\\research\\alpha_research\\MLalpha\\runs\\lstm_v5\\regime_alpha_profile_without_neutralization.csv",
     "matrix_top_k": 5,
@@ -17,9 +17,9 @@
         "factors": [
           {
             "name": "custom.ml_lstm_v5",
-            "ic_ir": 0.35749095923524965,
-            "t_stat": 9.251439546541564,
-            "baseline_ic_ir": 0.31531778785969816,
+            "ic_ir": 0.34973056608064584,
+            "t_stat": 8.823365310359806,
+            "baseline_ic_ir": 0.30323156901002013,
             "low_sample": false
           }
         ]
@@ -30,9 +30,9 @@
         "factors": [
           {
             "name": "custom.ml_lstm_v5",
-            "ic_ir": 0.27475766970313553,
-            "t_stat": 7.889668692296803,
-            "baseline_ic_ir": 0.31531778785969816,
+            "ic_ir": 0.2622693971705266,
+            "t_stat": 7.348203257338564,
+            "baseline_ic_ir": 0.30323156901002013,
             "low_sample": false
           }
         ]
@@ -43,9 +43,9 @@
         "factors": [
           {
             "name": "custom.ml_lstm_v5",
-            "ic_ir": 0.32723617568032204,
-            "t_stat": 8.60263261127025,
-            "baseline_ic_ir": 0.31531778785969816,
+            "ic_ir": 0.3114220546262242,
+            "t_stat": 8.086242562153265,
+            "baseline_ic_ir": 0.30323156901002013,
             "low_sample": false
           }
         ]
@@ -58,9 +58,9 @@
         "factors": [
           {
             "name": "custom.ml_lstm_v5",
-            "ic_ir": 0.33834475688712395,
-            "t_stat": 8.447731409098907,
-            "baseline_ic_ir": 0.31531778785969816,
+            "ic_ir": 0.3395810787580471,
+            "t_stat": 8.242744119511705,
+            "baseline_ic_ir": 0.30323156901002013,
             "low_sample": false
           }
         ]
@@ -71,9 +71,9 @@
         "factors": [
           {
             "name": "custom.ml_lstm_v5",
-            "ic_ir": 0.3207017236433855,
-            "t_stat": 10.667653116021478,
-            "baseline_ic_ir": 0.31531778785969816,
+            "ic_ir": 0.305400964384881,
+            "t_stat": 9.881299554500114,
+            "baseline_ic_ir": 0.30323156901002013,
             "low_sample": false
           }
         ]
@@ -84,9 +84,9 @@
         "factors": [
           {
             "name": "custom.ml_lstm_v5",
-            "ic_ir": 0.28273927470898097,
-            "t_stat": 6.252162799783116,
-            "baseline_ic_ir": 0.31531778785969816,
+            "ic_ir": 0.264085171985795,
+            "t_stat": 5.88849946083392,
+            "baseline_ic_ir": 0.30323156901002013,
             "low_sample": false
           }
         ]
@@ -99,9 +99,9 @@
         "factors": [
           {
             "name": "custom.ml_lstm_v5",
-            "ic_ir": 0.33240789916719266,
-            "t_stat": 6.6103062974637705,
-            "baseline_ic_ir": 0.31531778785969816,
+            "ic_ir": 0.3154370839160403,
+            "t_stat": 6.237044477263933,
+            "baseline_ic_ir": 0.30323156901002013,
             "low_sample": false
           }
         ]
@@ -112,9 +112,9 @@
         "factors": [
           {
             "name": "custom.ml_lstm_v5",
-            "ic_ir": 0.28856756081135815,
-            "t_stat": 10.242080308040062,
-            "baseline_ic_ir": 0.31531778785969816,
+            "ic_ir": 0.2823589396159074,
+            "t_stat": 9.663323228691011,
+            "baseline_ic_ir": 0.30323156901002013,
             "low_sample": false
           }
         ]
@@ -125,9 +125,9 @@
         "factors": [
           {
             "name": "custom.ml_lstm_v5",
-            "ic_ir": 0.36936493105210433,
-            "t_stat": 8.706836889169997,
-            "baseline_ic_ir": 0.31531778785969816,
+            "ic_ir": 0.34574267333641656,
+            "t_stat": 7.971285670792735,
+            "baseline_ic_ir": 0.30323156901002013,
             "low_sample": false
           }
         ]
@@ -140,9 +140,9 @@
         "factors": [
           {
             "name": "custom.ml_lstm_v5",
-            "ic_ir": 0.33483453229567217,
-            "t_stat": 11.548900735274795,
-            "baseline_ic_ir": 0.31531778785969816,
+            "ic_ir": 0.32232897949549705,
+            "t_stat": 10.749654694657565,
+            "baseline_ic_ir": 0.30323156901002013,
             "low_sample": false
           }
         ]
@@ -153,9 +153,9 @@
         "factors": [
           {
             "name": "custom.ml_lstm_v5",
-            "ic_ir": 0.22979782586427966,
-            "t_stat": 4.532160905522204,
-            "baseline_ic_ir": 0.31531778785969816,
+            "ic_ir": 0.21619759736448474,
+            "t_stat": 4.203304269841958,
+            "baseline_ic_ir": 0.30323156901002013,
             "low_sample": false
           }
         ]
@@ -166,9 +166,9 @@
         "factors": [
           {
             "name": "custom.ml_lstm_v5",
-            "ic_ir": 0.32834759165914146,
-            "t_stat": 9.870121008087652,
-            "baseline_ic_ir": 0.31531778785969816,
+            "ic_ir": 0.31769176086207607,
+            "t_stat": 9.331074734520623,
+            "baseline_ic_ir": 0.30323156901002013,
             "low_sample": false
           }
         ]
@@ -181,9 +181,9 @@
     "factors": [
       {
         "name": "custom.ml_lstm_v5",
-        "ic_ir": 0.31531778785969816,
-        "t_stat": 15.463462100198251,
-        "baseline_ic_ir": 0.31531778785969816,
+        "ic_ir": 0.30323156901002013,
+        "t_stat": 14.430042384065747,
+        "baseline_ic_ir": 0.30323156901002013,
         "low_sample": false
       }
     ]

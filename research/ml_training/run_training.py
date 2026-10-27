@@ -13,8 +13,10 @@
    最佳轮数，② 用整个窗口按最佳轮数重训，保存第②步的模型；
 4. **增量**：清单里已有、文件齐全的重训时点直接跳过。特征清单或训练配置变了会拒绝续训，要 `--force` 全部重训；
 5. 用清单里全部模型对各自服务的时间段做样本外预测，逐期算 RankIC，写 `<研究线>/results/ml_training/`：
-   - `folds.csv`：每个重训时点一行（训练行数、早停轮数、内部验证 IC_IR、服务期内的样本外 RankIC）；
-   - `oos_summary.csv`：拼起来的样本外 RankIC 按选择段 / 验证段汇总。
+   - `folds.csv`：每个重训时点一行（训练窗口起止和天数、训练行数、早停轮数、内部验证 IC_IR、服务期内的样本外 RankIC）；
+   - `oos_summary.csv`：拼起来的样本外 RankIC 按选择段 / 验证段汇总；
+   - `train_config.json`：这个模型实际用的完整训练配置（后端、训练窗口、标签、种子……，跟模型清单里记的同一份），读结果的人
+     不用去翻模型类就知道这次 run 是怎么训练的。
 
 样本外 RankIC 只在损失掩码内算，跟研究流水线阶段一的 IC 同一个口径（标签同样套了掩码）。注意 B 组特征（世坤
 因子名单）是在选择段上挑出来的，选择段的样本外数字偏乐观，看验证段。
@@ -40,6 +42,7 @@ from sherpa.alpha import registry
 from sherpa.alpha.custom.ml.alpha import MLAlpha
 from sherpa.alpha.custom.ml.backends import get_backend, predict_ensemble
 from sherpa.alpha.custom.ml.manifest import Manifest, ModelEntry, fold_dir_name, format_ts, load_manifest, save_manifest
+from sherpa.data.schema import interval_to_timedelta
 
 import config
 from data import (
@@ -206,9 +209,18 @@ def evaluate(
     backend = get_backend(manifest.backend)
     pred = np.full(len(frame), np.nan)
     fold_rows = []
+    research_start = pd.Timestamp(START_TIME, tz="UTC")
     for i, entry in enumerate(entries):
         rows = assigned == i
-        row = {"valid_from": entry.valid_from, "valid_until": entry.valid_until, "n_train_rows": entry.n_train_rows,
+        # 训练窗口：滑动窗口 = τ 往前 train_window_bars 根（不早于研究起点）；扩展窗口 = 从研究起点开始
+        train_from = research_start
+        if cfg.train_window_bars is not None:
+            train_from = max(research_start, entry.valid_from_ts - cfg.train_window_bars * interval_to_timedelta(INTERVAL))
+        train_until = pd.Timestamp(entry.train_rows_until)
+        row = {"valid_from": entry.valid_from, "valid_until": entry.valid_until,
+               "train_from": format_ts(train_from), "train_until": entry.train_rows_until,
+               "train_days": round((train_until - train_from) / pd.Timedelta(days=1), 1),
+               "n_train_rows": entry.n_train_rows,
                "best_iterations": "|".join(map(str, entry.best_iterations)),
                "inner_valid_ic_ir": float(np.mean(entry.metrics.get("inner_valid_ic_ir_by_seed", [np.nan])))}
         if rows.any():
@@ -278,9 +290,16 @@ def main(argv: list[str] | None = None) -> None:
         prefix = alpha.model_name
         folds.to_csv(results_dir / f"{prefix}_folds.csv", index=False)
         summary.to_csv(results_dir / f"{prefix}_oos_summary.csv", index=False)
+        (results_dir / f"{prefix}_train_config.json").write_text(json.dumps(
+            {"alpha": alpha.qualified_name, "model_dir": str(alpha.model_dir), "feature_fingerprint": manifest.feature_fingerprint,
+             "config_fingerprint": manifest.config_fingerprint,
+             "train_window": "扩展（从研究起点用到每个重训时点）" if cfg.train_window_bars is None
+             else f"滑动 {cfg.train_window_bars} 根 bar（{cfg.train_window_bars * interval_to_timedelta(INTERVAL) / pd.Timedelta(days=1):g} 天）",
+             "config": manifest.config},
+            ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print("\n  样本外 RankIC（每个模型只预测它服务的那段时间，损失掩码内）：")
         print(summary.round(4).to_string(index=False))
-        print(f"  结果：{results_dir / f'{prefix}_folds.csv'}、{results_dir / f'{prefix}_oos_summary.csv'}")
+        print(f"  结果：{results_dir / f'{prefix}_folds.csv'}、{results_dir / f'{prefix}_oos_summary.csv'}、{prefix}_train_config.json")
 
 
 if __name__ == "__main__":
