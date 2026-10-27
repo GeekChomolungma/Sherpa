@@ -381,7 +381,7 @@ class LstmV5(MLAlpha):
 | --- | --- | --- | --- | --- | --- |
 | `lightgbm` | 当前这一行的 K 个特征 | 自定义损失：`ICIRObjective` 的解析梯度 | 树的棵数 | `LGB_PARAMS` | `seed<k>.txt` |
 | `xgboost` | 同上 | 同一个梯度函数（签名相同） | 树的棵数 | `XGB_PARAMS`（按含义对齐 `LGB_PARAMS`） | `seed<k>.json` |
-| `lstm` | 同一个币最近 `seq_len` 根 bar 的特征序列（`ModelInputs.sequences`） | torch 版的同一个加权 IC_IR，自动求导（`trainers/lstm.py` 的 `ic_ir_loss`） | epoch 数 | `LSTM_PARAMS`，`seq_len` 必须写明 | `seed<k>.pt` |
+| `lstm` | 同一个币最近 `seq_len` 根 bar 的特征序列（`ModelInputs.sequences`）；默认 GPU 训练 | torch 版的同一个加权 IC_IR，自动求导（`trainers/lstm.py` 的 `ic_ir_loss`） | epoch 数 | `LSTM_PARAMS`，`seq_len` 必须写明 | `seed<k>.pt` |
 
 - **配置指纹**：LightGBM 模型的配置里不写 `backend` / `backend_params`，跟引入多后端之前逐字节相同，V1–V4 不用重训；其它后端
   写有效超参数（默认值 + 覆盖）、不写 `lgb_params`。`backend_params` 的键拼错、LSTM 没写 `seq_len` 都直接报错；
@@ -390,7 +390,13 @@ class LstmV5(MLAlpha):
 - **LSTM 的输入预处理**（`backends/lstm.py` 的 `prepare`，训练推断共用）：按训练行的均值 / 标准差标准化（存进模型文件），缺失填 0，再加一个
   "这一步有没有数据"的通道。序列只往回看，point-in-time 单测同样覆盖（`tests/research/test_ml_backends.py`）；
 - **可复现**：同一配置、同一个种子，不管前面先训了哪个种子，结果都一样（三个后端都有单测）；
-- **可复现性**：LightGBM / XGBoost 逐位可复现；LSTM 在同一环境、同样线程数下逐位可复现，但 CPU 多线程浮点累加顺序会随实际线程数变（机器过载时会变），换环境只能做到打分截面相关 ≥ 0.999。要逐位相同就把 `num_threads` 设为 1（慢很多）；
+- **设备**（2026-10-26 起）：LSTM 默认用 **GPU** 训练（`backend_params["device"]` 默认 `"cuda"`），显式写 `"cpu"` 才用 CPU；要 GPU
+  但没有可用 GPU 直接报错，不悄悄退回 CPU。设备进配置指纹（两种设备训出来的模型数值不同，打分相关 1.000000 但不逐位相同）。需要 CUDA 版
+  torch（`pyproject.toml` 的 `nn` 一节）。训练时每个阶段把整个窗口的输入一次性放进显存，batch 只在显存里按下标取；365 天窗口最后一个时点
+  （43 万行）1 个种子 GPU 约 7 秒、CPU 约 22 秒。推断默认用训练时的设备，没有 GPU 的机器自动退回 CPU 并警告（环境变量
+  `SHERPA_TORCH_DEVICE` 可以强制）；
+- **可复现性**：LightGBM / XGBoost 逐位可复现；LSTM 在 GPU 上打开了 torch 的确定性模式，同一配置同一种子**逐位可复现**（单测守住）。
+  `device="cpu"` 时 CPU 多线程浮点累加顺序会随实际线程数变（机器过载时会变），只能做到打分截面相关 ≥ 0.999；
 - **代价**：LSTM 训练比树模型慢一到两个数量级（每个 epoch 要过一遍窗口里的全部行，每行一条 `seq_len` 长的序列）。18 种子 ×
   每 20 天重训在 CPU 上很重，先少用几个种子、短一点的 `seq_len` 在探索里试；
 - **依赖**：`pip install -e .[ml]` 装 lightgbm + xgboost，LSTM 另外 `pip install -e .[nn]`（torch）。

@@ -43,10 +43,32 @@ class _ToyXgb(MLAlpha):
 
 
 class _ToyLstm(MLAlpha):
+    """不写 device = 默认 GPU。"""
+
     name = "ml_toy_lstm"
     model_name = "toy_lstm"
     spec = TOY_SPEC
     training_overrides = {"backend": "lstm", "backend_params": LSTM_TOY}
+
+
+class _ToyLstmCpu(MLAlpha):
+    name = "ml_toy_lstm_cpu"
+    model_name = "toy_lstm_cpu"
+    spec = TOY_SPEC
+    training_overrides = {"backend": "lstm", "backend_params": {**LSTM_TOY, "device": "cpu"}}
+
+
+def _needs(alpha_cls):
+    """跳过当前机器跑不了的后端：XGBoost 没装、torch 没装、默认 GPU 的 LSTM 没有可用 GPU。"""
+    if alpha_cls is _ToyXgb:
+        pytest.importorskip("xgboost")
+        return
+    torch = pytest.importorskip("torch")
+    if alpha_cls is _ToyLstm and not torch.cuda.is_available():
+        pytest.skip("没有可用的 CUDA 设备")
+
+
+ALL_TOYS = pytest.mark.parametrize("alpha_cls", [_ToyXgb, _ToyLstm, _ToyLstmCpu], ids=["xgboost", "lstm-cuda", "lstm-cpu"])
 
 
 def _train(panel, root: Path, alpha_cls, *, seeds=(0,)) -> Manifest:
@@ -161,9 +183,9 @@ def test_model_case_carries_the_backend_of_the_bound_model():
 # 训练 -> 清单 -> 推断
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("alpha_cls", [_ToyXgb, _ToyLstm], ids=["xgboost", "lstm"])
+@ALL_TOYS
 def test_backend_trains_scores_out_of_sample_and_is_point_in_time(alpha_cls, tmp_path, monkeypatch):
-    pytest.importorskip("xgboost" if alpha_cls is _ToyXgb else "torch")
+    _needs(alpha_cls)
     panel = _reversal_panel()
     manifest = _train(panel, tmp_path, alpha_cls)
     assert manifest.backend == alpha_cls.training_overrides["backend"]
@@ -192,9 +214,9 @@ def test_manifest_backend_must_match_the_model_class(tmp_path, monkeypatch):
         _ToyXgb().compute(panel)
 
 
-@pytest.mark.parametrize("alpha_cls", [_ToyXgb, _ToyLstm], ids=["xgboost", "lstm"])
+@ALL_TOYS
 def test_a_seed_trains_the_same_model_regardless_of_which_seeds_ran_before_it(alpha_cls, tmp_path):
-    pytest.importorskip("xgboost" if alpha_cls is _ToyXgb else "torch")
+    _needs(alpha_cls)
     panel = _reversal_panel(n=500)
     _train(panel, tmp_path / "alone", alpha_cls, seeds=(5,))
     _train(panel, tmp_path / "after", alpha_cls, seeds=(0, 5))
@@ -223,3 +245,45 @@ def test_lstm_batch_loss_is_the_same_ic_ir_as_the_tree_objective():
     expected = ICIRObjective(y, w, period_starts(times), min_period_rows=1).ic_ir(p)
     loss = ic_ir_loss(torch.tensor(p), torch.tensor(y), torch.tensor(w), torch.tensor(times), 5)
     assert -loss.item() == pytest.approx(expected, rel=1e-4)
+
+
+# ---------------------------------------------------------------------------
+# LSTM 的设备：默认 GPU，显式 cpu 才用 CPU，要 GPU 没有 GPU 直接报错
+# ---------------------------------------------------------------------------
+
+def test_lstm_device_defaults_to_cuda_and_is_validated():
+    assert cfg_module.for_model({"backend": "lstm", "backend_params": {"seq_len": 6}}).backend_params["device"] == "cuda"
+    cpu = cfg_module.for_model({"backend": "lstm", "backend_params": {"seq_len": 6, "device": "cpu"}})
+    assert cpu.backend_params["device"] == "cpu"
+    with pytest.raises(ValueError, match="device"):
+        cfg_module.for_model({"backend": "lstm", "backend_params": {"seq_len": 6, "device": "gpu"}})
+
+
+def test_training_on_cuda_without_a_gpu_fails_instead_of_falling_back(monkeypatch):
+    torch = pytest.importorskip("torch")
+    from sherpa.alpha.custom.ml.backends import lstm as lstm_backend
+
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    with pytest.raises(RuntimeError, match="device='cpu'"):
+        lstm_backend.resolve_device("cuda")
+    assert lstm_backend.resolve_device("cpu").type == "cpu"
+
+
+def test_gpu_trained_checkpoint_records_its_device_and_loads_on_cpu(tmp_path, monkeypatch):
+    torch = pytest.importorskip("torch")
+    if not torch.cuda.is_available():
+        pytest.skip("没有可用的 CUDA 设备")
+    from sherpa.alpha.custom.ml.backends import lstm as lstm_backend
+
+    panel = _reversal_panel(n=500)
+    _train(panel, tmp_path, _ToyLstm)
+    path = next((tmp_path / "toy_lstm").rglob("seed0.pt"))
+    model = lstm_backend.load_checkpoint(path)
+    assert model.train_device == "cuda" and model.device.type == "cuda"
+    monkeypatch.setenv("SHERPA_TORCH_DEVICE", "cpu")
+    on_cpu = lstm_backend.load_checkpoint(path)
+    assert on_cpu.device.type == "cpu"
+    frame = build_training_frame(panel, TOY_SPEC, horizon=1, delay=0, neutralize_label=False, tail_quantile=0.2, tail_weight=3.0)
+    rows = frame.source_rows[-300:]
+    backend = get_backend("lstm")
+    np.testing.assert_allclose(backend.predict(model, frame.inputs, rows), backend.predict(on_cpu, frame.inputs, rows), atol=1e-4)

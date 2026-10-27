@@ -11,10 +11,16 @@
    不是全样本统计量）。A 组本来是 [-0.5, 0.5] 的截面排名，C 组是比例 / 分位数 / 收益，量级不同，网络需要对齐尺度；
 2. 缺失（不在流动性范围内的 A 组特征、还没上线的步）填 0，也就是"跟训练窗口的均值一样"；
 3. 末尾追加一个通道 `present`：这一步这个 symbol 有没有特征行，让网络能区分"真的等于均值"和"没有数据"。
+
+设备（2026-10-26 起默认 GPU）：训练用哪个设备由 `backend_params["device"]` 决定（默认 `"cuda"`，显式写 `"cpu"` 才用 CPU），
+记进 checkpoint 的 `train_device`。推断默认用训练时的设备；模型是 GPU 训练的、当前机器没有可用 GPU 时退回 CPU 并警告
+（推断时两种设备的数值差异极小，可以退；训练时不退，见 `research/ml_training/trainers/lstm.py`）。环境变量 `SHERPA_TORCH_DEVICE`
+可以强制指定推断设备。GPU 上打开 torch 的确定性模式（`enable_determinism`），同一个模型、同一份输入每次推断逐位相同。
 """
 
 from __future__ import annotations
 
+import os
 import warnings
 from dataclasses import dataclass
 from pathlib import Path
@@ -27,6 +33,42 @@ from torch import nn
 from .base import Backend, ModelInputs
 
 CHECKPOINT_FORMAT = "sherpa.lstm.v1"
+DEVICES = ("cuda", "cpu")
+INFER_DEVICE_ENV = "SHERPA_TORCH_DEVICE"
+
+
+def enable_determinism() -> None:
+    """GPU 上逐位可复现：cuBLAS 用固定的工作区、cuDNN 只用确定性算法、torch 遇到没有确定性实现的算子直接报错。
+    `CUBLAS_WORKSPACE_CONFIG` 必须在第一次 cuBLAS 调用之前设好（之后再设不生效），所以训练和推断加载模型前都先调这里。"""
+    os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    torch.use_deterministic_algorithms(True)
+
+
+def resolve_device(device: str) -> torch.device:
+    """训练用：`cuda` 必须真的可用，不悄悄退回 CPU——两种设备训练出来的模型数值不同，悄悄换会让结果说不清是哪个设备的。"""
+    if device not in DEVICES:
+        raise ValueError(f"device 只能是 {DEVICES}，收到 {device!r}")
+    if device == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError(
+            "要求用 GPU（device='cuda'，LSTM 的默认值）训练，但 torch 看不到可用的 CUDA 设备："
+            f"torch {torch.__version__}，torch.version.cuda = {torch.version.cuda}。装 CUDA 版 torch，"
+            "或者在模型的 backend_params 里显式写 device='cpu'"
+        )
+    if device == "cuda":
+        enable_determinism()
+    return torch.device(device)
+
+
+def inference_device(train_device: str) -> torch.device:
+    forced = os.environ.get(INFER_DEVICE_ENV)
+    if forced:
+        return resolve_device(forced)
+    if train_device == "cuda" and not torch.cuda.is_available():
+        warnings.warn("模型是 GPU 训练的，当前机器没有可用的 CUDA 设备，推断退回 CPU（数值跟 GPU 推断有极小差异）", RuntimeWarning)
+        return torch.device("cpu")
+    return resolve_device(train_device)
 
 
 class LSTMScorer(nn.Module):
@@ -54,6 +96,11 @@ class LSTMModel:
     mean: np.ndarray  # (K,) float32
     std: np.ndarray  # (K,) float32
     hparams: dict[str, Any]
+    train_device: str = "cpu"  # 训练用的设备（2026-10-26 以前的 checkpoint 没记，都是 CPU）
+
+    @property
+    def device(self) -> torch.device:
+        return next(self.net.parameters()).device
 
 
 def build_net(n_features: int, hparams: Mapping[str, Any]) -> LSTMScorer:
@@ -77,7 +124,7 @@ def feature_stats(matrix: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 
 
 def prepare(x: np.ndarray, present: np.ndarray, mean: np.ndarray, std: np.ndarray) -> torch.Tensor:
-    """`ModelInputs.sequences` 的输出 -> 网络输入 `(B, L, K+1)`（见模块说明）。"""
+    """`ModelInputs.sequences` 的输出 -> 网络输入 `(B, L, K+1)`（见模块说明），CPU 上的张量，调用方再搬到设备上。"""
     z = (x - mean) / std
     z = np.where(np.isfinite(z), z, 0.0).astype("float32")
     return torch.from_numpy(np.concatenate([z, present[..., None].astype("float32")], axis=-1))
@@ -86,7 +133,7 @@ def prepare(x: np.ndarray, present: np.ndarray, mean: np.ndarray, std: np.ndarra
 def predict_sequences(model: LSTMModel, x: np.ndarray, present: np.ndarray) -> np.ndarray:
     model.net.eval()
     with torch.no_grad():
-        return model.net(prepare(x, present, model.mean, model.std)).double().numpy()
+        return model.net(prepare(x, present, model.mean, model.std).to(model.device)).double().cpu().numpy()
 
 
 def save_checkpoint(path: Path, model: LSTMModel) -> None:
@@ -97,7 +144,8 @@ def save_checkpoint(path: Path, model: LSTMModel) -> None:
         "mean": model.mean,
         "std": model.std,
         "hparams": dict(model.hparams),
-        "state_dict": model.net.state_dict(),
+        "train_device": model.train_device,
+        "state_dict": {k: v.cpu() for k, v in model.net.state_dict().items()},  # 存 CPU 张量，哪种设备都能读
     }, str(path))
 
 
@@ -105,16 +153,19 @@ def load_checkpoint(path: Path) -> LSTMModel:
     raw = torch.load(str(path), map_location="cpu", weights_only=False)
     if raw.get("format") != CHECKPOINT_FORMAT:
         raise ValueError(f"{path} 不是 {CHECKPOINT_FORMAT} 格式的模型文件（format={raw.get('format')!r}）")
+    train_device = str(raw.get("train_device", "cpu"))
+    device = inference_device(train_device)
     net = build_net(int(raw["n_features"]), raw["hparams"])
     net.load_state_dict(raw["state_dict"])
-    net.eval()
-    return LSTMModel(net, int(raw["seq_len"]), np.asarray(raw["mean"]), np.asarray(raw["std"]), dict(raw["hparams"]))
+    net.to(device).eval()
+    return LSTMModel(net, int(raw["seq_len"]), np.asarray(raw["mean"]), np.asarray(raw["std"]), dict(raw["hparams"]),
+                     train_device)
 
 
 class LSTMBackend(Backend):
     name = "lstm"
     suffix = ".pt"
-    batch_rows = 8192
+    batch_rows = 65536
 
     def load(self, path: Path) -> LSTMModel:
         return load_checkpoint(path)

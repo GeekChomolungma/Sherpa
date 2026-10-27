@@ -114,8 +114,12 @@ LSTM_PARAMS: dict[str, Any] = {
     "periods_per_batch": 32,  # 一个 batch 放几期（几根 bar）的全部截面行；IC_IR 在 batch 内的这几期上算
     "max_epochs": 30,
     "patience": 5,
-    "num_threads": 0,  # torch 线程数，0 = torch 默认
+    "num_threads": 0,  # torch 的 CPU 线程数（数据准备、device="cpu" 时的训练），0 = torch 默认
+    # 训练设备（2026-10-26 起默认 GPU）。"cuda" = GPU，没有可用 GPU 直接报错；要用 CPU 必须显式写 "cpu"。GPU / CPU 训练出来的模型
+    # 数值不同，所以设备进配置指纹（trainers/lstm.py）
+    "device": "cuda",
 }
+BACKEND_CHOICES: dict[str, dict[str, tuple[Any, ...]]] = {"lstm": {"device": ("cuda", "cpu")}}
 LSTM_REQUIRED: tuple[str, ...] = ("seq_len",)
 
 BACKEND_PARAMS: dict[str, dict[str, Any]] = {"lightgbm": {}, "xgboost": XGB_PARAMS, "lstm": LSTM_PARAMS}
@@ -203,4 +207,7 @@ def for_model(overrides: Mapping[str, Any]) -> TrainConfig:
     if missing:
         raise ValueError(f"{backend} 必须在 backend_params 里写明 {missing}")
     merged["backend_params"] = {**defaults, **given}
+    for key, choices in BACKEND_CHOICES.get(backend, {}).items():
+        if merged["backend_params"][key] not in choices:
+            raise ValueError(f"{backend} 的 backend_params[{key!r}] 只能是 {choices}，收到 {merged['backend_params'][key]!r}")
     return TrainConfig(**merged)

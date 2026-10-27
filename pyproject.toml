@@ -19,7 +19,9 @@ ml = [
     "lightgbm>=4.0",
     "xgboost>=2.0",
 ]
-# 神经网络后端（LSTM，sherpa/alpha/custom/ml/nets.py）：体积大，单独装。`pip install -e .[ml,nn]`
+# 神经网络后端（LSTM，sherpa/alpha/custom/ml/backends/lstm.py）：默认用 GPU 训练，要装 CUDA 版 torch（不要装 CPU 版）：
+#   pip install torch --index-url https://download.pytorch.org/whl/cu130   （RTX 50 系 / Blackwell 至少要 cu128）
+# 没有 GPU 的机器才在模型的 backend_params 里显式写 device="cpu"。
 nn = [
     "torch>=2.1",
 ]
