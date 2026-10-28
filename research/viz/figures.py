@@ -90,6 +90,33 @@ def _line(x, y, name: str, color: str, *, width: float = 2, dash: Optional[str] 
                         legendgroup=group or name, showlegend=showlegend, hovertemplate=f"{fmt}<extra>{html.escape(name)}</extra>")
 
 
+MARKET_ROW_HEIGHT = 0.6  # 市场背景那一行相对其它行的高度
+
+
+def _market_titles(market: Optional[pd.Series]) -> list[str]:
+    return [] if market is None else [f"市场背景：{market.name} 收盘价（对数刻度）"]
+
+
+def _row_heights(market: Optional[pd.Series], rows: int) -> list[float]:
+    return ([MARKET_ROW_HEIGHT] if market is not None else []) + [1.0] * rows
+
+
+def _add_market(fig: go.Figure, market: pd.Series, start: pd.Timestamp, end: pd.Timestamp) -> None:
+    """第一行画市场背景（收盘价），裁到跟下面的图同一个时间段。单独一行、共用时间轴，不跟别的指标共用纵轴。"""
+    part = market[(market.index >= start) & (market.index <= end)]
+    fig.add_trace(go.Scatter(x=part.index, y=part, name=str(market.name), mode="lines", showlegend=False,
+                             line={"color": TEXT_SECONDARY, "width": 1.5},
+                             hovertemplate=f"%{{y:,.0f}}<extra>{html.escape(str(market.name))}</extra>"), 1, 1)
+    # 对数刻度的默认刻度挤在上半段，按价格区间挑几个整数刻度（1、2、3、5 × 10^k）
+    lo, hi = float(part.min()), float(part.max())
+    ticks = [b * 10**k for k in range(-2, 8) for b in (1, 2, 3, 5) if lo * 0.9 <= b * 10**k <= hi * 1.1]
+    fig.update_yaxes(type="log", tickvals=ticks, tickformat=",.0f", row=1, col=1)
+
+
+def _yaxis(fig: go.Figure, row: int):
+    return fig.layout["yaxis" if row == 1 else f"yaxis{row}"]
+
+
 def _no_data(fig: go.Figure, row: int, text: str) -> None:
     fig.add_annotation(text=text, xref="x domain", yref="y domain", x=0.5, y=0.5, showarrow=False,
                        font={"color": TEXT_SECONDARY}, row=row, col=1)
@@ -132,9 +159,10 @@ def _page(title: str, intro: str, tables: str, fig: go.Figure) -> str:
 """
 
 
-def overview_page(run: RunSeries, opts: Options) -> str:
-    rows = 6
-    titles = [
+def overview_page(run: RunSeries, opts: Options, market: Optional[pd.Series] = None) -> str:
+    m = 0 if market is None else 1  # 有市场背景时它占第 1 行，其余各行往下挪一行
+    rows = 6 + m
+    titles = _market_titles(market) + [
         f"滚动 RankIC（{opts.ic_window_days:g} 天 / {opts.ic_long_window_days:g} 天均值）",
         "累计 RankIC（斜率 = IC 水平，变平 = 衰减）",
         f"净值（{opts.combo.label} · {opts.cost}；灰带 = 全部组合净值的 25%–75% 分位）",
@@ -142,16 +170,17 @@ def overview_page(run: RunSeries, opts: Options) -> str:
         f"滚动净 Sharpe（{opts.sharpe_window_days:g} 天，{opts.combo.label} · {opts.cost}）",
         f"单边换手（{opts.turnover_window_days:g} 天均值，{opts.combo.label}）",
     ]
-    fig = make_subplots(rows=rows, cols=1, shared_xaxes=True, vertical_spacing=0.035, subplot_titles=titles)
+    fig = make_subplots(rows=rows, cols=1, shared_xaxes=True, vertical_spacing=0.035, subplot_titles=titles,
+                        row_heights=_row_heights(market, 6))
 
     if run.rank_ic is not None:
         ic = run.rank_ic
-        fig.add_trace(_line(ic.index, rolling_mean(ic, opts.ic_window_days), f"RankIC {opts.ic_window_days:g} 天", SERIES_COLORS[0], width=1.5), 1, 1)
-        fig.add_trace(_line(ic.index, rolling_mean(ic, opts.ic_long_window_days), f"RankIC {opts.ic_long_window_days:g} 天", SERIES_COLORS[1]), 1, 1)
-        fig.add_hline(y=0, line_width=1, line_color=NEUTRAL, row=1, col=1)
-        fig.add_trace(_line(ic.index, cumulative(ic), "累计 RankIC", SERIES_COLORS[0], showlegend=False), 2, 1)
+        fig.add_trace(_line(ic.index, rolling_mean(ic, opts.ic_window_days), f"RankIC {opts.ic_window_days:g} 天", SERIES_COLORS[0], width=1.5), 1 + m, 1)
+        fig.add_trace(_line(ic.index, rolling_mean(ic, opts.ic_long_window_days), f"RankIC {opts.ic_long_window_days:g} 天", SERIES_COLORS[1]), 1 + m, 1)
+        fig.add_hline(y=0, line_width=1, line_color=NEUTRAL, row=1 + m, col=1)
+        fig.add_trace(_line(ic.index, cumulative(ic), "累计 RankIC", SERIES_COLORS[0], showlegend=False), 2 + m, 1)
     else:
-        for row in (1, 2):
+        for row in (1 + m, 2 + m):
             _no_data(fig, row, "无逐期 RankIC（非 ML 模型，或旧 run 没有 ic_by_bar.csv）")
 
     if run.gross is not None:
@@ -161,33 +190,36 @@ def overview_page(run: RunSeries, opts: Options) -> str:
         band = run.all_net_returns(opts.cost, case).apply(equity)
         q = band.quantile([0.25, 0.5, 0.75], axis=1).T
         fig.add_trace(go.Scatter(x=q.index, y=q[0.75], mode="lines", line={"width": 0}, showlegend=False, hoverinfo="skip",
-                                   legendgroup="band"), 3, 1)
+                                   legendgroup="band"), 3 + m, 1)
         fig.add_trace(go.Scatter(x=q.index, y=q[0.25], mode="lines", line={"width": 0}, fill="tonexty",
                                    fillcolor="rgba(138, 137, 132, 0.18)", name="全部组合 25%–75%", legendgroup="band",
-                                   hoverinfo="skip"), 3, 1)
-        fig.add_trace(_line(q.index, q[0.5], "全部组合中位数", NEUTRAL, width=1.5, dash="dot"), 3, 1)
-        fig.add_trace(_line(net.index, equity(run.gross[column]), "毛净值（零成本）", SERIES_COLORS[1], width=1.5, dash="dash"), 3, 1)
-        fig.add_trace(_line(net.index, equity(net), f"净值 · {opts.cost}", SERIES_COLORS[0]), 3, 1)
-        fig.add_trace(_line(net.index, drawdown(net), "回撤", SERIES_COLORS[0], showlegend=False, percent=True), 4, 1)
-        fig.add_trace(_line(net.index, rolling_sharpe(net, opts.sharpe_window_days), "滚动 Sharpe", SERIES_COLORS[0], showlegend=False), 5, 1)
-        fig.add_hline(y=0, line_width=1, line_color=NEUTRAL, row=5, col=1)
+                                   hoverinfo="skip"), 3 + m, 1)
+        fig.add_trace(_line(q.index, q[0.5], "全部组合中位数", NEUTRAL, width=1.5, dash="dot"), 3 + m, 1)
+        fig.add_trace(_line(net.index, equity(run.gross[column]), "毛净值（零成本）", SERIES_COLORS[1], width=1.5, dash="dash"), 3 + m, 1)
+        fig.add_trace(_line(net.index, equity(net), f"净值 · {opts.cost}", SERIES_COLORS[0]), 3 + m, 1)
+        fig.add_trace(_line(net.index, drawdown(net), "回撤", SERIES_COLORS[0], showlegend=False, percent=True), 4 + m, 1)
+        fig.add_trace(_line(net.index, rolling_sharpe(net, opts.sharpe_window_days), "滚动 Sharpe", SERIES_COLORS[0], showlegend=False), 5 + m, 1)
+        fig.add_hline(y=0, line_width=1, line_color=NEUTRAL, row=5 + m, col=1)
         turnover = run.turnover[column]
-        fig.add_trace(_line(turnover.index, rolling_mean(turnover, opts.turnover_window_days), "换手", SERIES_COLORS[0], showlegend=False), 6, 1)
-        fig.update_yaxes(tickformat=".0%", row=4, col=1)
+        fig.add_trace(_line(turnover.index, rolling_mean(turnover, opts.turnover_window_days), "换手", SERIES_COLORS[0], showlegend=False), 6 + m, 1)
+        fig.update_yaxes(tickformat=".0%", row=4 + m, col=1)
     else:
-        for row in (3, 4, 5, 6):
+        for row in (3 + m, 4 + m, 5 + m, 6 + m):
             _no_data(fig, row, "无逐 bar 收益（旧 run 没有 friction/07_bar_gross_returns.csv）")
 
+    if market is not None:
+        starts = [s.index[0] for s in (run.rank_ic, run.gross) if s is not None]
+        _add_market(fig, market, min(starts), _last_time(run))
     _decorate_time(fig, run, rows)
     _base_layout(fig, rows, "")
     # 图例跟着各自的子图：RankIC 那行和净值那行各一个，放在子图右上角（共用一个图例时两行的蓝线分不清）
     for trace in fig.data:
-        if trace.yaxis == "y3":
+        if trace.yaxis == f"y{3 + m}":
             trace.legend = "legend2"
     legend = {"orientation": "h", "yanchor": "bottom", "xanchor": "right", "x": 1.0, "font": {"color": TEXT},
               "bgcolor": "rgba(0,0,0,0)"}
-    fig.update_layout(legend={**legend, "y": fig.layout.yaxis.domain[1] + 0.004},
-                      legend2={**legend, "y": fig.layout.yaxis3.domain[1] + 0.004})
+    fig.update_layout(legend={**legend, "y": _yaxis(fig, 1 + m).domain[1] + 0.004},
+                      legend2={**legend, "y": _yaxis(fig, 3 + m).domain[1] + 0.004})
     summary = segment_summary(run, opts)
     notes = "；".join(f"{k}：{html.escape(v)}" for k, v in run.notes.items())
     intro = (f"来源 <code>{html.escape(str(run.source))}</code>（{run.stage}）。组合 <b>{html.escape(opts.combo.label)}</b>，成本 "
@@ -196,18 +228,23 @@ def overview_page(run: RunSeries, opts: Options) -> str:
     return _page(f"{run.name} · 研究线总览", intro, _table(summary), fig)
 
 
-def compare_page(runs: list[RunSeries], metrics: list[str], opts: Options, baseline: Optional[RunSeries] = None) -> str:
+def compare_page(runs: list[RunSeries], metrics: list[str], opts: Options, baseline: Optional[RunSeries] = None,
+                 market: Optional[pd.Series] = None) -> str:
     colors = {run.name: SERIES_COLORS[i % len(SERIES_COLORS)] for i, run in enumerate(runs)}
     if len(runs) > len(SERIES_COLORS):
         raise ValueError(f"一张图最多比 {len(SERIES_COLORS)} 个模型（颜色不循环），这次 {len(runs)} 个：分几张图比")
-    fig = make_subplots(rows=len(metrics), cols=1, shared_xaxes=True, vertical_spacing=0.05,
-                        subplot_titles=[metric_title(m, opts) for m in metrics])
+    m = 0 if market is None else 1
+    fig = make_subplots(rows=len(metrics) + m, cols=1, shared_xaxes=True, vertical_spacing=0.05,
+                        subplot_titles=_market_titles(market) + [metric_title(name, opts) for name in metrics],
+                        row_heights=_row_heights(market, len(metrics)))
     legend_shown: set[str] = set()
-    for row, name in enumerate(metrics, 1):
+    span: list[pd.Timestamp] = []
+    for row, name in enumerate(metrics, 1 + m):
         series = compare_series(runs, name, opts, baseline)
         if not series:
             _no_data(fig, row, "这些 run 都没有这个指标的数据")
             continue
+        span += [min(s.index[0] for s in series.values()), max(s.index[-1] for s in series.values())]
         for run in runs:
             if run.name not in series:
                 continue
@@ -219,10 +256,12 @@ def compare_page(runs: list[RunSeries], metrics: list[str], opts: Options, basel
             fig.add_hline(y=0, line_width=1, line_color=NEUTRAL, row=row, col=1)
         if METRICS[name].percent:
             fig.update_yaxes(tickformat=".0%", row=row, col=1)
+    if market is not None and span:
+        _add_market(fig, market, min(span), max(span))
     reference = baseline or runs[0]
     _decorate_time(fig, RunSeries(name="", stage=reference.stage, source=reference.source, rank_ic=reference.rank_ic,
-                                  gross=reference.gross, segments=reference.segments), len(metrics))
-    _base_layout(fig, len(metrics), "")
+                                  gross=reference.gross, segments=reference.segments), len(metrics) + m)
+    _base_layout(fig, len(metrics) + m, "")
 
     tables = []
     for run in runs:

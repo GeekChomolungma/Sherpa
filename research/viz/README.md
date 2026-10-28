@@ -40,6 +40,23 @@ CH_HOST=... CH_PASSWORD=... bash research/alpha_research/MLalpha/run_track.sh --
 
 非 ML 的研究线没有 `ml_training/`，总览里 RankIC 两行会写"无数据"，收益部分照常画。
 
+### 市场背景（BTC 收盘价）
+
+两种画布的最上面一行默认画 BTCUSDT 的收盘价（对数刻度），用来对照"行情怎么走的时候，RankIC 和收益是什么样"。它是市场数据，
+跟哪个 run 无关，所以**不放进 runs**，单独取到 `research/viz/market/`：
+
+```bash
+CH_HOST=... CH_PASSWORD=... python research/viz/fetch_market.py            # -> research/viz/market/BTCUSDT_4h.csv
+CH_HOST=... CH_PASSWORD=... python research/viz/fetch_market.py ETHUSDT    # 别的币，画图时 --market ETHUSDT
+```
+
+时间范围 = `research_config.json` 的研究段，**不取 holdout 段**。CSV 不进 git（跟其它 CSV 一样），换机器重新取一次。没取过的话
+图里就不画这一行（命令行会提示），其它照常。
+
+为什么单独一行、不叠到 RankIC 或净值图上：价格和 RankIC / 净值的量纲完全不同，叠在一起只能用两个纵轴，两条线看起来"同步"还是"背离"
+完全取决于两个纵轴怎么缩放，很容易看出不存在的关系。单独一行、共用时间轴，沿同一条竖线往下看就能对上，鼠标悬停时同一时刻的
+BTC 价格和各指标一起显示。
+
 ## 3. 用法
 
 以下命令都在仓库根目录跑。
@@ -106,11 +123,13 @@ python research/viz/viz.py run $R/lgbm_v4 --list-combos      # 列出 run 里有
 | `--ic-window` | 20 | 滚动 RankIC 窗口（天）；总览里另有一条 120 天的 |
 | `--sharpe-window` | 90 | 滚动 Sharpe 窗口（天） |
 | `--case` | — | 一个 run 里有多个 case（`--alphas a,b` 一起评估）时指定看哪一个 |
+| `--market` | `BTCUSDT` | 最上面一行的市场背景；`none` = 不画 |
 | `--out` | `research/viz/output/` | 输出目录，或直接给一个 `.html` 文件名 |
 | `--name` | 各 run 名用 `+` 连起来 | `compare` 的输出文件名 |
 
 ## 4. 图上的元素
 
+- **最上面一行** = 市场背景（BTC 收盘价，对数刻度）；
 - **灰色背景** = 验证段（之前是选择段）。选择段是挑模型、挑特征的那段，数字偏乐观；验证段是确认用的；
 - **细竖线** = ML 模型的重训时点（每 20 天一个）；
 - **总览的净值行**：蓝线 = 选定组合的净值，橙色虚线 = 同一组合零成本的毛净值（两者的差 = 成本吃掉的部分），灰带 = 全部 39 个组合
@@ -131,6 +150,7 @@ python research/viz/viz.py run $R/lgbm_v4 --list-combos      # 列出 run 里有
 | `metrics.py` | 从底层序列派生指标（净收益、净值、回撤、滚动 Sharpe、累计 / 滚动 RankIC）；多模型比较的指标表 `METRICS` |
 | `figures.py` | 两种画布（plotly）和 HTML 页面 |
 | `viz.py` | 命令行入口 |
+| `fetch_market.py` | 从 ClickHouse 取市场背景（收盘价）到 `market/` |
 
 画图只认 `RunSeries`，不关心数据是哪个阶段产出的。以后接阶段二回测：在 `series.py` 里加一个加载器，把回测结果（`sherpa/backtest`
 的 `BacktestResult` 本来就有逐 bar 收益和换手）填进 `RunSeries`，在 `load_run` 里按目录结构分派过去，画图和命令行都不用改。

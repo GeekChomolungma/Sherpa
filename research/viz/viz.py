@@ -23,7 +23,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from figures import compare_page, overview_page  # noqa: E402
 from metrics import METRICS, Options, segment_summary  # noqa: E402
-from series import DEFAULT_COST, DEFAULT_REBALANCE_EVERY, DEFAULT_WEIGHTING, Combo, available_combos, load_run  # noqa: E402
+from series import (  # noqa: E402
+    DEFAULT_COST, DEFAULT_MARKET, DEFAULT_REBALANCE_EVERY, DEFAULT_WEIGHTING, Combo, available_combos, load_market, load_run,
+)
 
 OUTPUT_DIR = Path(__file__).resolve().parent / "output"
 DEFAULT_COMPARE_METRICS = ("rankic_cum", "rankic_diff_cum", "rankic_rolling", "equity", "drawdown")
@@ -40,6 +42,17 @@ def _write(text: str, path: Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
     return path
+
+
+def _market(args: argparse.Namespace):
+    """市场背景行：默认 BTCUSDT，`--market none` 不画；没取过数据就提示一下、照常出图。"""
+    if args.market.lower() == "none":
+        return None
+    market = load_market(args.market)
+    if market is None:
+        print(f"  [提示] 没有 {args.market} 的市场背景数据，图里不画这一行。要画先跑："
+              f"CH_HOST=... CH_PASSWORD=... python research/viz/fetch_market.py {args.market}")
+    return market
 
 
 def _target(out: str | None, default_dir: Path, file_name: str) -> Path:
@@ -62,13 +75,14 @@ def _is_default(args: argparse.Namespace) -> bool:
 
 def cmd_run(args: argparse.Namespace) -> None:
     opts = _options(args)
+    market = _market(args)
     for path in args.runs:
         run = load_run(path)
         if args.list_combos:
             print(f"{run.name}：{available_combos(run.gross.columns) if run.gross is not None else '无逐 bar 收益'}")
             continue
         target = _target(args.out, OUTPUT_DIR / "runs", f"{run.name}{_combo_suffix(opts, _is_default(args))}.html")
-        written = _write(overview_page(run, opts), target)
+        written = _write(overview_page(run, opts, market), target)
         print(f"== {run.name}（{opts.combo.label} · {opts.cost}）==")
         print(segment_summary(run, opts).round(4).to_string(index=False))
         for k, v in run.notes.items():
@@ -93,7 +107,7 @@ def cmd_compare(args: argparse.Namespace) -> None:
         raise SystemExit(f"未知指标 {unknown}；可选的有 {list(METRICS)}")
     name = args.name or "+".join(names)
     target = _target(args.out, OUTPUT_DIR / "compare", f"{name}{_combo_suffix(opts, _is_default(args))}.html")
-    written = _write(compare_page(runs, metrics, opts, baseline), target)
+    written = _write(compare_page(runs, metrics, opts, baseline, _market(args)), target)
     print(f"比较 {names}，指标 {metrics}，组合 {opts.combo.label} · {opts.cost} -> {written}")
 
 
@@ -107,6 +121,8 @@ def main(argv: list[str] | None = None) -> None:
     common.add_argument("--case", default=None, help="run 里有多个 case 时指定一个")
     common.add_argument("--ic-window", type=float, default=20.0, help="滚动 RankIC 窗口（天），默认 20")
     common.add_argument("--sharpe-window", type=float, default=90.0, help="滚动 Sharpe 窗口（天），默认 90")
+    common.add_argument("--market", default=DEFAULT_MARKET,
+                        help=f"最上面一行的市场背景（收盘价），默认 {DEFAULT_MARKET}；none = 不画。数据由 fetch_market.py 取")
     common.add_argument("--out", default=None, help="输出目录或 .html 文件，默认 research/viz/output/")
     sub = parser.add_subparsers(dest="command", required=True)
     run = sub.add_parser("run", parents=[common], help="一个（或几个，各出一页）run 的总览")

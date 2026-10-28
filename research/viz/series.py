@@ -157,6 +157,20 @@ def load_research_run(run_dir: str | Path, *, results: str = RESULTS_DIR) -> Run
                      cost_bps=cost_bps, segments=segments, events=events, notes=notes)
 
 
+MARKET_DIR = Path(__file__).resolve().parent / "market"
+DEFAULT_MARKET = "BTCUSDT"
+
+
+def load_market(symbol: str = DEFAULT_MARKET, interval: str = "4h") -> Optional[pd.Series]:
+    """画图用的市场背景（收盘价，`fetch_market.py` 从 ClickHouse 取的）。跟 run 无关，所以不在 `RunSeries` 里；没取过就返回 None。"""
+    path = MARKET_DIR / f"{symbol}_{interval}.csv"
+    if not path.exists():
+        return None
+    close = _read_time_csv(path)["close"]
+    close.name = symbol
+    return close
+
+
 def load_run(path: str | Path) -> RunSeries:
     """按目录内容挑加载器。现在只有研究线；以后加阶段二回测时在这里按目录结构分派。"""
     return load_research_run(path)
