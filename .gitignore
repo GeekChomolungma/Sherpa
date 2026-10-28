@@ -16,3 +16,6 @@ research/alpha_research/*/models/*/*/
 research/alpha_research/*/experiments/_cache/
 research/alpha_research/*/experiments/*/models/
 research/alpha_research/*/experiments/**/*.pkl
+
+# 研究结果可视化（research/viz/）的输出：从 runs 里的 CSV 现生成的 HTML，跟 CSV 一样不进仓库，要看就重新生成
+research/viz/output/

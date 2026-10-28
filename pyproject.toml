@@ -25,6 +25,10 @@ ml = [
 nn = [
     "torch>=2.1",
 ]
+# 研究结果可视化（research/viz/）：输出可交互的单文件 HTML。`pip install -e .[viz]`
+viz = [
+    "plotly>=5.20",
+]
 
 [build-system]
 requires = ["setuptools>=68"]
