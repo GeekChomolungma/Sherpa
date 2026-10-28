@@ -4,6 +4,7 @@
 | 文件 | 家族 | 模型 |
 | --- | --- | --- |
 | `lgbm.py` | LightGBM | `LgbmV1` – `LgbmV4`（基线 V4） |
+| `xgb.py` | XGBoost | `XgbV5`（V4 的特征和训练配置，只换成 XGBoost） |
 | `lstm.py` | LSTM | `LstmV5`（V4 的特征 + LSTM 看 1 天，滑动 365 天窗口）、`LstmV5Win60`（同上，滑动 60 天窗口的对照）、`LstmV5Expanding`（同上，扩展窗口的对照）、`LstmV5Win60Seq42`（60 天窗口 + 看 7 天） |
 
 **加一个新家族**（比如 XGBoost / LSTM）：新建 `xgb.py` / `lstm.py`，照 `lgbm.py` 写 `MLAlpha` 子类，`training_overrides` 里写
@@ -13,5 +14,6 @@
 
 from .lgbm import WORLDQUANT_L0_UNION, LgbmV1, LgbmV2, LgbmV3, LgbmV4
 from .lstm import LstmV5, LstmV5Expanding, LstmV5Win60, LstmV5Win60Seq42
+from .xgb import XgbV5
 
-__all__ = ["WORLDQUANT_L0_UNION", "LgbmV1", "LgbmV2", "LgbmV3", "LgbmV4", "LstmV5", "LstmV5Expanding", "LstmV5Win60", "LstmV5Win60Seq42"]
+__all__ = ["WORLDQUANT_L0_UNION", "LgbmV1", "LgbmV2", "LgbmV3", "LgbmV4", "LstmV5", "LstmV5Expanding", "LstmV5Win60", "LstmV5Win60Seq42", "XgbV5"]

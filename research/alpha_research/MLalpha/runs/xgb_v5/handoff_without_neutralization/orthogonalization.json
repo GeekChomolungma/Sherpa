@@ -1,0 +1,192 @@
+{
+  "kind": "candidates",
+  "schema_version": 1,
+  "track": "MLalpha",
+  "producer": "orthogonalization:passthrough",
+  "created_at": "2026-10-27T20:46:52Z",
+  "meta": {
+    "source_profile": "D:\\code-repo\\Chomo\\Sherpa\\research\\alpha_research\\MLalpha\\runs\\xgb_v5\\regime_alpha_profile_without_neutralization.csv",
+    "matrix_top_k": 5,
+    "min_abs_t": 2.0,
+    "input_producer": "report"
+  },
+  "regime_sets": {
+    "dispersion": {
+      "low": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 2",
+        "factors": [
+          {
+            "name": "custom.ml_xgb_v5",
+            "ic_ir": 0.2977907232275197,
+            "t_stat": 8.285200755207324,
+            "baseline_ic_ir": 0.2379122636939,
+            "low_sample": false
+          }
+        ]
+      },
+      "normal": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 2",
+        "factors": [
+          {
+            "name": "custom.ml_xgb_v5",
+            "ic_ir": 0.20261883691448462,
+            "t_stat": 5.432253363904554,
+            "baseline_ic_ir": 0.2379122636939,
+            "low_sample": false
+          }
+        ]
+      },
+      "high": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 2",
+        "factors": [
+          {
+            "name": "custom.ml_xgb_v5",
+            "ic_ir": 0.2298089195483414,
+            "t_stat": 6.040789585546236,
+            "baseline_ic_ir": 0.2379122636939,
+            "low_sample": false
+          }
+        ]
+      }
+    },
+    "liquidity": {
+      "starved": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 2",
+        "factors": [
+          {
+            "name": "custom.ml_xgb_v5",
+            "ic_ir": 0.2944432737712789,
+            "t_stat": 7.10436209689824,
+            "baseline_ic_ir": 0.2379122636939,
+            "low_sample": false
+          }
+        ]
+      },
+      "normal": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 2",
+        "factors": [
+          {
+            "name": "custom.ml_xgb_v5",
+            "ic_ir": 0.2583945829692382,
+            "t_stat": 8.697161069422794,
+            "baseline_ic_ir": 0.2379122636939,
+            "low_sample": false
+          }
+        ]
+      },
+      "high": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 2",
+        "factors": [
+          {
+            "name": "custom.ml_xgb_v5",
+            "ic_ir": 0.14960311737394505,
+            "t_stat": 3.692269632880748,
+            "baseline_ic_ir": 0.2379122636939,
+            "low_sample": false
+          }
+        ]
+      }
+    },
+    "trend": {
+      "bear": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 2",
+        "factors": [
+          {
+            "name": "custom.ml_xgb_v5",
+            "ic_ir": 0.28433104360464256,
+            "t_stat": 6.243027258399658,
+            "baseline_ic_ir": 0.2379122636939,
+            "low_sample": false
+          }
+        ]
+      },
+      "neutral": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 2",
+        "factors": [
+          {
+            "name": "custom.ml_xgb_v5",
+            "ic_ir": 0.21018140980124858,
+            "t_stat": 7.4069629361870835,
+            "baseline_ic_ir": 0.2379122636939,
+            "low_sample": false
+          }
+        ]
+      },
+      "bull": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 2",
+        "factors": [
+          {
+            "name": "custom.ml_xgb_v5",
+            "ic_ir": 0.273087140177223,
+            "t_stat": 6.204535780198828,
+            "baseline_ic_ir": 0.2379122636939,
+            "low_sample": false
+          }
+        ]
+      }
+    },
+    "volatility": {
+      "low": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 2",
+        "factors": [
+          {
+            "name": "custom.ml_xgb_v5",
+            "ic_ir": 0.2629634624862046,
+            "t_stat": 9.226391956155574,
+            "baseline_ic_ir": 0.2379122636939,
+            "low_sample": false
+          }
+        ]
+      },
+      "normal": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 2",
+        "factors": [
+          {
+            "name": "custom.ml_xgb_v5",
+            "ic_ir": 0.20096888455049677,
+            "t_stat": 4.533155778962116,
+            "baseline_ic_ir": 0.2379122636939,
+            "low_sample": false
+          }
+        ]
+      },
+      "high": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 2",
+        "factors": [
+          {
+            "name": "custom.ml_xgb_v5",
+            "ic_ir": 0.22515488892378543,
+            "t_stat": 6.577435754938008,
+            "baseline_ic_ir": 0.2379122636939,
+            "low_sample": false
+          }
+        ]
+      }
+    }
+  },
+  "global": {
+    "low_sample": false,
+    "note": "只有 1/1 个因子通过显著性门槛 |t| >= 2",
+    "factors": [
+      {
+        "name": "custom.ml_xgb_v5",
+        "ic_ir": 0.2379122636939,
+        "t_stat": 11.885715056408262,
+        "baseline_ic_ir": 0.2379122636939,
+        "low_sample": false
+      }
+    ]
+  }
+}
