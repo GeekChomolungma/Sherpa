@@ -13,6 +13,7 @@
 | [`custom_starter/`](custom_starter/) | 自定义因子 starter 主题（`sherpa/alpha/custom/starter.py`），只看 trend；因子少，关卡1/2 透传，直接进关卡3 |
 | [`custom_quote_activity/`](custom_quote_activity/) | 成交活跃度排名单因子（`sherpa/alpha/custom/quote_activity.py`），只看 trend；关卡1/2 透传，直接进关卡3 |
 | [`MLalpha/`](MLalpha/) | 机器学习模型 alpha（`sherpa/alpha/custom/ml/`）：步骤 0 滚动训练（`research/ml_training/`），之后跟普通 alpha 一样评估；关卡1/2 透传。结果阅读指南（ML alpha 研究的主框架）：[`MLalpha/RESULT_READING.md`](MLalpha/RESULT_READING.md)；研究工作流：[`MLalpha/RESEARCH_WORKFLOW.md`](MLalpha/RESEARCH_WORKFLOW.md) |
+| [`tradecraft/`](tradecraft/) | 交易经验 alpha（`sherpa/alpha/custom/tradecraft/`，写法见那里的 README.md）：规则直接打分、不训练。步骤 0 用通用的逐期 RankIC 时间线（`_pipeline/run_ic_timeline.py`）产出跟 MLalpha 同格式的 `ic_by_bar.csv`，之后关卡1/2 透传；流动性掩码、中性化（关）跟 MLalpha 相同，结果能直接跟 V4 横比 |
 
 ## 流水线：各阶段只靠交接文件（handoff）连接
 
