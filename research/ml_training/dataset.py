@@ -167,9 +167,14 @@ def build_training_frame(
     #   (08:00, ETH)  ret_1=0.50 vol=0.5  →  [0.50, 0.5]       0.0      True
     #                                       形状 (n, K)=(5, 2)  (5,)     (5,)
     #
-    #   features[keep] = [[0.00, 0.1], [0.50, 0.3], [0.17, 0.4], [0.50, 0.5]]   形状 (m, K)=(4, 2)：整行留下 / 去掉
-    #   y[keep]        = [0.5, 0.0, 0.5, 0.0]                                    形状 (m,)=(4,)
+    #   features.to_numpy()[keep] = [[0.00, 0.1], [0.50, 0.3], [0.17, 0.4], [0.50, 0.5]]   形状 (m, K)=(4, 2)：整行留下 / 去掉
+    #   y[keep]                   = [0.5, 0.0, 0.5, 0.0]                                    形状 (m,)=(4,)
     #   times[keep] / symbols[keep] 记着每一行是哪个 (时间, 币)，后面按时间切重训时点、按期分组算 IC 都靠它。
+    #
+    # ③ 返回值里的 `features=inputs.matrix[keep]` 就是上面的 features.to_numpy()[keep]：`inputs.matrix` 是
+    #    features.to_numpy(float32)，行列都不变。除 `inputs` 外的字段都按 keep 筛过（掩码内、标签有效的行）；`inputs` 是
+    #    **没筛的**完整特征矩阵——序列模型（LSTM）要回看同一个币前几根 bar，那几根不一定在掩码内 / 有标签；
+    #    `source_rows` 记着筛完的第 i 行是 `inputs` 的第几行。
     inputs = ModelInputs.from_features(features, panel.close.index, panel.close.columns)
     return TrainingFrame(
         features=inputs.matrix[keep],

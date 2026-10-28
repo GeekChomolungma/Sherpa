@@ -16,7 +16,12 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from metrics import METRICS, Options, compare_series, cumulative, drawdown, equity, metric_title, rolling_mean, rolling_sharpe, segment_summary
+import dataclasses
+
+from metrics import (
+    METRICS, Options, compare_series, cumulative, drawdown, equity, metric_title, resolve_ic_horizon, rolling_mean, rolling_sharpe,
+    segment_summary,
+)
 from series import RunSeries
 
 # 分类色（固定顺序，不循环；颜色跟着模型走，不跟排名走）和页面配色
@@ -162,9 +167,12 @@ def _page(title: str, intro: str, tables: str, fig: go.Figure) -> str:
 def overview_page(run: RunSeries, opts: Options, market: Optional[pd.Series] = None) -> str:
     m = 0 if market is None else 1  # 有市场背景时它占第 1 行，其余各行往下挪一行
     rows = 6 + m
+    ic = run.ic(opts.ic_horizon)
+    horizon = opts.ic_horizon if opts.ic_horizon is not None else run.ic_horizon
+    ic_tag = f" · 持有 {horizon} 根" if horizon is not None else ""
     titles = _market_titles(market) + [
-        f"滚动 RankIC（{opts.ic_window_days:g} 天 / {opts.ic_long_window_days:g} 天均值）",
-        "累计 RankIC（斜率 = IC 水平，变平 = 衰减）",
+        f"滚动 RankIC（{opts.ic_window_days:g} 天 / {opts.ic_long_window_days:g} 天均值{ic_tag}）",
+        f"累计 RankIC（斜率 = IC 水平，变平 = 衰减{ic_tag}）",
         f"净值（{opts.combo.label} · {opts.cost}；灰带 = 全部组合净值的 25%–75% 分位）",
         f"回撤（{opts.combo.label} · {opts.cost}）",
         f"滚动净 Sharpe（{opts.sharpe_window_days:g} 天，{opts.combo.label} · {opts.cost}）",
@@ -173,15 +181,14 @@ def overview_page(run: RunSeries, opts: Options, market: Optional[pd.Series] = N
     fig = make_subplots(rows=rows, cols=1, shared_xaxes=True, vertical_spacing=0.035, subplot_titles=titles,
                         row_heights=_row_heights(market, 6))
 
-    if run.rank_ic is not None:
-        ic = run.rank_ic
+    if ic is not None:
         fig.add_trace(_line(ic.index, rolling_mean(ic, opts.ic_window_days), f"RankIC {opts.ic_window_days:g} 天", SERIES_COLORS[0], width=1.5), 1 + m, 1)
         fig.add_trace(_line(ic.index, rolling_mean(ic, opts.ic_long_window_days), f"RankIC {opts.ic_long_window_days:g} 天", SERIES_COLORS[1]), 1 + m, 1)
         fig.add_hline(y=0, line_width=1, line_color=NEUTRAL, row=1 + m, col=1)
         fig.add_trace(_line(ic.index, cumulative(ic), "累计 RankIC", SERIES_COLORS[0], showlegend=False), 2 + m, 1)
     else:
         for row in (1 + m, 2 + m):
-            _no_data(fig, row, "无逐期 RankIC（非 ML 模型，或旧 run 没有 ic_by_bar.csv）")
+            _no_data(fig, row, f"无逐期 RankIC{ic_tag}（旧 run 没有 ic_by_bar.csv，或没有这个持有期的口径）")
 
     if run.gross is not None:
         net = run.net_returns(opts.combo, opts.cost)
@@ -192,11 +199,18 @@ def overview_page(run: RunSeries, opts: Options, market: Optional[pd.Series] = N
         fig.add_trace(go.Scatter(x=q.index, y=q[0.75], mode="lines", line={"width": 0}, showlegend=False, hoverinfo="skip",
                                    legendgroup="band"), 3 + m, 1)
         fig.add_trace(go.Scatter(x=q.index, y=q[0.25], mode="lines", line={"width": 0}, fill="tonexty",
-                                   fillcolor="rgba(138, 137, 132, 0.18)", name="全部组合 25%–75%", legendgroup="band",
+                                   fillcolor="rgba(138, 137, 132, 0.18)", name="组合 25–75%", legendgroup="band",
                                    hoverinfo="skip"), 3 + m, 1)
-        fig.add_trace(_line(q.index, q[0.5], "全部组合中位数", NEUTRAL, width=1.5, dash="dot"), 3 + m, 1)
-        fig.add_trace(_line(net.index, equity(run.gross[column]), "毛净值（零成本）", SERIES_COLORS[1], width=1.5, dash="dash"), 3 + m, 1)
+        fig.add_trace(_line(q.index, q[0.5], "组合中位数", NEUTRAL, width=1.5, dash="dot"), 3 + m, 1)
+        fig.add_trace(_line(net.index, equity(run.gross[column]), "毛净值", SERIES_COLORS[1], width=1.5, dash="dash"), 3 + m, 1)
         fig.add_trace(_line(net.index, equity(net), f"净值 · {opts.cost}", SERIES_COLORS[0]), 3 + m, 1)
+        # 只做多账本带等权基准（同样的调仓间隔、同样扣费）：只做多不是市场中性，要跟"闭眼买"比
+        for i, bench in enumerate(("ew_pool", "ew_scope")):
+            bench_col = f"benchmark | {bench} | every{opts.combo.rebalance_every}"
+            if bench_col in run.gross.columns:
+                bench_net = run.gross[bench_col] - run.turnover[bench_col] * run.cost_bps[opts.cost] / 10_000.0
+                label = {"ew_pool": "等权·候选池", "ew_scope": "等权·全范围"}[bench]
+                fig.add_trace(_line(bench_net.index, equity(bench_net), label, SERIES_COLORS[(2, 6)[i]], width=1.5, dash="dot"), 3 + m, 1)
         fig.add_trace(_line(net.index, drawdown(net), "回撤", SERIES_COLORS[0], showlegend=False, percent=True), 4 + m, 1)
         fig.add_trace(_line(net.index, rolling_sharpe(net, opts.sharpe_window_days), "滚动 Sharpe", SERIES_COLORS[0], showlegend=False), 5 + m, 1)
         fig.add_hline(y=0, line_width=1, line_color=NEUTRAL, row=5 + m, col=1)
@@ -230,6 +244,8 @@ def overview_page(run: RunSeries, opts: Options, market: Optional[pd.Series] = N
 
 def compare_page(runs: list[RunSeries], metrics: list[str], opts: Options, baseline: Optional[RunSeries] = None,
                  market: Optional[pd.Series] = None) -> str:
+    # RankIC 统一到同一个持有期再比（ML 主指标 6 根、tradecraft 默认 1 根，量级不同）
+    opts = dataclasses.replace(opts, ic_horizon=resolve_ic_horizon(runs, opts.ic_horizon))
     colors = {run.name: SERIES_COLORS[i % len(SERIES_COLORS)] for i, run in enumerate(runs)}
     if len(runs) > len(SERIES_COLORS):
         raise ValueError(f"一张图最多比 {len(SERIES_COLORS)} 个模型（颜色不循环），这次 {len(runs)} 个：分几张图比")
@@ -273,5 +289,6 @@ def compare_page(runs: list[RunSeries], metrics: list[str], opts: Options, basel
     intro = (f"模型：{names}。所有模型用同一个组合 <b>{html.escape(opts.combo.label)}</b>、同一个成本 <b>{html.escape(opts.cost)}</b>，"
              f"时间轴裁到共同区间、累计类曲线从同一起点出发。"
              + (f"基线：<b>{html.escape(baseline.name)}</b>。" if baseline is not None else "")
+             + (f"RankIC 统一按持有 <b>{opts.ic_horizon}</b> 根比较。" if opts.ic_horizon is not None else "")
              + "RankIC 是主判据，收益只作确认。")
     return _page("多模型对比", intro, table, fig)

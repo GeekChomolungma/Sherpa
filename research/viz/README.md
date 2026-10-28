@@ -26,7 +26,8 @@ pip install -e .[viz]      # plotly
 
 | 文件 | 谁写的 | 内容 |
 | --- | --- | --- |
-| `results_without_neutralization/ml_training/<model>_ic_by_bar.csv` | 步骤 0 训练（`research/ml_training/run_training.py`） | 每根 bar 一行的样本外 RankIC（6 根标签）、这一期的币数、负责它的重训时点、所属段 |
+| `results_without_neutralization/ml_training/<model>_ic_by_bar.csv` | ML 研究线的步骤 0 训练（`research/ml_training/run_training.py`） | 每根 bar 一行的样本外 RankIC（6 根标签）、这一期的币数、负责它的重训时点、所属段 |
+| `results_without_neutralization/ic_timeline/<name>_ic_by_bar.csv` | 不训练的研究线（tradecraft 等）的步骤 0（`research/alpha_research/_pipeline/run_ic_timeline.py`） | 同样格式；主列 `rank_ic` = alpha 自己的持有期，另有 `rank_ic_h1` / `rank_ic_h6` 两列 |
 | `results_without_neutralization/friction/07_bar_gross_returns.csv` | 关卡3（`research/friction_test/run_friction.py`） | 全部 39 个组合、整个研究段（选择段 + 验证段）的逐 bar 毛收益，列 = 组合 |
 | `results_without_neutralization/friction/08_bar_turnover.csv` | 同上 | 同样形状的逐 bar 单边换手 |
 | `results_without_neutralization/friction/bar_series.json` | 同上 | 各成本假设的 bps、验证段起点 |
@@ -38,7 +39,9 @@ CH_HOST=... CH_PASSWORD=... bash research/alpha_research/MLalpha/run_track.sh --
 # 只缺关卡3 的文件时：  ... run_track.sh --alphas custom.ml_lgbm_v4 --from-step 5
 ```
 
-非 ML 的研究线没有 `ml_training/`，总览里 RankIC 两行会写"无数据"，收益部分照常画。
+两份逐期 RankIC 文件只要有一份就行（ML 研究线是 `ml_training/`，tradecraft 是 `ic_timeline/`）；都没有的研究线（比如世坤），总览里 RankIC 两行会写"无数据"，收益部分照常画。
+
+**持有期**：不同研究线的主 RankIC 口径不一样——ML 模型是 6 根（训练标签），tradecraft 默认 1 根（alpha 自己声明）。持有越久，IC 累积的信号越多，量级不同，不能直接放在一起比。`compare` 会自动统一成大家都有的持有期（ML 6 根 vs tradecraft 时用 tradecraft 的 `rank_ic_h6` 列），页面上写明用的是几根；也可以用 `--ic-horizon` 指定。总览默认用 run 自己的主口径，标题里注明。
 
 ### 市场背景（BTC 收盘价）
 
@@ -121,6 +124,8 @@ python research/viz/viz.py run $R/lgbm_v4 --list-combos      # 列出 run 里有
 | 参数 | 默认 | 说明 |
 | --- | --- | --- |
 | `--ic-window` | 20 | 滚动 RankIC 窗口（天）；总览里另有一条 120 天的 |
+| `--book` | `friction` | 收益从哪个账本读：`friction` = 关卡3（多空，所有研究线都有）；`long_only` = tradecraft 研究线步骤 6 的只做多回测（默认组合 `top10_exit20 / 每 3 根`，净值图另画两个等权基准：候选池、全范围）。输出文件名带 `__long_only` |
+| `--ic-horizon` | 自动 | RankIC 用哪个持有期（根）。总览默认 run 自己的主口径；对比默认统一成大家都有的口径 |
 | `--sharpe-window` | 90 | 滚动 Sharpe 窗口（天） |
 | `--case` | — | 一个 run 里有多个 case（`--alphas a,b` 一起评估）时指定看哪一个 |
 | `--market` | `BTCUSDT` | 最上面一行的市场背景；`none` = 不画 |

@@ -37,6 +37,9 @@ _CONFIG = json.loads((Path(__file__).resolve().parents[2] / "research_config.jso
 INTERVAL: str = _CONFIG["window"]["interval"]
 START_TIME: str = _CONFIG["window"]["research_start"]
 END_TIME: str = _CONFIG["window"]["validation_start"]  # 选择段截止，不是 research_end
+VALIDATION_START: str = _CONFIG["window"]["validation_start"]
+# 整个研究段的终点（选择段 + 验证段）。只有逐期 RankIC 时间线（run_ic_timeline.py）取到这里，阶段一仍只看选择段
+RESEARCH_END: str = _CONFIG["window"]["research_end"]
 
 # `market` 一节：大盘锚点。regime 打标（趋势判定看它）和 Beta 暴露（中性化剥离对它的 Beta）都用它，
 # 所有关卡必须一致，否则各关的 state 含义、残差口径对不上。以前在几个脚本和 config 里各写一份

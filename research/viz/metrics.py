@@ -67,12 +67,32 @@ class Options:
     ic_long_window_days: float = 120.0
     sharpe_window_days: float = 90.0
     turnover_window_days: float = 20.0
+    # RankIC 的持有期：None = 每个 run 用自己的主口径。多模型比较时由 `resolve_ic_horizon` 统一成大家都有的同一个口径
+    ic_horizon: Optional[int] = None
 
 
 # ---- 多模型比较的指标表：名字 -> (标题, 纵轴, 底层序列, 派生函数) ----
 
 def _ic(run: RunSeries, opts: Options) -> Optional[pd.Series]:
-    return run.rank_ic
+    return run.ic(opts.ic_horizon)
+
+
+def resolve_ic_horizon(runs: list[RunSeries], requested: Optional[int] = None) -> Optional[int]:
+    """多个 run 的 RankIC 统一到同一个持有期：给了就用给的；没给时主口径都一样就用它，否则用大家都有的口径里最长的那个。
+
+    1 根和 6 根的 RankIC 量级不同（持有越久，信号累积越多），不同口径放在一张图上比会误导，所以没有共同口径时报错。
+    """
+    with_ic = [run for run in runs if run.rank_ic is not None]
+    if requested is not None or not with_ic:
+        return requested
+    mains = {run.ic_horizon for run in with_ic}
+    if len(mains) == 1:
+        return mains.pop()
+    common = set.intersection(*(set(run.ic_by_horizon) for run in with_ic))
+    if not common:
+        detail = "、".join(f"{run.name}={sorted(run.ic_by_horizon) or '?'}" for run in with_ic)
+        raise ValueError(f"这些 run 的 RankIC 没有共同的持有期（{detail}），用 --ic-horizon 指定一个大家都有的")
+    return max(common)
 
 
 def _net(run: RunSeries, opts: Options) -> Optional[pd.Series]:
@@ -109,9 +129,12 @@ METRICS: dict[str, Metric] = {
 
 
 def metric_title(name: str, opts: Options) -> str:
-    return METRICS[name].title.format(combo=opts.combo.label, cost=opts.cost, ic_window_days=opts.ic_window_days,
-                                      sharpe_window_days=opts.sharpe_window_days,
-                                      turnover_window_days=opts.turnover_window_days)
+    title = METRICS[name].title.format(combo=opts.combo.label, cost=opts.cost, ic_window_days=opts.ic_window_days,
+                                       sharpe_window_days=opts.sharpe_window_days,
+                                       turnover_window_days=opts.turnover_window_days)
+    if METRICS[name].source is _ic and opts.ic_horizon is not None:
+        title += f" · 持有 {opts.ic_horizon} 根"
+    return title
 
 
 def compare_series(runs: list[RunSeries], name: str, opts: Options, baseline: Optional[RunSeries] = None) -> dict[str, pd.Series]:
@@ -120,9 +143,10 @@ def compare_series(runs: list[RunSeries], name: str, opts: Options, baseline: Op
     raw = {run.name: metric.source(run, opts) for run in runs}
     raw = {k: v.dropna() for k, v in raw.items() if v is not None and v.notna().any()}
     if name == "rankic_diff_cum":
-        if baseline is None or baseline.rank_ic is None:
-            raise ValueError("rankic_diff_cum 要指定有 RankIC 的基线（--baseline）")
-        base = baseline.rank_ic.dropna()
+        base = None if baseline is None else baseline.ic(opts.ic_horizon)
+        if base is None:
+            raise ValueError("rankic_diff_cum 要指定有（这个持有期）RankIC 的基线（--baseline）")
+        base = base.dropna()
         raw = {k: (v - base).dropna() for k, v in raw.items() if k != baseline.name}
     if not raw:
         return {}
@@ -141,8 +165,9 @@ def segment_summary(run: RunSeries, opts: Options) -> pd.DataFrame:
         def cut(s: pd.Series) -> pd.Series:
             return s[(s.index >= start) & ((s.index < end) if end is not None else True)]
         row = {"段": segment}
-        if run.rank_ic is not None:
-            row["平均 RankIC"] = float(cut(run.rank_ic).mean())
+        ic = run.ic(opts.ic_horizon)
+        if ic is not None:
+            row["平均 RankIC"] = float(cut(ic).mean())
         if net is not None:
             n = cut(net)
             row.update({"净 Sharpe": sharpe(n), "最大回撤": max_drawdown(n), "累计收益": float(equity(n).iloc[-1] - 1.0)})

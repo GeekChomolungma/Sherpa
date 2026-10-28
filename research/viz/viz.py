@@ -31,10 +31,14 @@ OUTPUT_DIR = Path(__file__).resolve().parent / "output"
 DEFAULT_COMPARE_METRICS = ("rankic_cum", "rankic_diff_cum", "rankic_rolling", "equity", "drawdown")
 
 
-def _options(args: argparse.Namespace) -> Options:
+def _options(args: argparse.Namespace, runs: list) -> Options:
+    """组合没指定时：用账本自己声明的默认组合（只做多账本），否则用全局默认（关卡3 的 top10_exit20 / 每 6 根）。"""
+    declared = next((run.default_combo for run in runs if run.default_combo is not None), None)
+    weighting = args.weighting or (declared.weighting if declared else DEFAULT_WEIGHTING)
+    every = args.every or (declared.rebalance_every if declared else DEFAULT_REBALANCE_EVERY)
     return Options(
-        combo=Combo(args.weighting, args.every, args.case), cost=args.cost,
-        ic_window_days=args.ic_window, sharpe_window_days=args.sharpe_window,
+        combo=Combo(weighting, every, args.case), cost=args.cost,
+        ic_window_days=args.ic_window, sharpe_window_days=args.sharpe_window, ic_horizon=args.ic_horizon,
     )
 
 
@@ -63,25 +67,26 @@ def _target(out: str | None, default_dir: Path, file_name: str) -> Path:
     return out_path if out_path.suffix == ".html" else out_path / file_name
 
 
-def _combo_suffix(opts: Options, default: bool) -> str:
+def _combo_suffix(opts: Options, default: bool, book: str = "friction") -> str:
+    suffix = "" if book == "friction" else f"__{book}"
     if default:
-        return ""
-    return "__" + re.sub(r"[^\w.-]+", "_", f"{opts.combo.weighting}_every{opts.combo.rebalance_every}_{opts.cost}")
+        return suffix
+    return suffix + "__" + re.sub(r"[^\w.-]+", "_", f"{opts.combo.weighting}_every{opts.combo.rebalance_every}_{opts.cost}")
 
 
 def _is_default(args: argparse.Namespace) -> bool:
-    return (args.weighting, args.every, args.cost) == (DEFAULT_WEIGHTING, DEFAULT_REBALANCE_EVERY, DEFAULT_COST)
+    return args.weighting is None and args.every is None and args.cost == DEFAULT_COST
 
 
 def cmd_run(args: argparse.Namespace) -> None:
-    opts = _options(args)
     market = _market(args)
     for path in args.runs:
-        run = load_run(path)
+        run = load_run(path, args.book)
+        opts = _options(args, [run])
         if args.list_combos:
             print(f"{run.name}：{available_combos(run.gross.columns) if run.gross is not None else '无逐 bar 收益'}")
             continue
-        target = _target(args.out, OUTPUT_DIR / "runs", f"{run.name}{_combo_suffix(opts, _is_default(args))}.html")
+        target = _target(args.out, OUTPUT_DIR / "runs", f"{run.name}{_combo_suffix(opts, _is_default(args), args.book)}.html")
         written = _write(overview_page(run, opts, market), target)
         print(f"== {run.name}（{opts.combo.label} · {opts.cost}）==")
         print(segment_summary(run, opts).round(4).to_string(index=False))
@@ -91,8 +96,8 @@ def cmd_run(args: argparse.Namespace) -> None:
 
 
 def cmd_compare(args: argparse.Namespace) -> None:
-    opts = _options(args)
-    runs = [load_run(p) for p in args.runs]
+    runs = [load_run(p, args.book) for p in args.runs]
+    opts = _options(args, runs)
     names = [r.name for r in runs]
     baseline = None
     if args.baseline:
@@ -106,7 +111,7 @@ def cmd_compare(args: argparse.Namespace) -> None:
     if unknown:
         raise SystemExit(f"未知指标 {unknown}；可选的有 {list(METRICS)}")
     name = args.name or "+".join(names)
-    target = _target(args.out, OUTPUT_DIR / "compare", f"{name}{_combo_suffix(opts, _is_default(args))}.html")
+    target = _target(args.out, OUTPUT_DIR / "compare", f"{name}{_combo_suffix(opts, _is_default(args), args.book)}.html")
     written = _write(compare_page(runs, metrics, opts, baseline, _market(args)), target)
     print(f"比较 {names}，指标 {metrics}，组合 {opts.combo.label} · {opts.cost} -> {written}")
 
@@ -115,11 +120,17 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="研究结果可视化：一个 run 的总览 / 多个 run 的对比")
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("runs", nargs="+", help="run 目录（<研究线>/runs/<run_id>/）")
-    common.add_argument("--weighting", default=DEFAULT_WEIGHTING, help=f"权重映射，默认 {DEFAULT_WEIGHTING}")
-    common.add_argument("--every", type=int, default=DEFAULT_REBALANCE_EVERY, help=f"调仓间隔（根 bar），默认 {DEFAULT_REBALANCE_EVERY}")
+    common.add_argument("--weighting", default=None,
+                        help=f"权重映射，默认 {DEFAULT_WEIGHTING}（只做多账本默认用它自己声明的组合）")
+    common.add_argument("--every", type=int, default=None,
+                        help=f"调仓间隔（根 bar），默认 {DEFAULT_REBALANCE_EVERY}（只做多账本默认用它自己声明的组合）")
+    common.add_argument("--book", default="friction", choices=("friction", "long_only"),
+                        help="收益从哪个账本读：friction = 关卡3 多空（默认）；long_only = tradecraft 的只做多回测（含等权基准）")
     common.add_argument("--cost", default=DEFAULT_COST, help=f"成本假设（zero / all_maker / all_taker / stress），默认 {DEFAULT_COST}")
     common.add_argument("--case", default=None, help="run 里有多个 case 时指定一个")
     common.add_argument("--ic-window", type=float, default=20.0, help="滚动 RankIC 窗口（天），默认 20")
+    common.add_argument("--ic-horizon", type=int, default=None,
+                        help="RankIC 用哪个持有期（根）。默认：总览用 run 自己的主口径；对比时统一成大家都有的口径（ML 6 根 vs tradecraft 1 根时取 6）")
     common.add_argument("--sharpe-window", type=float, default=90.0, help="滚动 Sharpe 窗口（天），默认 90")
     common.add_argument("--market", default=DEFAULT_MARKET,
                         help=f"最上面一行的市场背景（收盘价），默认 {DEFAULT_MARKET}；none = 不画。数据由 fetch_market.py 取")
