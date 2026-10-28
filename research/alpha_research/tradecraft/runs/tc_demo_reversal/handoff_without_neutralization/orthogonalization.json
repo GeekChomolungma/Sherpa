@@ -1,0 +1,192 @@
+{
+  "kind": "candidates",
+  "schema_version": 1,
+  "track": "tradecraft",
+  "producer": "orthogonalization:passthrough",
+  "created_at": "2026-10-28T12:11:34Z",
+  "meta": {
+    "source_profile": "D:\\code-repo\\Chomo\\Sherpa\\research\\alpha_research\\tradecraft\\runs\\tc_demo_reversal\\regime_alpha_profile_without_neutralization.csv",
+    "matrix_top_k": 5,
+    "min_abs_t": 0.0,
+    "input_producer": "report"
+  },
+  "regime_sets": {
+    "dispersion": {
+      "low": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 0",
+        "factors": [
+          {
+            "name": "custom.tc_demo_reversal",
+            "ic_ir": 0.15442151371151536,
+            "t_stat": 4.790592505010439,
+            "baseline_ic_ir": 0.1210778517444663,
+            "low_sample": false
+          }
+        ]
+      },
+      "normal": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 0",
+        "factors": [
+          {
+            "name": "custom.tc_demo_reversal",
+            "ic_ir": 0.08752557086982259,
+            "t_stat": 2.90788677436638,
+            "baseline_ic_ir": 0.1210778517444663,
+            "low_sample": false
+          }
+        ]
+      },
+      "high": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 0",
+        "factors": [
+          {
+            "name": "custom.tc_demo_reversal",
+            "ic_ir": 0.1327014748377119,
+            "t_stat": 4.302265314456817,
+            "baseline_ic_ir": 0.1210778517444663,
+            "low_sample": false
+          }
+        ]
+      }
+    },
+    "liquidity": {
+      "starved": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 0",
+        "factors": [
+          {
+            "name": "custom.tc_demo_reversal",
+            "ic_ir": 0.16699301597145458,
+            "t_stat": 4.885984570054872,
+            "baseline_ic_ir": 0.1210778517444663,
+            "low_sample": false
+          }
+        ]
+      },
+      "normal": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 0",
+        "factors": [
+          {
+            "name": "custom.tc_demo_reversal",
+            "ic_ir": 0.1225107732638612,
+            "t_stat": 4.787238940277428,
+            "baseline_ic_ir": 0.1210778517444663,
+            "low_sample": false
+          }
+        ]
+      },
+      "high": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 0",
+        "factors": [
+          {
+            "name": "custom.tc_demo_reversal",
+            "ic_ir": 0.07608433191274688,
+            "t_stat": 2.1996322322918878,
+            "baseline_ic_ir": 0.1210778517444663,
+            "low_sample": false
+          }
+        ]
+      }
+    },
+    "trend": {
+      "bear": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 0",
+        "factors": [
+          {
+            "name": "custom.tc_demo_reversal",
+            "ic_ir": 0.1755506515006625,
+            "t_stat": 3.897703130901066,
+            "baseline_ic_ir": 0.1210778517444663,
+            "low_sample": false
+          }
+        ]
+      },
+      "neutral": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 0",
+        "factors": [
+          {
+            "name": "custom.tc_demo_reversal",
+            "ic_ir": 0.09847254700978791,
+            "t_stat": 4.478881422488783,
+            "baseline_ic_ir": 0.1210778517444663,
+            "low_sample": false
+          }
+        ]
+      },
+      "bull": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 0",
+        "factors": [
+          {
+            "name": "custom.tc_demo_reversal",
+            "ic_ir": 0.1327101885313467,
+            "t_stat": 3.5469406352889745,
+            "baseline_ic_ir": 0.1210778517444663,
+            "low_sample": false
+          }
+        ]
+      }
+    },
+    "volatility": {
+      "low": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 0",
+        "factors": [
+          {
+            "name": "custom.tc_demo_reversal",
+            "ic_ir": 0.13388506725097957,
+            "t_stat": 4.858248966416286,
+            "baseline_ic_ir": 0.1210778517444663,
+            "low_sample": false
+          }
+        ]
+      },
+      "normal": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 0",
+        "factors": [
+          {
+            "name": "custom.tc_demo_reversal",
+            "ic_ir": 0.09547432574722382,
+            "t_stat": 2.4582994888561154,
+            "baseline_ic_ir": 0.1210778517444663,
+            "low_sample": false
+          }
+        ]
+      },
+      "high": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 0",
+        "factors": [
+          {
+            "name": "custom.tc_demo_reversal",
+            "ic_ir": 0.1045177667408972,
+            "t_stat": 3.53169896280922,
+            "baseline_ic_ir": 0.1210778517444663,
+            "low_sample": false
+          }
+        ]
+      }
+    }
+  },
+  "global": {
+    "low_sample": false,
+    "note": "只有 1/1 个因子通过显著性门槛 |t| >= 0",
+    "factors": [
+      {
+        "name": "custom.tc_demo_reversal",
+        "ic_ir": 0.1210778517444663,
+        "t_stat": 6.937418707946614,
+        "baseline_ic_ir": 0.1210778517444663,
+        "low_sample": false
+      }
+    ]
+  }
+}

@@ -1,0 +1,192 @@
+{
+  "kind": "candidates",
+  "schema_version": 1,
+  "track": "tradecraft",
+  "producer": "orthogonalization:passthrough",
+  "created_at": "2026-10-28T14:09:41Z",
+  "meta": {
+    "source_profile": "D:\\code-repo\\Chomo\\Sherpa\\research\\alpha_research\\tradecraft\\runs\\tc_surge_calm_v2_h2\\regime_alpha_profile_without_neutralization.csv",
+    "matrix_top_k": 5,
+    "min_abs_t": 0.0,
+    "input_producer": "report"
+  },
+  "regime_sets": {
+    "dispersion": {
+      "low": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 0",
+        "factors": [
+          {
+            "name": "custom.tc_surge_calm_v2_h2",
+            "ic_ir": 0.1547380493664525,
+            "t_stat": 5.1532683220067685,
+            "baseline_ic_ir": 0.17586208326865205,
+            "low_sample": false
+          }
+        ]
+      },
+      "normal": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 0",
+        "factors": [
+          {
+            "name": "custom.tc_surge_calm_v2_h2",
+            "ic_ir": 0.18190369103645265,
+            "t_stat": 7.032663554830572,
+            "baseline_ic_ir": 0.17586208326865205,
+            "low_sample": false
+          }
+        ]
+      },
+      "high": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 0",
+        "factors": [
+          {
+            "name": "custom.tc_surge_calm_v2_h2",
+            "ic_ir": 0.18948203092915353,
+            "t_stat": 6.427595061119268,
+            "baseline_ic_ir": 0.17586208326865205,
+            "low_sample": false
+          }
+        ]
+      }
+    },
+    "liquidity": {
+      "starved": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 0",
+        "factors": [
+          {
+            "name": "custom.tc_surge_calm_v2_h2",
+            "ic_ir": 0.1884438412051215,
+            "t_stat": 6.234624984559016,
+            "baseline_ic_ir": 0.17586208326865205,
+            "low_sample": false
+          }
+        ]
+      },
+      "normal": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 0",
+        "factors": [
+          {
+            "name": "custom.tc_surge_calm_v2_h2",
+            "ic_ir": 0.17327092343111902,
+            "t_stat": 7.004065228429979,
+            "baseline_ic_ir": 0.17586208326865205,
+            "low_sample": false
+          }
+        ]
+      },
+      "high": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 0",
+        "factors": [
+          {
+            "name": "custom.tc_surge_calm_v2_h2",
+            "ic_ir": 0.16944887175939613,
+            "t_stat": 5.198326462474388,
+            "baseline_ic_ir": 0.17586208326865205,
+            "low_sample": false
+          }
+        ]
+      }
+    },
+    "trend": {
+      "bear": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 0",
+        "factors": [
+          {
+            "name": "custom.tc_surge_calm_v2_h2",
+            "ic_ir": 0.1931447839154956,
+            "t_stat": 4.664305697623519,
+            "baseline_ic_ir": 0.17586208326865205,
+            "low_sample": false
+          }
+        ]
+      },
+      "neutral": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 0",
+        "factors": [
+          {
+            "name": "custom.tc_surge_calm_v2_h2",
+            "ic_ir": 0.14968845196618014,
+            "t_stat": 6.298897964662979,
+            "baseline_ic_ir": 0.17586208326865205,
+            "low_sample": false
+          }
+        ]
+      },
+      "bull": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 0",
+        "factors": [
+          {
+            "name": "custom.tc_surge_calm_v2_h2",
+            "ic_ir": 0.22412430420814158,
+            "t_stat": 6.528552662954575,
+            "baseline_ic_ir": 0.17586208326865205,
+            "low_sample": false
+          }
+        ]
+      }
+    },
+    "volatility": {
+      "low": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 0",
+        "factors": [
+          {
+            "name": "custom.tc_surge_calm_v2_h2",
+            "ic_ir": 0.2061762066117408,
+            "t_stat": 8.444671996297416,
+            "baseline_ic_ir": 0.17586208326865205,
+            "low_sample": false
+          }
+        ]
+      },
+      "normal": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 0",
+        "factors": [
+          {
+            "name": "custom.tc_surge_calm_v2_h2",
+            "ic_ir": 0.16394980940932685,
+            "t_stat": 4.339408228361989,
+            "baseline_ic_ir": 0.17586208326865205,
+            "low_sample": false
+          }
+        ]
+      },
+      "high": {
+        "low_sample": false,
+        "note": "只有 1/1 个因子通过显著性门槛 |t| >= 0",
+        "factors": [
+          {
+            "name": "custom.tc_surge_calm_v2_h2",
+            "ic_ir": 0.14600461380405283,
+            "t_stat": 5.31854849498974,
+            "baseline_ic_ir": 0.17586208326865205,
+            "low_sample": false
+          }
+        ]
+      }
+    }
+  },
+  "global": {
+    "low_sample": false,
+    "note": "只有 1/1 个因子通过显著性门槛 |t| >= 0",
+    "factors": [
+      {
+        "name": "custom.tc_surge_calm_v2_h2",
+        "ic_ir": 0.17586208326865205,
+        "t_stat": 10.770740509222412,
+        "baseline_ic_ir": 0.17586208326865205,
+        "low_sample": false
+      }
+    ]
+  }
+}

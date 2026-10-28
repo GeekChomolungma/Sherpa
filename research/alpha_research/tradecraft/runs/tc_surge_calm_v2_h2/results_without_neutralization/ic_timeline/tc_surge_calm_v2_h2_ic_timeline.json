@@ -1,0 +1,19 @@
+{
+  "alpha": "custom.tc_surge_calm_v2_h2",
+  "horizon_bars": 2,
+  "execution_delay_bars": 1,
+  "reference_horizons": [
+    1,
+    6
+  ],
+  "tradable_mask": {
+    "min_percentile": 0.5,
+    "min_quote_volume": 0,
+    "min_trades_count": 0
+  },
+  "neutralize": false,
+  "min_period_symbols": 20,
+  "research_start": "2023-01-01",
+  "validation_start": "2024-06-30",
+  "research_end": "2026-03-15"
+}
