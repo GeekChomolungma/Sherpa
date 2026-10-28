@@ -82,6 +82,8 @@ bash research/alpha_research/worldquant_101/run_track.sh --from-step 5
 | `04_robustness.csv` | **先看这张**：每个 case × 成本一行，全部组合（映射 × 调仓频率）在两段的净 Sharpe **中位数** / 为正占比、两段都为正的组合占比。看的是"一片参数区域都成立"，不是网格里最高的那格；选择段空仓 > 20% 的组合不计入 |
 | `05_style_attribution.csv` | 每个组合 × 段（全吃单成本）：净收益对 BTC / 全市场等权 / 低波动 / 小市值 / 反转 / 动量 六个风格收益做时间序列回归——`beta[*]` 是风格暴露，`alpha_sharpe` 是剥离风格后的 Sharpe（选币能力的估计），`r2` 是风格能解释的比例（`sherpa.backtest.attribution`） |
 | `06_quarterly.csv` | 每个组合（全吃单成本）按自然季度的净 Sharpe / 收益，`positive_quarter_frac` = 赚钱季度的占比 |
+| `07_bar_gross_returns.csv` / `08_bar_turnover.csv` | **全部组合、整个研究段**（选择段 + 验证段）的逐 bar 毛收益 / 单边换手，宽表（行 = bar，列 = 组合）。任意成本下的净收益 = 毛收益 − 换手 × 成本 bps / 10000；画时间序列（`research/viz/`）用 |
+| `bar_series.json` | `07` / `08` 的口径：各成本假设的 bps、验证段起点、执行延迟 |
 
 **怎么读、按什么顺序读、什么情况算好，见 [`RESULT_READING.md`](RESULT_READING.md)。**不要只看 `02` 排第一的那一行：在几百个组合里挑最高的一格，结果天然偏乐观。
 

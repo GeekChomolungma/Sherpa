@@ -39,7 +39,11 @@
 - `03_validation_net_equity.csv`：验证段、`BASE_COST` 下净 Sharpe 前 `EQUITY_TOP_N` 名组合的净值曲线（宽表，
   列 = 组合），方便画图。全部组合都存会有几十 MB；
 - `case_grids/<case>.csv`：每个 case 一张验证段净 Sharpe 的二维截面（行 = 映射，列 = 成本假设 × 调仓频率，
-  `zero` 那几列就是毛 Sharpe），从 `01_friction_summary.csv` pivot 出来，看一个 case 的稳健区域用。
+  `zero` 那几列就是毛 Sharpe），从 `01_friction_summary.csv` pivot 出来，看一个 case 的稳健区域用；
+- `07_bar_gross_returns.csv` / `08_bar_turnover.csv`：**全部组合、整个研究段**（选择段 + 验证段，从 case 第一根有打分的
+  bar 起）的逐 bar 毛收益和单边换手，宽表（行 = bar，列 = 组合，列名同 `03`）。成本是换手的线性函数，任意成本假设下的
+  逐 bar 净收益 = 毛收益 − 换手 × 成本 bps / 10000，所以不用每种成本各存一份；各成本假设的 bps、验证段起点写在
+  `bar_series.json`。画时间序列（净值、回撤、滚动 Sharpe，`research/viz/`）用这两张表，`03` 只是其中验证段前几名的净值。
 
 怎么读这些结果，见同目录的 `RESULT_READING.md`。
 
@@ -53,6 +57,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import sys
@@ -105,6 +110,9 @@ CONSISTENCY_FILE = "00_case_consistency.csv"
 SUMMARY_FILE = "01_friction_summary.csv"
 RANKING_FILE = "02_validation_base_cost.csv"
 EQUITY_FILE = "03_validation_net_equity.csv"
+BAR_GROSS_FILE = "07_bar_gross_returns.csv"
+BAR_TURNOVER_FILE = "08_bar_turnover.csv"
+BAR_META_FILE = "bar_series.json"
 CASE_GRIDS_DIR = "case_grids"
 ROBUSTNESS_FILE = "04_robustness.csv"
 ATTRIBUTION_FILE = "05_style_attribution.csv"
@@ -213,6 +221,8 @@ def main(argv: list[str] | None = None) -> None:
     summary: list[dict] = []
     equity: dict[str, pd.Series] = {}
     base_nets: dict[str, pd.Series] = {}
+    bar_gross: dict[str, pd.Series] = {}
+    bar_turnover: dict[str, pd.Series] = {}
     started = time.monotonic()
     print(f"\n正在跑 {len(scores) * len(grid)} 组回测（{len(scores)} 个 case 分到 {MAX_WORKERS} 个进程）……")
     with ProcessPoolExecutor(max_workers=MAX_WORKERS) as pool:
@@ -221,10 +231,12 @@ def main(argv: list[str] | None = None) -> None:
             for case, score in scores.items()
         }
         for done, future in enumerate(as_completed(futures), 1):
-            rows, curves, nets = future.result()
+            rows, curves, nets, gross, turnover = future.result()
             summary += rows
             equity.update(curves)
             base_nets.update(nets)
+            bar_gross.update(gross)
+            bar_turnover.update(turnover)
             print(f"  [{done}/{len(futures)}] {futures[future]} 完成，已用时 {(time.monotonic() - started) / 60:.1f} 分钟", flush=True)
 
     summary_df = pd.DataFrame(summary)
@@ -239,6 +251,7 @@ def main(argv: list[str] | None = None) -> None:
     top_labels = [_label(row) for row in ranking.head(EQUITY_TOP_N).to_dict("records")]
     pd.DataFrame({label: equity[label] for label in top_labels}).to_csv(results_dir / EQUITY_FILE)
     write_case_grids(summary_df, results_dir / CASE_GRIDS_DIR)
+    write_bar_series(bar_gross, bar_turnover, results_dir, validation_start=validation_start, shift=shift)
 
     robustness = _robustness(summary_df)
     robustness.to_csv(results_dir / ROBUSTNESS_FILE, index=False)
@@ -262,7 +275,7 @@ def main(argv: list[str] | None = None) -> None:
           f"{config.ROBUSTNESS_MAX_FLAT:.0%} 的组合不计入） ==")
     print(robustness[robustness.cost_model == config.BASE_COST].drop(columns="cost_model").round(3).to_string(index=False))
     print(f"\n结果已写入 {results_dir}：{CONSISTENCY_FILE} / {SUMMARY_FILE} / {RANKING_FILE} / {EQUITY_FILE} / {CASE_GRIDS_DIR}/ / "
-          f"{ROBUSTNESS_FILE} / {ATTRIBUTION_FILE} / {QUARTERLY_FILE}")
+          f"{ROBUSTNESS_FILE} / {ATTRIBUTION_FILE} / {QUARTERLY_FILE} / {BAR_GROSS_FILE} / {BAR_TURNOVER_FILE} / {BAR_META_FILE}")
 
 
 def write_case_grids(summary_df: pd.DataFrame, out_dir: Path) -> list[Path]:
@@ -289,6 +302,29 @@ def write_case_grids(summary_df: pd.DataFrame, out_dir: Path) -> list[Path]:
     return written
 
 
+def write_bar_series(
+    gross: dict[str, pd.Series],
+    turnover: dict[str, pd.Series],
+    out_dir: Path,
+    *,
+    validation_start: pd.Timestamp,
+    shift: int,
+) -> None:
+    """`07` / `08` 两张逐 bar 宽表（列按组合名排序）和说明它们口径的 `bar_series.json`。"""
+    labels = sorted(gross)
+    pd.DataFrame({label: gross[label] for label in labels}).to_csv(out_dir / BAR_GROSS_FILE)
+    pd.DataFrame({label: turnover[label] for label in labels}).to_csv(out_dir / BAR_TURNOVER_FILE)
+    meta = {
+        "description": "07 = 逐 bar 毛收益，08 = 逐 bar 单边换手；净收益 = 毛收益 − 换手 × cost_bps / 10000",
+        "cost_bps": {name: model.cost(1.0) * 10_000.0 for name, model in config.COST_MODELS.items()},
+        "base_cost": config.BASE_COST,
+        "validation_start": validation_start.isoformat(),
+        "shift": shift,
+        "columns": "<case> | <weighting> | every<rebalance_every>",
+    }
+    (out_dir / BAR_META_FILE).write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
 def _label(row: dict[str, Any]) -> str:
     return f"{row['case']} | {row['weighting']} | every{row['rebalance_every']}"
 
@@ -302,15 +338,17 @@ def _run_case(
     grid: list[tuple[str, int]],
     segments: dict[str, pd.Series],
     periods_per_year: float,
-) -> tuple[list[dict], dict[str, pd.Series]]:
+) -> tuple[list[dict], dict[str, pd.Series], dict[str, pd.Series], dict[str, pd.Series], dict[str, pd.Series]]:
     """一个 case 的整套网格（worker 进程里跑）：返回绩效长表的行、验证段 BASE_COST 下的净值曲线、
-    全时段（从第一根有打分的 bar 起）BASE_COST 下的逐 bar 净收益（风格归因 / 分季度用）。
+    全时段（从第一根有打分的 bar 起）BASE_COST 下的逐 bar 净收益（风格归因 / 分季度用），以及全时段的逐 bar 毛收益和换手（`07` / `08`）。
 
     打分 → 目标仓位 → 回测 → 分段绩效这条链在 `sherpa.backtest.score_backtest`（跟 ML 探索实验共用），这里只管网格。
     """
     rows: list[dict] = []
     curves: dict[str, pd.Series] = {}
     nets: dict[str, pd.Series] = {}
+    bar_gross: dict[str, pd.Series] = {}
+    bar_turnover: dict[str, pd.Series] = {}
     # 分段从这个 case 第一根有打分的 bar 开始：模型 / 因子的 warm-up 期（比如 ML alpha 第一个模型之前）没有信号，
     # 算进选择段只会制造一大段"空仓"，拉低 Sharpe、让空仓比例失真
     scored = score.notna().any(axis=1)
@@ -329,8 +367,11 @@ def _run_case(
             if cost_name == config.BASE_COST and segment.startswith("validation"):
                 curves[_label(key)] = (1.0 + net).cumprod()
         base_net = gross - turnover.map(config.COST_MODELS[config.BASE_COST].cost)
-        nets[_label(key)] = base_net[base_net.index >= active_start]
-    return rows, curves, nets
+        active = gross.index >= active_start
+        nets[_label(key)] = base_net[active]
+        bar_gross[_label(key)] = gross[active]
+        bar_turnover[_label(key)] = turnover[active]
+    return rows, curves, nets, bar_gross, bar_turnover
 
 
 def _robustness(summary_df: pd.DataFrame) -> pd.DataFrame:

@@ -15,6 +15,8 @@
 5. 用清单里全部模型对各自服务的时间段做样本外预测，逐期算 RankIC，写 `<研究线>/results/ml_training/`：
    - `folds.csv`：每个重训时点一行（训练窗口起止和天数、训练行数、早停轮数、内部验证 IC_IR、服务期内的样本外 RankIC）；
    - `oos_summary.csv`：拼起来的样本外 RankIC 按选择段 / 验证段汇总；
+   - `ic_by_bar.csv`：逐期（每根 bar 一行）的样本外 RankIC，带这一期的币数、负责它的重训时点、所属段——上面两张表都是它的汇总，
+     画时间序列（`research/viz/`）用它；
    - `train_config.json`：这个模型实际用的完整训练配置（后端、训练窗口、标签、种子……，跟模型清单里记的同一份），读结果的人
      不用去翻模型类就知道这次 run 是怎么训练的。
 
@@ -202,8 +204,8 @@ def train_alpha(
 
 def evaluate(
     alpha: MLAlpha, manifest: Manifest, frame: TrainingFrame, cfg: config.TrainConfig
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """清单里每个模型只预测它服务的那段时间（样本外），逐期 RankIC。"""
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """清单里每个模型只预测它服务的那段时间（样本外），逐期 RankIC。返回 (每个重训时点一行, 分段汇总, 每期一行)。"""
     entries = manifest.sorted_entries()
     assigned = manifest.assign(frame.times)
     backend = get_backend(manifest.backend)
@@ -235,12 +237,21 @@ def evaluate(
     covered = np.isfinite(pred)
     ic = spearman_by_period(pred[covered], frame.label[covered], frame.times[covered], min_period_rows=cfg.min_period_rows)
     validation_start = pd.Timestamp(VALIDATION_START, tz="UTC")
+    times = frame.times[covered]
+    fold_of = np.array([e.valid_from for e in entries])[assigned[covered]]
+    by_bar = pd.DataFrame({
+        "rank_ic": ic,
+        "n_symbols": pd.Series(1, index=times).groupby(level=0).size().reindex(ic.index),
+        "fold_valid_from": pd.Series(fold_of, index=times).groupby(level=0).first().reindex(ic.index),
+        "segment": np.where(ic.index < validation_start, "selection", "validation"),
+    })
+    by_bar.index.name = "time"
     summary = [
         {"segment": "selection(样本外，特征名单在此段选出，偏乐观)", **ic_stats(ic[ic.index < validation_start])},
         {"segment": "validation(样本外)", **ic_stats(ic[ic.index >= validation_start])},
         {"segment": "all", **ic_stats(ic)},
     ]
-    return pd.DataFrame(fold_rows), pd.DataFrame(summary)
+    return pd.DataFrame(fold_rows), pd.DataFrame(summary), by_bar
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -286,10 +297,11 @@ def main(argv: list[str] | None = None) -> None:
         print(f"  训练集（损失掩码内、标签已知）{len(frame):,} 行，构建用时 {time.monotonic() - started:.0f} 秒")
         manifest = train_alpha(alpha, frame, panel.index[-1], cfg, args.force)
 
-        folds, summary = evaluate(alpha, manifest, frame, cfg)
+        folds, summary, by_bar = evaluate(alpha, manifest, frame, cfg)
         prefix = alpha.model_name
         folds.to_csv(results_dir / f"{prefix}_folds.csv", index=False)
         summary.to_csv(results_dir / f"{prefix}_oos_summary.csv", index=False)
+        by_bar.to_csv(results_dir / f"{prefix}_ic_by_bar.csv")
         (results_dir / f"{prefix}_train_config.json").write_text(json.dumps(
             {"alpha": alpha.qualified_name, "model_dir": str(alpha.model_dir), "feature_fingerprint": manifest.feature_fingerprint,
              "config_fingerprint": manifest.config_fingerprint,
@@ -299,7 +311,7 @@ def main(argv: list[str] | None = None) -> None:
             ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print("\n  样本外 RankIC（每个模型只预测它服务的那段时间，损失掩码内）：")
         print(summary.round(4).to_string(index=False))
-        print(f"  结果：{results_dir / f'{prefix}_folds.csv'}、{results_dir / f'{prefix}_oos_summary.csv'}、{prefix}_train_config.json")
+        print(f"  结果：{results_dir / f'{prefix}_folds.csv'}、{results_dir / f'{prefix}_oos_summary.csv'}、{prefix}_ic_by_bar.csv、{prefix}_train_config.json")
 
 
 if __name__ == "__main__":

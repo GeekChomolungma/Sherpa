@@ -3,9 +3,9 @@
   "schema_version": 1,
   "track": "MLalpha",
   "producer": "orthogonalization:passthrough",
-  "created_at": "2026-10-10T20:54:30Z",
+  "created_at": "2026-10-27T19:53:23Z",
   "meta": {
-    "source_profile": "D:\\code-repo\\Chomo\\Sherpa\\research\\alpha_research\\MLalpha\\regime_alpha_profile_without_neutralization.csv",
+    "source_profile": "D:\\code-repo\\Chomo\\Sherpa\\research\\alpha_research\\MLalpha\\runs\\lgbm_v4\\regime_alpha_profile_without_neutralization.csv",
     "matrix_top_k": 5,
     "min_abs_t": 2.0,
     "input_producer": "report"

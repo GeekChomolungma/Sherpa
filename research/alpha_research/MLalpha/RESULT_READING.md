@@ -94,6 +94,7 @@ research/alpha_research/MLalpha/
 | --- | --- | --- |
 | `<model>_folds.csv` | **一个重训时点**（50 行） | `valid_from / valid_until`（这个模型负责的 20 天）、`n_train_rows`（扩展窗口，越往后越多）、`best_iterations`（每个种子的早停轮数，竖线分隔；树模型 = 棵数，LSTM = epoch 数）、`inner_valid_ic_ir`（训练窗口里内部验证段的 IC_IR，只用于早停）、`periods`（负责期内的 bar 数）、**`rank_ic_mean` / `rank_ic_ir` / `rank_ic_win_rate`（负责期内逐 bar 截面 RankIC 的均值 / IR / 为正比例，纯样本外）** |
 | `<model>_oos_summary.csv` | 一个段 | 把所有 fold 的逐 bar RankIC 拼起来，按选择段 / 验证段 / 全部汇总 |
+| `<model>_ic_by_bar.csv` | 一根 bar | **逐期样本外 RankIC**（`rank_ic`），附这一期参与的币数 `n_symbols`、负责它的重训时点 `fold_valid_from`、所属段 `segment`。上面两张表都是它的汇总；画排序能力的时间序列（`research/viz/`）用它。2026-10-27 起才有 |
 | `<model>_train_config.json` | 一个模型 | **这次 run 的模型是怎么训练的**：`train_window`（扩展 / 滑动多少天）、后端、标签、种子等全部训练参数（跟模型清单同一份），以及特征 / 配置指纹 |
 
 `<model>_folds.csv` 还有三列训练窗口：`train_from` / `train_until` / `train_days`。扩展窗口的 `train_from` 一直是研究起点、`train_days` 越来越大；
@@ -130,11 +131,14 @@ research/alpha_research/MLalpha/
 | `00_case_consistency.csv` | 一个 case | 配方重建一致性；`recomputed_validation_ic_ir` 是**验证段、1 根标签**的 IC_IR（§2） |
 | `01_friction_summary.csv` | case × 映射 × 调仓频率 × 成本 × 段 | 完整长表：`gross/net_sharpe`、`net_ann_return / vol`、`net_max_drawdown`、`net_calmar`、`turnover_per_bar / per_year`、`cost_drag_per_year`、`turnover_decay`、`breakeven_cost_bps`、`flat_bar_fraction`。其它表都从它来 |
 | `02_validation_base_cost.csv` | 验证段、吃单下的一个组合（39 行，按净 Sharpe 排序） | 附挂单 / 压力下的净 Sharpe 和红线判定 `passes_red_lines`；挑具体组合时用 |
-| `03_validation_net_equity.csv` | 验证段的一根 bar | **验证段吃单下净 Sharpe 前 30 名组合的净值曲线**（从 1 开始累乘）。是目前唯一逐 bar 的收益序列，但只有验证段、而且是挑过的前 30 名，偏乐观 |
+| `03_validation_net_equity.csv` | 验证段的一根 bar | **验证段吃单下净 Sharpe 前 30 名组合的净值曲线**（从 1 开始累乘）。只有验证段、而且是挑过的前 30 名，偏乐观；完整的逐 bar 序列看 `07` / `08` |
 | `04_robustness.csv` | case × 成本 | 39 个组合两段的净 Sharpe 中位数、为正占比、两段都为正占比（选择段空仓 > 20% 的组合不计入） |
 | `05_style_attribution.csv` | 组合 × 段 | 吃单净收益对 6 个风格的回归（诊断，§4 第 3 步） |
 | `06_quarterly.csv` | 一个组合 | 吃单净收益的分季度 `sharpe[季度]` / `return[季度]`、`positive_quarter_frac`。按季度的时间序列 |
 | `case_grids/<case>.csv` | 一种映射 | 验证段净 Sharpe 的二维截面（列 = 成本 × 调仓频率），找"一片都好的区域" |
+| `07_bar_gross_returns.csv` | 一根 bar | **全部 39 个组合、整个研究段**（选择段 + 验证段）的逐 bar 毛收益，列 = 组合（`<case> \| <映射> \| every<N>`）。2026-10-27 起才有 |
+| `08_bar_turnover.csv` | 一根 bar | 同样形状的逐 bar 单边换手。任意成本下的净收益 = 毛收益 − 换手 × 成本 bps / 10000，所以不用每种成本各存一份 |
+| `bar_series.json` | — | `07` / `08` 的口径：各成本假设的 bps、验证段起点（进 git） |
 
 ---
 
@@ -292,21 +296,22 @@ V1–V4 横比（同一套数据、研究窗口、训练流程和关卡3 网格�
 
 ---
 
-## 7. 时间序列可视化：现有的数据和缺口
+## 7. 时间序列可视化
 
-以后从交易员视角做"横轴是时间"的可视化脚本，现在 runs 里能直接用的时间序列：
+横轴是时间的图用 [`research/viz/`](../../viz/README.md) 画（单个 run 的总览、多个模型同一指标放一张图），它读的是 runs 里这些逐期序列：
 
 | 序列 | 来源 | 粒度 | 覆盖 | 适合画什么 |
 | --- | --- | --- | --- | --- |
-| 样本外 RankIC（均值 / IR / 为正比例） | `ml_training/<model>_folds.csv` | 每 20 天一个点 | 全研究段 | 排序能力曲线、两个模型的配对差、滚动均值、趋势线 |
+| 样本外 RankIC | `ml_training/<model>_ic_by_bar.csv` | 每根 bar | 全研究段 | 滚动 / 累计 RankIC、两个模型的逐期差（累计差的拐点 = 优势开始 / 结束） |
+| 样本外 RankIC（均值 / IR / 为正比例） | `ml_training/<model>_folds.csv` | 每 20 天一个点 | 全研究段 | §5 的逐 fold 配对 |
 | 早停轮数、训练行数 | 同上 | 每 20 天 | 全研究段 | 训练健康度（模型是不是越来越学不到东西） |
+| 毛收益、换手 → 任意成本下的净收益、净值、回撤、滚动 Sharpe | `friction/07_bar_gross_returns.csv`、`08_bar_turnover.csv` | 每根 bar | 全研究段，全部 39 个组合 | 选定组合的净值 / 回撤、全部组合的分布带、多模型同一组合对比 |
 | 吃单净收益 / 净 Sharpe | `friction/06_quarterly.csv` | 每季度 | 全研究段，39 个组合 | 季度柱状图、跟季度 RankIC 叠在一起看挂钩 |
-| 净值曲线 | `friction/03_validation_net_equity.csv` | 每根 bar | **只有验证段**，**只有前 30 名组合** | 验证段净值和回撤（注意是挑过的，偏乐观） |
 
-缺口（要画逐 bar / 全研究段的时间序列，需要关卡3 或训练步骤额外落盘，目前**没有**）：
+2026-10-27 以前的 run 没有 `ic_by_bar.csv` 和 `07` / `08`，重跑一次研究线就有（模型已训练好时步骤 0 只评估、不重训）。
 
-- 逐 bar 的样本外 RankIC 序列（现在只有按 fold 汇总后的数）；
-- 全研究段、全部 39 个组合的逐 bar 净收益和换手（现在只有验证段前 30 名的净值）；
+还缺的（以后要用再落盘）：
+
 - 逐 bar 的 regime 标签（画"什么市况下 IC 高 / 低"的着色背景要用）；
 - 逐 bar 的首尾分位价差（Top-K 实际赚的东西，用来补 §5.4 挂钩检查的那一层）。
 

@@ -174,6 +174,32 @@ def test_training_to_inference_end_to_end(tmp_path, monkeypatch):
     assert stats["rank_ic_mean"] > 0.1
 
 
+def test_per_bar_rank_ic_is_what_the_fold_and_segment_tables_summarize(tmp_path, monkeypatch):
+    import dataclasses
+
+    import config
+    import run_training
+
+    panel = _reversal_panel()
+    manifest = _train_toy(panel, tmp_path)
+    monkeypatch.setenv("SHERPA_ML_MODEL_ROOT", str(tmp_path))
+    frame = build_training_frame(
+        panel, _ToyML.spec, horizon=1, delay=0, neutralize_label=False, tail_quantile=0.2, tail_weight=3.0
+    )
+    cfg = dataclasses.replace(config.for_model({}), min_period_rows=5)
+    folds, summary, by_bar = run_training.evaluate(_ToyML(), manifest, frame, cfg)
+
+    assert by_bar.index.is_monotonic_increasing and by_bar.index.is_unique
+    assert (by_bar["n_symbols"] >= 5).all()
+    per_fold = by_bar.groupby("fold_valid_from")["rank_ic"].mean()
+    np.testing.assert_allclose(per_fold.to_numpy(), folds.set_index("valid_from").loc[per_fold.index, "rank_ic_mean"].to_numpy())
+    overall = summary.set_index("segment").loc["all"]
+    assert overall["periods"] == by_bar["rank_ic"].notna().sum()
+    assert np.isclose(overall["rank_ic_mean"], by_bar["rank_ic"].mean())
+    validation_start = pd.Timestamp(run_training.VALIDATION_START, tz="UTC")
+    assert ((by_bar["segment"] == "validation") == (by_bar.index >= validation_start)).all()
+
+
 def test_ml_alpha_scores_are_point_in_time(tmp_path, monkeypatch):
     """截断面板算出来的打分，跟完整面板算出来的对应行完全一致（阶段一 / 关卡3 取的数据长度不同，靠的就是这点）。"""
     panel = _reversal_panel()
