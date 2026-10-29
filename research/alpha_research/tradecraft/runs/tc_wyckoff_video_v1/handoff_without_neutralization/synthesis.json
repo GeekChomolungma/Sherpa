@@ -1,0 +1,25 @@
+{
+  "kind": "recipes",
+  "schema_version": 1,
+  "track": "tradecraft",
+  "producer": "synthesis:passthrough",
+  "created_at": "2026-10-29T00:16:05Z",
+  "meta": {
+    "input_producer": "orthogonalization:passthrough",
+    "options": {
+      "singles": true,
+      "equal_weight": false,
+      "routed": false,
+      "direction": "as_is"
+    },
+    "note": "透传：方向按因子自己的定义（direction=as_is，不看 IC），等权；未经关卡2 在验证段上比较"
+  },
+  "recipes": {
+    "single:custom.tc_wyckoff_video_v1": {
+      "kind": "static",
+      "weights": {
+        "custom.tc_wyckoff_video_v1": 1.0
+      }
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "description": "只做多 Top-K（多头满仓）+ 两个等权基准。07 = 逐 bar 毛收益，08 = 逐 bar 换手；净收益 = 毛收益 − 换手 × cost_bps / 10000",
+  "cost_bps": {
+    "zero": 0.0,
+    "all_maker": 2.0,
+    "all_taker": 8.0,
+    "stress": 15.0
+  },
+  "base_cost": "all_taker",
+  "validation_start": "2024-06-30T00:00:00+00:00",
+  "shift": 2,
+  "default_weighting": "top10_exit20",
+  "default_rebalance_every": 3,
+  "columns": "<case> | <weighting> | every<rebalance_every>；case = long:<alpha> 或 benchmark"
+}

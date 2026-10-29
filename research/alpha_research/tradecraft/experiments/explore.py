@@ -48,6 +48,7 @@ import evaluation  # noqa: E402
 from sherpa.alpha.custom.tradecraft import TRADECRAFT_LIQUIDITY  # noqa: E402
 from sherpa.alpha.custom.tradecraft import indicators  # noqa: E402
 from sherpa.alpha.custom.tradecraft.liquidity_surge import LiquiditySurgeBase  # noqa: E402
+from sherpa.alpha.custom.tradecraft.wyckoff import WyckoffBase  # noqa: E402
 from sherpa.metrics.factor import forward_returns, rank_ic  # noqa: E402
 
 CONFIG = json.loads((ROOT / "research" / "research_config.json").read_text(encoding="utf-8"))
@@ -55,7 +56,7 @@ VALIDATION_START = pd.Timestamp(CONFIG["window"]["validation_start"], tz="UTC")
 DELAY = int(CONFIG["label"]["execution_delay_bars"])
 CACHE = ROOT / "research" / "alpha_research" / "MLalpha" / "experiments" / "_cache" / (
     f"panel_{CONFIG['window']['research_start']}_{CONFIG['window']['research_end']}.pkl")
-HORIZONS = (1, 6)
+HORIZONS = (1, 6, 18)  # 18 根 = 3 天：威科夫这类波段规则的持有期
 MIN_PERIOD_SYMBOLS = 20  # 同 run_ic_timeline.py
 PERIODS_PER_YEAR = 365 * 6
 WORKERS = int(os.environ.get("SHERPA_MAX_WORKERS", 16))
@@ -65,6 +66,9 @@ WORKERS = int(os.environ.get("SHERPA_MAX_WORKERS", 16))
 # ---------------------------------------------------------------------------------------------
 LS = LiquiditySurgeBase
 OFF = {"w_accel": 0.0, "w_breakout": 0.0, "w_shadow": 0.0}
+WY = WyckoffBase
+WY_OFF = {"w_false_break": 0.0, "w_break_hold": 0.0, "w_effort": 0.0, "w_result": 0.0, "w_reclaim_volume": 0.0, "w_trend": 0.0}
+VIDEO = {"probe_bars": 6, "w_effort": 1.0, "effort_bars": 120, "w_trend": 1.0}  # = TcWyckoffVideoV1 的多头打分
 BATCHES: dict[str, dict[str, tuple[type, dict[str, Any], str]]] = {
     # 第一批：把三项拆开看各自的方向和强弱，看候选池本身有没有用
     "b1_decompose": {
@@ -122,6 +126,90 @@ BATCHES: dict[str, dict[str, tuple[type, dict[str, Any], str]]] = {
                              "pool_quantile": 0.5}, "全部拉长 + 池 50%"),
         "ff_slower": (LS, {"accel_kind": "flat", "accel_bars": 12, "shadow_bars": 12, "breakout_bars": 18, "surge_short": 18,
                            "surge_long": 120}, "更慢：变化率 / 上影线 2 天、涨幅 3 天、放量 3 天 vs 20 天"),
+    },
+    # ---- 威科夫（wyckoff.py，素材 sherpa/alpha/custom/tradecraft/materials/wyckoff_spring_yekoi.md）----
+    # 第一批：每个分项单独看方向和强弱（权重 +1，RankIC 为负 = 反过来用才对），再看区间 / 试探段 / 量价窗口
+    "w1_decompose": {
+        "fb": (WY, {}, "只用假突破（弹簧 − 上冲回落）：区间 20 天、试探 3 天"),
+        "bh": (WY, {**WY_OFF, "w_break_hold": 1.0}, "只用突破 / 跌破后收不回来（顺势为正）"),
+        "effort": (WY, {**WY_OFF, "w_effort": 1.0}, "只用量价：7 天里上涨 K 成交额 − 下跌 K 成交额"),
+        "reclaim": (WY, {**WY_OFF, "w_reclaim_volume": 1.0}, "只用放量收回（× 假突破方向）"),
+        "trend": (WY, {**WY_OFF, "w_trend": 1.0}, "只用均线组：EMA 20 天 / 50 天"),
+        "fb_r60": (WY, {"range_bars": 60}, "假突破，区间 10 天"),
+        "fb_r240": (WY, {"range_bars": 240}, "假突破，区间 40 天"),
+        "fb_p6": (WY, {"probe_bars": 6}, "假突破，试探 1 天"),
+        "fb_p36": (WY, {"probe_bars": 36}, "假突破，试探 6 天"),
+        "effort_e18": (WY, {**WY_OFF, "w_effort": 1.0, "effort_bars": 18}, "量价看 3 天"),
+        "effort_e120": (WY, {**WY_OFF, "w_effort": 1.0, "effort_bars": 120}, "量价看 20 天"),
+    },
+    # 第二批：第一批里假突破（弹簧）只有很弱的正 IC（试探 1 天最好），"突破收不回来"和"上涨放量"都是稳定的负 IC——
+    # 截面上放量上涨的币之后跑输（威科夫的"努力没有结果" = 派发）。试：反过来用、量价背离（努力 vs 结果）、组合；
+    # 并用纯涨跌反转（−result）做对照，看是不是只是短期反转换了个说法
+    "w2_effort_result": {
+        "rev42": (WY, {**WY_OFF, "w_result": -1.0}, "对照：7 天涨跌反转（跌得多分高）"),
+        "rev120": (WY, {**WY_OFF, "w_result": -1.0, "effort_bars": 120}, "对照：20 天涨跌反转"),
+        "noeffort42": (WY, {**WY_OFF, "w_effort": -1.0}, "上涨 K 成交额占比低的分高（7 天）"),
+        "noeffort120": (WY, {**WY_OFF, "w_effort": -1.0, "effort_bars": 120}, "同上，20 天"),
+        "div42": (WY, {**WY_OFF, "w_effort": -1.0, "w_result": 1.0}, "量价背离：涨了但上涨 K 没放量的分高，放量却没涨的分低（7 天）"),
+        "div120": (WY, {**WY_OFF, "w_effort": -1.0, "w_result": 1.0, "effort_bars": 120}, "同上，20 天"),
+        "nohold": (WY, {**WY_OFF, "w_break_hold": -1.0}, "跌出区间收不回来的分高、冲出区间的分低"),
+        "spring_nohold": (WY, {"probe_bars": 6, "w_break_hold": -1.0}, "弹簧（试探 1 天）+ 跌出区间的分高"),
+        "spring_noeffort": (WY, {"probe_bars": 6, "w_effort": -1.0, "effort_bars": 120}, "弹簧 + 上涨不放量（20 天）"),
+        "nohold_noeffort": (WY, {**WY_OFF, "w_break_hold": -1.0, "w_effort": -1.0, "effort_bars": 120}, "跌出区间 + 上涨不放量"),
+        "all3": (WY, {"probe_bars": 6, "w_break_hold": -1.0, "w_effort": -1.0, "effort_bars": 120}, "弹簧 + 跌出区间 + 上涨不放量"),
+    },
+    # 第三批：第二批是"中位数效应"——视频方向（上涨放量、多头排列看多）RankIC 为负但多空零成本赚钱（高分组平均收益更高、
+    # 右尾更肥）；RankIC 为正的反方向零成本就亏。把视频的三条按原意组合（弹簧 + 放量上涨 + 均线多头），跟 RankIC 方向的组合对比
+    "w3_video": {
+        "video": (WY, {"probe_bars": 6, "w_effort": 1.0, "effort_bars": 120, "w_trend": 1.0}, "按视频原意：弹簧 + 放量上涨（20 天）+ 多头排列"),
+        "video_nofb": (WY, {**WY_OFF, "w_effort": 1.0, "effort_bars": 120, "w_trend": 1.0}, "放量上涨 + 多头排列（不要弹簧）"),
+        "video_fb_trend": (WY, {"probe_bars": 6, "w_trend": 1.0}, "弹簧 + 多头排列"),
+        "video_hold": (WY, {"probe_bars": 6, "w_effort": 1.0, "effort_bars": 120, "w_trend": 1.0, "w_break_hold": 1.0},
+                       "视频原意 + 突破收不回来顺势（SOW 看空 / SOS 看多）"),
+        "trend_slow": (WY, {**WY_OFF, "w_trend": 1.0, "ema_fast": 300, "ema_slow": 600}, "多头排列：EMA 50 天 / 100 天"),
+        "video_slow": (WY, {"probe_bars": 6, "w_effort": 1.0, "effort_bars": 120, "w_trend": 1.0, "ema_fast": 300, "ema_slow": 600},
+                       "视频原意，均线 50 / 100 天"),
+        "absorb": (WY, {**WY_OFF, "w_break_hold": -1.0, "w_effort": -1.0, "effort_bars": 120}, "RankIC 方向：跌出区间 + 上涨不放量"),
+    },
+    # 第四批：给视频实例加做空腿。视频实例的空头腿（多头分最低 = 下跌放量 + 空头排列）选择段零成本年化 −22%，多头腿两段都赚。
+    # 先把派发结构的看空分项单独看（权重 −1：越像派发分越低，看"尾超额"是不是负的），再看哪些值得当空头腿
+    "w4_short": {
+        "ut": (WY, {**WY_OFF, "w_upthrust": -1.0, "probe_bars": 6}, "上冲回落（试探 1 天）越深分越低"),
+        "ut_p18": (WY, {**WY_OFF, "w_upthrust": -1.0}, "上冲回落，试探 3 天"),
+        "supply": (WY, {**WY_OFF, "w_supply": -1.0}, "上方抛压：3 天成交额加权上影线占比越高分越低"),
+        "supply_s42": (WY, {**WY_OFF, "w_supply": -1.0, "supply_bars": 42}, "上方抛压，7 天"),
+        "lpsy": (WY, {**WY_OFF, "w_lpsy": -1.0}, "LPSY：空头排列下 1 天缩量反弹越明显分越低"),
+        "lpsy_r18": (WY, {**WY_OFF, "w_lpsy": -1.0, "rally_bars": 18}, "LPSY，反弹看 3 天"),
+        "ext": (WY, {**WY_OFF, "w_extension": -1.0}, "买方高潮：偏离 EMA 50 天越多分越低"),
+        "ext_fast": (WY, {**WY_OFF, "w_extension": -1.0, "ema_slow": 120}, "买方高潮：偏离 EMA 20 天"),
+        "bear": (WY, {**WY_OFF, "w_trend": 1.0, "w_effort": 1.0, "effort_bars": 120},
+                 "对照：视频的尾巴（空头排列 + 下跌放量分低）"),
+        "spring": (WY, {**WY_OFF, "w_spring": 1.0, "probe_bars": 6}, "对照：只用弹簧那一半"),
+    },
+    # 第五批：第四批里抛压、买方高潮也是"中位数效应"（RankIC 为正，但最像派发的 10% 右尾肥、尾超额为正，做空被轧）；
+    # 只有 LPSY 两段 RankIC 为正、尾超额两段为负。视频多头腿不动，空头腿换成派发分项（两条腿分开选），试压底比例和组合
+    "w5_video_short": {
+        "video": (WY, VIDEO, "对照：视频原意，空头腿 = 多头分最低"),
+        "v_lpsy_q10": (WY, {**VIDEO, "s_lpsy": 1.0, "short_quantile": 0.1}, "空头腿 LPSY（1 天反弹），压底 10%"),
+        "v_lpsy_q20": (WY, {**VIDEO, "s_lpsy": 1.0, "short_quantile": 0.2}, "同上，压底 20%"),
+        "v_lpsy_q30": (WY, {**VIDEO, "s_lpsy": 1.0, "short_quantile": 0.3}, "同上，压底 30%"),
+        "v_lpsy18_q20": (WY, {**VIDEO, "s_lpsy": 1.0, "rally_bars": 18, "short_quantile": 0.2}, "LPSY 反弹看 3 天，压底 20%"),
+        "v_lpsy_bear": (WY, {**VIDEO, "s_lpsy": 1.0, "s_trend": -1.0}, "LPSY + 空头排列，压底 20%"),
+        "v_lpsy_down": (WY, {**VIDEO, "s_lpsy": 1.0, "s_effort": -1.0}, "LPSY + 下跌放量（20 天），压底 20%"),
+        "v_lpsy_supply": (WY, {**VIDEO, "s_lpsy": 1.0, "s_supply": 1.0, "supply_bars": 42}, "LPSY + 上方抛压（7 天），压底 20%"),
+        "v_lpsy_ut": (WY, {**VIDEO, "s_lpsy": 1.0, "s_upthrust": 1.0}, "LPSY + 上冲回落，压底 20%"),
+        "v_supply": (WY, {**VIDEO, "s_supply": 1.0, "supply_bars": 42}, "对照：空头腿只用上方抛压"),
+        "v_ext": (WY, {**VIDEO, "s_extension": 1.0}, "对照：空头腿只用买方高潮"),
+    },
+    # 第六批：第五批 LPSY + 空头排列（v_lpsy_bear）零成本最稳、换手最低；LPSY + 上冲回落零成本最高但换手翻倍，扣费后不如。
+    # 卡脖子的是换手：把空头腿放慢（反弹 3 天、上冲回落试探 3 天），再看压底比例
+    "w6_short_slow": {
+        "v_lpsy_bear": (WY, {**VIDEO, "s_lpsy": 1.0, "s_trend": -1.0}, "第五批原样"),
+        "v_lpsy18_bear": (WY, {**VIDEO, "s_lpsy": 1.0, "s_trend": -1.0, "rally_bars": 18}, "LPSY 反弹 3 天 + 空头排列"),
+        "v_lpsy_bear_q10": (WY, {**VIDEO, "s_lpsy": 1.0, "s_trend": -1.0, "short_quantile": 0.1}, "压底 10%"),
+        "v_lpsy_bear_q30": (WY, {**VIDEO, "s_lpsy": 1.0, "s_trend": -1.0, "short_quantile": 0.3}, "压底 30%"),
+        "v_lpsy_bear_ut18": (WY, {**VIDEO, "s_lpsy": 1.0, "s_trend": -1.0, "s_upthrust": 1.0, "probe_bars": 18},
+                             "LPSY + 空头排列 + 上冲回落（试探 3 天；多头的弹簧也跟着变 3 天）"),
     },
 }
 
@@ -192,6 +280,21 @@ def ic_stats(ic: pd.Series, prefix: str) -> dict[str, float]:
     return out
 
 
+def tail_excess(score: pd.DataFrame, label: pd.DataFrame, live: pd.Series, q: float = 0.1) -> dict[str, float]:
+    """打分最高 / 最低 q 的币相对范围内等权平均的未来收益（bps / 期，对期平均）：两条腿各自有没有用。RankIC 看整体排序，
+    这里看 Top-K 实际交易的两端——做空要的是最低那一端跑输。"""
+    pct = score.rank(axis=1, pct=True)
+    market = label.where(score.notna()).mean(axis=1)
+    top = label.where(pct > 1 - q).mean(axis=1) - market
+    bot = label.where(pct <= q).mean(axis=1) - market
+    out = {}
+    for seg, mask in (("sel", score.index < VALIDATION_START), ("val", score.index >= VALIDATION_START)):
+        m = mask & live.to_numpy()
+        out[f"top_ex6_{seg}"] = float(top[m].mean() * 1e4)
+        out[f"bot_ex6_{seg}"] = float(bot[m].mean() * 1e4)
+    return out
+
+
 def load_panel():
     if CACHE.exists():
         return pickle.loads(CACHE.read_bytes())
@@ -242,9 +345,12 @@ def main(argv: list[str] | None = None) -> None:
             row.update(ic_stats(ic, f"ic{h}"))
             if h == 1:
                 ics[name] = ic
+        row.update(tail_excess(score, labels[6], live))
         rows[name] = row
         ranked_by_variant[name] = evaluation.cross_sectional_rank(score)
         print(f"  {name:<20} IC1 选 / 验 {row['ic1_sel']:+.4f} / {row['ic1_val']:+.4f}   IC6 {row['ic6_sel']:+.4f} / {row['ic6_val']:+.4f}"
+              f"   IC18 {row['ic18_sel']:+.4f} / {row['ic18_val']:+.4f}"
+              f"   头 / 尾超额 6 根 {row['top_ex6_sel']:+.1f} / {row['top_ex6_val']:+.1f}，{row['bot_ex6_sel']:+.1f} / {row['bot_ex6_val']:+.1f} bps"
               f"   有打分 {row['active_frac']:.0%}，每期 {row['symbols_per_bar']:.0f} 个币", flush=True)
 
     if not args.no_grid:
