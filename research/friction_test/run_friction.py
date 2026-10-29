@@ -79,6 +79,7 @@ from sherpa.backtest.residual import ScorePreprocessor, residual_scores
 from sherpa.backtest.attribution import attribute, period_stats, style_factor_returns
 from sherpa.backtest.score_backtest import cost_segment_rows, run_score_backtest
 from sherpa.data.schema import interval_to_timedelta
+from sherpa.risk.stop_control import StopRules
 from sherpa.metrics.factor import ic_summary, rank_ic
 
 import config
@@ -117,6 +118,7 @@ CASE_GRIDS_DIR = "case_grids"
 ROBUSTNESS_FILE = "04_robustness.csv"
 ATTRIBUTION_FILE = "05_style_attribution.csv"
 QUARTERLY_FILE = "06_quarterly.csv"
+STOP_EVENTS_FILE = "09_stop_events.csv"  # 只有 --stop-control 时有：每次触发一行（组合、时间、事件、当时的净值 / 回撤）
 
 # 重算的验证段 IC_IR 跟关卡2 报告的差多少算"对不上"。同一份数据、同一套公式，理论上只有浮点误差；
 # 放宽到 1e-3 是为了容忍 ClickHouse 里最近几根 bar 被补写 / 修订之类的数据漂移。
@@ -172,14 +174,19 @@ def _consistency_rows(
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="关卡3：配方 × 组合构建 × 成本的扣费回测")
     parser.add_argument("--track", required=True, help="研究线 id（research/alpha_research/<id>/）或目录")
+    parser.add_argument("--stop-control", default=None, choices=sorted(config.STOP_CONTROLS),
+                        help="加止损控制（config.STOP_CONTROLS）再跑整套网格，产出写到 results*/friction_stop_<名字>/")
     args = parser.parse_args(argv)
+    stop_rules = config.STOP_CONTROLS[args.stop_control] if args.stop_control else None
     track = load_track(args.track)
     input_path = track.handoff_path(handoff.INPUT_STAGE[STAGE])
     recipes = handoff.read_recipes(input_path, expect_track=track.id)
     print(f"研究线 {track.id} · 关卡3；输入配方集 {input_path}（producer={recipes.producer}）")
     _check_config(recipes, input_path)
     track.import_alpha_modules()
-    results_dir = track.stage_results_dir(STAGE)
+    results_dir = track.stage_results_dir(STAGE if stop_rules is None else f"{STAGE}_stop_{args.stop_control}")
+    if stop_rules is not None:
+        print(f"止损控制 {args.stop_control}：{stop_rules.to_dict()} -> {results_dir}")
 
     factor_names = recipes.factor_names()
     grid = [(w, r) for w in config.WEIGHTINGS for r in config.REBALANCE_EVERY]
@@ -223,16 +230,19 @@ def main(argv: list[str] | None = None) -> None:
     base_nets: dict[str, pd.Series] = {}
     bar_gross: dict[str, pd.Series] = {}
     bar_turnover: dict[str, pd.Series] = {}
+    stop_events: list[pd.DataFrame] = []
     started = time.monotonic()
     print(f"\n正在跑 {len(scores) * len(grid)} 组回测（{len(scores)} 个 case 分到 {MAX_WORKERS} 个进程）……")
     with ProcessPoolExecutor(max_workers=MAX_WORKERS) as pool:
         futures = {
-            pool.submit(_run_case, case, score, panel.close, panel.interval, shift, grid, segments, periods_per_year): case
+            pool.submit(_run_case, case, score, panel.close, panel.interval, shift, grid, segments, periods_per_year,
+                        stop_rules): case
             for case, score in scores.items()
         }
         for done, future in enumerate(as_completed(futures), 1):
-            rows, curves, nets, gross, turnover = future.result()
+            rows, curves, nets, gross, turnover, events = future.result()
             summary += rows
+            stop_events += events
             equity.update(curves)
             base_nets.update(nets)
             bar_gross.update(gross)
@@ -251,7 +261,14 @@ def main(argv: list[str] | None = None) -> None:
     top_labels = [_label(row) for row in ranking.head(EQUITY_TOP_N).to_dict("records")]
     pd.DataFrame({label: equity[label] for label in top_labels}).to_csv(results_dir / EQUITY_FILE)
     write_case_grids(summary_df, results_dir / CASE_GRIDS_DIR)
-    write_bar_series(bar_gross, bar_turnover, results_dir, validation_start=validation_start, shift=shift)
+    write_bar_series(bar_gross, bar_turnover, results_dir, validation_start=validation_start, shift=shift,
+                     stop_control=None if stop_rules is None else {"name": args.stop_control, **stop_rules.to_dict()})
+    if stop_rules is not None:
+        events_df = pd.concat(stop_events, ignore_index=True) if stop_events else pd.DataFrame()
+        events_df.to_csv(results_dir / STOP_EVENTS_FILE, index=False)
+        if len(events_df):
+            counts = events_df.groupby("event").size().to_dict()
+            print(f"\n止损控制触发：{counts}（全部组合合计，明细 {STOP_EVENTS_FILE}）")
 
     robustness = _robustness(summary_df)
     robustness.to_csv(results_dir / ROBUSTNESS_FILE, index=False)
@@ -309,6 +326,7 @@ def write_bar_series(
     *,
     validation_start: pd.Timestamp,
     shift: int,
+    stop_control: dict[str, Any] | None = None,
 ) -> None:
     """`07` / `08` 两张逐 bar 宽表（列按组合名排序）和说明它们口径的 `bar_series.json`。"""
     labels = sorted(gross)
@@ -322,6 +340,9 @@ def write_bar_series(
         "shift": shift,
         "columns": "<case> | <weighting> | every<rebalance_every>",
     }
+    if stop_control is not None:
+        meta["stop_control"] = stop_control
+        meta["description"] += f"；加了止损控制 {stop_control['name']}（sherpa.risk.stop_control）"
     (out_dir / BAR_META_FILE).write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
@@ -338,7 +359,8 @@ def _run_case(
     grid: list[tuple[str, int]],
     segments: dict[str, pd.Series],
     periods_per_year: float,
-) -> tuple[list[dict], dict[str, pd.Series], dict[str, pd.Series], dict[str, pd.Series], dict[str, pd.Series]]:
+    stop_rules: StopRules | None = None,
+) -> tuple[list[dict], dict[str, pd.Series], dict[str, pd.Series], dict[str, pd.Series], dict[str, pd.Series], list[pd.DataFrame]]:
     """一个 case 的整套网格（worker 进程里跑）：返回绩效长表的行、验证段 BASE_COST 下的净值曲线、
     全时段（从第一根有打分的 bar 起）BASE_COST 下的逐 bar 净收益（风格归因 / 分季度用），以及全时段的逐 bar 毛收益和换手（`07` / `08`）。
 
@@ -349,6 +371,7 @@ def _run_case(
     nets: dict[str, pd.Series] = {}
     bar_gross: dict[str, pd.Series] = {}
     bar_turnover: dict[str, pd.Series] = {}
+    events: list[pd.DataFrame] = []
     # 分段从这个 case 第一根有打分的 bar 开始：模型 / 因子的 warm-up 期（比如 ML alpha 第一个模型之前）没有信号，
     # 算进选择段只会制造一大段"空仓"，拉低 Sharpe、让空仓比例失真
     scored = score.notna().any(axis=1)
@@ -357,8 +380,11 @@ def _run_case(
     for weighting, rebalance in grid:
         # 目标权重路径先按时间顺序算好（缓冲带要参考上一期目标），回测只做恒等映射。
         targets = target_path(score, config.WEIGHTINGS[weighting], rebalance)
-        gross, turnover = run_score_backtest(targets, close, interval, shift=shift, rebalance_every=rebalance)
         key = {"case": case, "weighting": weighting, "rebalance_every": rebalance}
+        combo_events: list[pd.DataFrame] = []
+        gross, turnover = run_score_backtest(targets, close, interval, shift=shift, rebalance_every=rebalance,
+                                             stop_rules=stop_rules, stop_events=combo_events)
+        events += [e.assign(combo=_label(key)) for e in combo_events if len(e)]
         seg_nets: dict[tuple[str, str], pd.Series] = {}
         rows += [{**key, **row} for row in cost_segment_rows(
             gross, turnover, config.COST_MODELS, segments, periods_per_year=periods_per_year, net_curves=seg_nets
@@ -371,7 +397,7 @@ def _run_case(
         nets[_label(key)] = base_net[active]
         bar_gross[_label(key)] = gross[active]
         bar_turnover[_label(key)] = turnover[active]
-    return rows, curves, nets, bar_gross, bar_turnover
+    return rows, curves, nets, bar_gross, bar_turnover, events
 
 
 def _robustness(summary_df: pd.DataFrame) -> pd.DataFrame:

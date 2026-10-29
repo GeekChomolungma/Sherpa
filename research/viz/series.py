@@ -23,8 +23,14 @@ DEFAULT_COST = "all_taker"
 
 RESULTS_DIR = "results_without_neutralization"
 # 收益从哪个"账本"读：friction = 关卡3（多空对称的 39 个组合，所有研究线都有）；long_only = tradecraft 研究线的只做多回测
-# （`research/alpha_research/tradecraft/run_long_only.py`，含等权基准）。两者文件格式相同
+# （`research/alpha_research/tradecraft/run_long_only.py`，含等权基准）；friction_stop_<方案> = 关卡3 加止损控制再跑一遍
+# （`run_friction.py --stop-control <方案>`，`sherpa.risk.stop_control`）。文件格式都相同
 BOOKS = ("friction", "long_only")
+STOP_BOOK_PREFIX = "friction_stop_"
+
+
+def valid_book(book: str) -> bool:
+    return book in BOOKS or (book.startswith(STOP_BOOK_PREFIX) and len(book) > len(STOP_BOOK_PREFIX))
 
 
 @dataclass(frozen=True)
@@ -170,8 +176,8 @@ def load_research_run(run_dir: str | Path, *, results: str = RESULTS_DIR, book: 
     elif (base / "friction").is_dir():
         notes["缺数据"] = "没有逐期 RankIC（ml_training/ 或 ic_timeline/ 下的 *_ic_by_bar.csv）"
 
-    if book not in BOOKS:
-        raise ValueError(f"book 只能是 {BOOKS}，收到 {book!r}")
+    if not valid_book(book):
+        raise ValueError(f"book 只能是 {BOOKS} 或 {STOP_BOOK_PREFIX}<方案>，收到 {book!r}")
     gross = turnover = None
     default_combo = None
     cost_bps: dict[str, float] = {}
@@ -188,6 +194,8 @@ def load_research_run(run_dir: str | Path, *, results: str = RESULTS_DIR, book: 
             default_combo = Combo(meta["default_weighting"], int(meta["default_rebalance_every"]))
         if book != "friction":
             notes["账本"] = f"{book}（{meta.get('description', '')}）"
+    elif book.startswith(STOP_BOOK_PREFIX):
+        notes["缺数据"] = f"没有 {book}/07_bar_gross_returns.csv：跑 run_friction.py --stop-control {book[len(STOP_BOOK_PREFIX):]}"
     elif book != "friction":
         notes["缺数据"] = f"没有 {book}/07_bar_gross_returns.csv（只有 tradecraft 研究线的步骤 6 会产出）"
     elif pnl_dir.is_dir():

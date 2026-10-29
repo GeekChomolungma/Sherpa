@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import re
 import sys
 from pathlib import Path
@@ -95,8 +96,18 @@ def cmd_run(args: argparse.Namespace) -> None:
         print(f"  -> {written}")
 
 
+def _load_compare_run(spec: str, default_book: str):
+    """`run目录` 用 --book；`run目录::<book>` 让这一个 run 读别的账本（比如同一个 run 加不加止损放在一起比），
+    名字加上 `·<book>` 区分。"""
+    path, sep, book = spec.partition("::")
+    if not sep:
+        return load_run(path, default_book)
+    run = load_run(path, book)
+    return dataclasses.replace(run, name=f"{run.name}·{book}")
+
+
 def cmd_compare(args: argparse.Namespace) -> None:
-    runs = [load_run(p, args.book) for p in args.runs]
+    runs = [_load_compare_run(p, args.book) for p in args.runs]
     opts = _options(args, runs)
     names = [r.name for r in runs]
     baseline = None
@@ -119,13 +130,15 @@ def cmd_compare(args: argparse.Namespace) -> None:
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="研究结果可视化：一个 run 的总览 / 多个 run 的对比")
     common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("runs", nargs="+", help="run 目录（<研究线>/runs/<run_id>/）")
+    common.add_argument("runs", nargs="+",
+                        help="run 目录（<研究线>/runs/<run_id>/）；compare 里可以写 <run 目录>::<book> 让这个 run 读别的账本")
     common.add_argument("--weighting", default=None,
                         help=f"权重映射，默认 {DEFAULT_WEIGHTING}（只做多账本默认用它自己声明的组合）")
     common.add_argument("--every", type=int, default=None,
                         help=f"调仓间隔（根 bar），默认 {DEFAULT_REBALANCE_EVERY}（只做多账本默认用它自己声明的组合）")
-    common.add_argument("--book", default="friction", choices=("friction", "long_only"),
-                        help="收益从哪个账本读：friction = 关卡3 多空（默认）；long_only = tradecraft 的只做多回测（含等权基准）")
+    common.add_argument("--book", default="friction",
+                        help="收益从哪个账本读：friction = 关卡3 多空（默认）；long_only = tradecraft 的只做多回测（含等权基准）；"
+                             "friction_stop_<方案> = 关卡3 加止损控制（run_friction.py --stop-control <方案>）")
     common.add_argument("--cost", default=DEFAULT_COST, help=f"成本假设（zero / all_maker / all_taker / stress），默认 {DEFAULT_COST}")
     common.add_argument("--case", default=None, help="run 里有多个 case 时指定一个")
     common.add_argument("--ic-window", type=float, default=20.0, help="滚动 RankIC 窗口（天），默认 20")

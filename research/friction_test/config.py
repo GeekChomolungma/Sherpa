@@ -23,6 +23,7 @@ from __future__ import annotations
 from typing import Any
 
 from sherpa.backtest.cost_model import CostModel, FixedFeeCostModel, ZeroCostModel
+from sherpa.risk.stop_control import BookStop, StopRules
 
 from data import MAKER_FEE_BPS, STRESS_SLIPPAGE_BPS, TAKER_FEE_BPS, TAKER_SLIPPAGE_BPS
 
@@ -81,3 +82,11 @@ MIN_NET_SHARPE: float = 2.5
 # 算出来的（比如币池小的时候宽 Top-K 整段空仓），混进来会让中位数失真。
 ROBUSTNESS_MAX_FLAT: float = 0.2
 MAX_TURNOVER_DECAY: float = 0.40
+
+# 止损控制方案（`sherpa.risk.stop_control`，`run_friction.py --stop-control <名字>`）：目标权重路径和实际持仓之间加一层，
+# 整套网格再跑一遍，产出写到单独的 `results*/friction_stop_<名字>/`（文件格式同 friction/，04 表同一套判定逻辑），
+# 不加止损的 friction/ 不受影响。方案要事先声明、数量少，不在网格里搜阈值。
+STOP_CONTROLS: dict[str, StopRules] = {
+    # 组合熔断：毛净值相对峰值回撤 10% 全部平仓；熔断满 1 天、影子净值（不加止损的同一条目标路径）站上最近 7 天均值后恢复
+    "book10": StopRules(book=BookStop(max_drawdown=0.10, resume_bars=42, min_flat_bars=6)),
+}

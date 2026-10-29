@@ -87,6 +87,12 @@ bash research/alpha_research/worldquant_101/run_track.sh --from-step 5
 
 **怎么读、按什么顺序读、什么情况算好，见 [`RESULT_READING.md`](RESULT_READING.md)。**不要只看 `02` 排第一的那一行：在几百个组合里挑最高的一格，结果天然偏乐观。
 
+**加止损控制**（可选，`sherpa.risk.stop_control`，设计见 [`sherpa/risk/STOP_CONTROL.md`](../../sherpa/risk/STOP_CONTROL.md)）：
+`python run_friction.py --track <研究线> --stop-control <方案>`，方案在 `config.STOP_CONTROLS` 里事先声明（目前有 `book10`：
+组合毛净值回撤 10% 全部平仓，影子净值站回 7 天均线后恢复）。整套网格在目标和实际持仓之间加一层止损再跑一遍，产出写到
+`results*/friction_stop_<方案>/`（文件同上，多一张 `09_stop_events.csv`：每次触发一行），不加止损的 `friction/` 不受影响；
+画图加 `--book friction_stop_<方案>`。注意熔断期间是空仓，选择段空仓超过 20% 的组合照常被 04 表剔除。
+
 ## 7. 已经试过、已排除的做法
 
 以下结论来自 2026-09 的五轮网格（除特别注明外都是 `horizon_bars = 1` 的因子池），看验证段、8 个 case 的中位数。以后因子池或标签变了，可以再打开重测。

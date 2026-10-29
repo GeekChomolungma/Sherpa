@@ -9,6 +9,7 @@ import pandas as pd
 
 from sherpa.data.schema import BarPanel, interval_to_timedelta
 from sherpa.metrics.performance import calmar_ratio, equity_curve, max_drawdown, sharpe_ratio
+from sherpa.risk.stop_control import StopController, StopRules
 
 from .cost_model import CostModel
 from .result import BacktestResult
@@ -24,6 +25,7 @@ def run_vectorized_backtest(
     *,
     shift: int = 1,
     rebalance_every: int = 1,
+    stop_rules: StopRules | None = None,
 ) -> BacktestResult:
     """`docs/backtest_principle.md` 第二层，向量化版本。
 
@@ -50,6 +52,10 @@ def run_vectorized_backtest(
     `drift_weights` / `turnover` 完全一致（`tests/backtest/test_vectorized.py` 保留了逐 bar 调用
     这两个函数的旧写法做对比）；只是避免每根 bar 都做一次 pandas 按 symbol 对齐——关卡3 要对
     几百种组合各跑一遍全研究段，旧写法太慢。
+
+    `stop_rules`：止损控制（`sherpa.risk.stop_control`），插在"目标 / 漂移后的持仓"和实际持仓 `held` 之间，每根 bar
+    都检查（非调仓行也能平仓），触发用的是决策时刻 t 的收盘价。不给（或规则全空）时逐格等于不加止损；触发记录在
+    结果的 `stop_events`（time 是决策时刻，symbol 是列名）。
     """
     if shift < 1:
         raise ValueError(f"shift 至少是 1（shift=0 等于用决策之前已经实现的收益，是前视），收到 {shift}")
@@ -76,6 +82,8 @@ def run_vectorized_backtest(
     weights = target_weights.loc[common_index].fillna(0.0).to_numpy(dtype=float)
     returns = forward_returns.loc[common_index].fillna(0.0).to_numpy(dtype=float)
     trade = trade_flags.loc[common_index].to_numpy(dtype=bool)
+    controller = StopController(stop_rules, len(columns), shift=shift) if stop_rules is not None and stop_rules.active else None
+    decision_close = panel.close.loc[common_index].to_numpy(dtype=float) if controller is not None else None
 
     net_returns = np.empty(len(common_index))
     turnovers = np.empty(len(common_index))
@@ -89,6 +97,9 @@ def run_vectorized_backtest(
     for i in range(len(common_index)):
         drifted = _drift(prev_weights, prev_return)
         held = weights[i] if trade[i] else drifted  # 不调仓的 bar 直接持有漂移后的仓位
+        if controller is not None:
+            held = controller.step(close=decision_close[i], target=weights[i] if trade[i] else None, holding=drifted,
+                                   label=common_index[i])
         turnover = float(np.abs(held - drifted).sum())
         gross = float(held @ returns[i])
 
@@ -102,6 +113,10 @@ def run_vectorized_backtest(
 
     periods_per_year = _YEAR / interval_to_timedelta(panel.interval)
     curve = equity_curve(net_series)
+    stop_events = None
+    if controller is not None:
+        stop_events = controller.events_frame()
+        stop_events["symbol"] = [None if pd.isna(j) else columns[int(j)] for j in stop_events["symbol"]]
     return BacktestResult(
         equity_curve=curve,
         returns=net_series,
@@ -109,6 +124,7 @@ def run_vectorized_backtest(
         sharpe=sharpe_ratio(net_series, periods_per_year=periods_per_year),
         calmar=calmar_ratio(net_series, periods_per_year=periods_per_year),
         max_drawdown=max_drawdown(curve),
+        stop_events=stop_events,
     )
 
 

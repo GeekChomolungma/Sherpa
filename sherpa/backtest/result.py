@@ -28,3 +28,4 @@ class BacktestResult:
     sharpe: float
     calmar: float
     max_drawdown: float
+    stop_events: pd.DataFrame | None = None  # 止损控制的触发记录（`sherpa.risk.stop_control`），没加止损时 None
