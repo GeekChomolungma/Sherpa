@@ -105,7 +105,7 @@
 | `report.matrix_top_k` / `report.min_abs_t` | 汇总报告每个 state 取前几名、显著性门槛（环境变量 `MIN_ABS_T` 可临时覆盖） |
 | `stages.orthogonalization.mode` / `stages.synthesis.mode` | `run`（默认）或 `passthrough`，见上表 |
 | `outputs.per_run` | 可选，默认 false。true = 产出按 run 归档进 `runs/<run_id>/`（见上一节），配合编排脚本的 `--alphas` / `--variant` |
-| `stages.synthesis.passthrough` | 关卡2 透传时出哪些配方：`singles`（true = 每个候选因子一个单因子配方；整数 N = 按全历史 \|IC_IR\| 取前 N 个）、`equal_weight`（`直通·G0` / `直通·L0`）、`routed`（每个维度一个 `直通·L2-<维度>`） |
+| `stages.synthesis.passthrough` | 关卡2 透传时出哪些配方：`singles`（true = 每个候选因子一个单因子配方；整数 N = 按全历史 \|IC_IR\| 取前 N 个）、`equal_weight`（`直通·G0` / `直通·L0`）、`routed`（每个维度一个 `直通·L2-<维度>`）、`direction`（默认 `"ic"` = 方向取选择段 IC 符号；`"as_is"` = 按因子自己的方向，不反转，tradecraft 用） |
 
 **track 不能覆盖的**：时间窗、IC 标签口径（horizon / delay）、大盘锚点、成本，统一在
 `research/research_config.json`。不同研究线的结论要能横向比较，这几项必须一致。关卡自身的参数（相关性阈值、

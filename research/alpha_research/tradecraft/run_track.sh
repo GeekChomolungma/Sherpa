@@ -19,8 +19,9 @@
 #
 # 本线 neutralize=false、流动性掩码跟 MLalpha 相同（成交额前一半），所以结果能直接跟 MLalpha 的 runs 横比、画在一张图上。
 # report.min_abs_t = 0：每条经验规则都走到关卡3，强弱看 RankIC，不在阶段一按显著性挡掉。
-# 注意关卡1/2 透传时，配方方向取阶段一（选择段）IC 的符号：规则在选择段 IC 为负，关卡3 会把它反过来做。步骤 0 的
-# RankIC 永远按 alpha 自己的方向（越大越看多）算，方向错了在那里直接是负数。
+# 关卡2 透传设了 direction=as_is（track.json）：配方方向按 alpha 自己的定义（越大越做多），不取阶段一 IC 的符号——
+# 交易经验写明了什么看多、什么看空，选择段 IC 为负时也照原方向测（不然关卡3 会悄悄反过来做）。步骤 0 的 RankIC
+# 同样按 alpha 自己的方向算，方向错了在那里直接是负数。
 #
 # 参数：
 #   --alphas a,b     这次评估哪些 alpha（qualified_name，逗号分隔），不写 = track.json 的 alphas.include

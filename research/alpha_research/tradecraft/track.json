@@ -24,7 +24,7 @@
     "orthogonalization": {"mode": "passthrough"},
     "synthesis": {
       "mode": "passthrough",
-      "passthrough": {"singles": true, "equal_weight": false, "routed": false}
+      "passthrough": {"singles": true, "equal_weight": false, "routed": false, "direction": "as_is"}
     }
   }
 }

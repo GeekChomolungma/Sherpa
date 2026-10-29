@@ -113,5 +113,8 @@ class TcBreakoutV2(TcBreakoutV1):
 - **会主动不参与（整期 NaN）的 alpha，04 表可能是空的**：关卡3 的 04 表剔除选择段空仓 > 20% 的组合（这条规则是给"币不够被迫空仓"
   设计的，ML / 世坤都靠它，不改），择时让整期空仓，常常 39 个组合全被剔掉。这种 alpha 看 `01_friction_summary.csv`（每个组合 ×
   成本 × 段的净 Sharpe、回撤、空仓比例，自己取中位数）、`02`、`06`（赚钱季度占比）和 `research/viz/` 的净值 / 回撤图；RankIC 看步骤 0；
+- **关卡3 按 alpha 自己的方向做**：研究线的关卡2 透传设了 `direction: as_is`（`track.json`），打分越大越做多，不按阶段一选择段
+  IC 的符号反转。规则方向和 RankIC 方向对不上（比如威科夫 `TcWyckoffVideoV1`：RankIC 为负、多空却赚钱的"中位数效应"）时，
+  关卡3 测的仍是规则本身；
 - **持有期**：步骤 0 的 RankIC 主列按 `horizon_bars` 算，另外固定给 1 根、6 根两列。阶段一和关卡3 用的是 `research_config.json`
   的全局口径（1 根），跟默认值一致。跟 ML 模型（主指标 6 根）比 RankIC 时要用同一个持有期，`research/viz/` 的对比图会自动对齐。

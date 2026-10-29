@@ -124,6 +124,24 @@ def test_passthrough_options(candidates):
     assert nothing.recipes == {}
 
 
+def test_passthrough_direction_as_is():
+    """direction=as_is：不看 IC 符号，选择段 IC 为负的因子也按自己的方向（+1）做；默认仍按 IC 符号。"""
+    negative = handoff.CandidateSet(track="t", producer="report", global_set=handoff.StateCandidates(factors=[_entry("custom.c", -0.4, -0.3)]))
+    options = {"singles": True, "equal_weight": False, "routed": False}
+    assert passthrough.direct_recipes(negative, options, track_id="t").recipes["single:custom.c"]["weights"] == {"custom.c": -1.0}
+    as_is = passthrough.direct_recipes(negative, {**options, "direction": "as_is"}, track_id="t")
+    assert as_is.recipes["single:custom.c"]["weights"] == {"custom.c": 1.0}
+    assert "as_is" in as_is.meta["note"]
+    # state 内 IC 为负也不反转
+    in_state = handoff.CandidateSet(track="t", producer="report", regime_sets={
+        "trend": {"bull": handoff.StateCandidates(factors=[_entry("custom.a", -0.3), _entry("custom.b", 0.2)])}})
+    routed = passthrough.direct_recipes(in_state, {"singles": False, "equal_weight": False, "routed": True, "direction": "as_is"},
+                                        track_id="t")
+    assert routed.recipes["直通·L2-trend 路由等权"]["states"] == {"bull": {"custom.a": 1.0, "custom.b": 1.0}}
+    with pytest.raises(ValueError):
+        passthrough.direct_recipes(negative, {**options, "direction": "flip"}, track_id="t")
+
+
 def test_passthrough_merges_equivalent_recipes():
     """真实数据里碰到的情况：只有一个因子显著，G0 / L0 / L2 路由 / 单因子参照全都是"只用它"，只该回测一次。"""
     only = handoff.CandidateSet(

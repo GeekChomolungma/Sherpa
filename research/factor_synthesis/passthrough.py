@@ -12,8 +12,10 @@
 - `routed`：候选集里的每个 regime 维度一个 `直通·L2-<维度> 路由等权`：当前 bar 处在哪个 state 就用那个 state 的
   名单（方向取该 state 的 IC_IR 符号），state 未知 / 名单为空时退回 L0——跟关卡2 真跑时 L2 的路由规则一致。
 
-方向：全局方向优先用条目里的 `baseline_ic_ir`（完整 IC 序列），没有就用全局名单里的 `ic_ir`，再没有就用它在
-第一个出现的 state 里的 `ic_ir`；state 内方向用该 state 的 `ic_ir`，为 0 / 缺失时退回全局方向。
+方向（`direction`，默认 `"ic"`）：全局方向优先用条目里的 `baseline_ic_ir`（完整 IC 序列），没有就用全局名单里的 `ic_ir`，
+再没有就用它在第一个出现的 state 里的 `ic_ir`；state 内方向用该 state 的 `ic_ir`，为 0 / 缺失时退回全局方向。
+`direction = "as_is"`：不看 IC，一律按因子自己的方向（权重 +1，分数越大越做多）——给"打分方向是规则本身定义的"研究线用
+（tradecraft：交易经验写明了什么看多、什么看空，选择段 IC 为负时也照原方向测，不让关卡3 悄悄反过来做）。
 
 **等效配方去重**：候选因子很少时，上面几类配方经常退化成同一个东西（比如只有一个因子显著时，G0、L2 路由、单因子
 参照都是"只用这一个因子"），关卡3 会把同一个配方回测好几遍。所以按"每根 bar 实际用的权重"判等效：
@@ -100,8 +102,15 @@ def dedupe_recipes(recipes: Mapping[str, dict[str, Any]]) -> dict[str, dict[str,
     return kept
 
 
+DIRECTIONS = ("ic", "as_is")
+
+
 def direct_recipes(candidates: handoff.CandidateSet, options: Mapping[str, Any], *, track_id: str) -> handoff.RecipeSet:
-    signs = _global_signs(candidates)
+    direction = options.get("direction", "ic")
+    if direction not in DIRECTIONS:
+        raise ValueError(f"passthrough.direction 只能是 {DIRECTIONS}，收到 {direction!r}")
+    as_is = direction == "as_is"
+    signs = {name: 1.0 for name in candidates.factor_entries()} if as_is else _global_signs(candidates)
     union = candidates.regime_union()
     recipes: dict[str, dict[str, Any]] = {}
 
@@ -119,7 +128,7 @@ def direct_recipes(candidates: handoff.CandidateSet, options: Mapping[str, Any],
             for state, cands in states.items():
                 weights = {}
                 for f in cands.factors:
-                    sign = handoff.sign_of(f.get("ic_ir")) or signs.get(f["name"], 0.0)
+                    sign = signs.get(f["name"], 0.0) if as_is else (handoff.sign_of(f.get("ic_ir")) or signs.get(f["name"], 0.0))
                     if sign != 0.0:
                         weights[f["name"]] = sign
                 if weights:
@@ -145,6 +154,7 @@ def direct_recipes(candidates: handoff.CandidateSet, options: Mapping[str, Any],
         meta={
             "input_producer": candidates.producer,
             "options": dict(options),
-            "note": "透传：方向取自候选集（选择段 IC 符号），等权；未经关卡2 在验证段上比较",
+            "note": ("透传：方向按因子自己的定义（direction=as_is，不看 IC），等权；未经关卡2 在验证段上比较" if as_is else
+                     "透传：方向取自候选集（选择段 IC 符号），等权；未经关卡2 在验证段上比较"),
         },
     )

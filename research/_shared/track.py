@@ -55,7 +55,7 @@ GATE_MODES = ("run", "passthrough")
 OPTIONAL_GATES = ("orthogonalization", "synthesis")
 
 # 关卡2 透传时，把候选集直接变成哪些配方（`factor_synthesis/passthrough.py`）。
-DEFAULT_SYNTHESIS_PASSTHROUGH: dict[str, Any] = {"singles": True, "equal_weight": True, "routed": True}
+DEFAULT_SYNTHESIS_PASSTHROUGH: dict[str, Any] = {"singles": True, "equal_weight": True, "routed": True, "direction": "ic"}
 
 # 按 run 归档时的两个运行期开关（编排脚本 `--alphas` / `--variant` 设置，各阶段的 python 进程都读同一份）。
 ALPHAS_ENV = "SHERPA_TRACK_ALPHAS"
