@@ -19,3 +19,17 @@ research/alpha_research/*/experiments/**/*.pkl
 
 # 研究结果可视化（research/viz/）的输出：从 runs 里的 CSV 现生成的 HTML，跟 CSV 一样不进仓库，要看就重新生成
 research/viz/output/
+
+# 音视频（比如 tradecraft 的素材视频）：体积大，只提交整理好的 md，原帖链接写在 md 里
+*.mp4
+*.mov
+*.mkv
+*.webm
+*.avi
+*.flv
+*.mp3
+*.wav
+*.m4a
+*.aac
+*.flac
+*.ogg

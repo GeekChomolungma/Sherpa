@@ -27,10 +27,11 @@ def test_there_is_at_least_one_registered_tradecraft_alpha():
 @pytest.mark.parametrize("qualified_name", TRADECRAFT)
 def test_scores_are_point_in_time(qualified_name):
     """截掉后面的数据，前面的打分一个格子都不变：打分只用到第 t 根 K 线为止的数据。"""
-    panel = _panel()
     alpha = registry.get(qualified_name)()
+    n = max(240, alpha.lookback_bars + 120)  # 回看长的 alpha（均线几百根）要更长的面板才有打分
+    panel = _panel(n)
     full = alpha.compute(panel)
-    cut = panel.index[180]
+    cut = panel.index[n * 3 // 4]
     truncated = alpha.compute(panel.loc_until(cut))
     pd.testing.assert_frame_equal(full.loc[:cut], truncated)
     assert full.notna().any().any()  # 测试面板够长，真的有打分，上面的比较才有意义
@@ -38,8 +39,8 @@ def test_scores_are_point_in_time(qualified_name):
 
 @pytest.mark.parametrize("qualified_name", TRADECRAFT)
 def test_scores_only_inside_liquidity_scope(qualified_name):
-    panel = _panel()
     alpha = registry.get(qualified_name)()
+    panel = _panel(max(240, alpha.lookback_bars + 120))
     scores = alpha.compute(panel)
     scope = alpha.scope(panel)
     assert scores.shape == panel.close.shape
@@ -101,3 +102,20 @@ def test_derivative_indicators_refuse_panels_without_the_field():
         indicators.oi_change(panel, 6)
     with pytest.raises(ValueError, match="long_short_ratio"):
         indicators.long_short_zscore(panel, 42)
+
+
+def test_wyckoff_short_leg_is_pushed_below_every_long_score():
+    """威科夫两条腿分开选：空头分前 short_quantile 的币打分为负、排在所有多头分之下，其余币是多头分的百分位。"""
+    from sherpa.alpha.custom.tradecraft import TcWyckoffLsV1
+
+    alpha = TcWyckoffLsV1()
+    panel = _panel(alpha.lookback_bars + 120)
+    scores = alpha.compute(panel).dropna(how="all")
+    assert len(scores)
+    flagged = scores < 0
+    assert flagged.any().any()
+    for row, s in scores.iterrows():
+        neg, pos = s[s < 0], s[s > 0]
+        if len(neg) and len(pos):
+            assert neg.max() < pos.min()
+        assert flagged.loc[row].sum() <= np.ceil(alpha.short_quantile * s.notna().sum())
