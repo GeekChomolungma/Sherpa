@@ -7,7 +7,10 @@ import pytest
 from sherpa.backtest.cost_model import ZeroCostModel
 from sherpa.backtest.score_backtest import target_path
 from sherpa.backtest.vectorized import _drift, run_vectorized_backtest
-from sherpa.risk.stop_control import BookStop, StopController, StopRules, SymbolStop
+from sherpa.risk.reentry import (AllOf, AnyOf, MarketCalm, MarketTape, MaxFlat, ReentryContext, ShadowRebound,
+                                 ShadowReboundScaled, ShadowRecovered, UnstoppedAboveMean)
+from sherpa.risk.shadow_book import ShadowBook
+from sherpa.risk.stop_control import BookStop, StopController, StopRules, SymbolStop, drawdown_limit
 
 from ..backtest.fixtures import panel_from_close
 
@@ -59,7 +62,7 @@ def test_book_equity_matches_the_backtest_gross_returns_lagged_by_shift(shift):
         drifted = _drift(held_prev, ret_prev)
         trade = i % rebalance == 0
         held = controller.step(close=prices[i], target=weights[i] if trade else None, holding=drifted)
-        seen.append((controller.equity, controller.shadow_equity))
+        seen.append((controller.equity, controller.unstopped_equity))
         held_prev, ret_prev = held, returns[i]
     equity = pd.Series([e for e, _ in seen], index=index)
     shadow = pd.Series([s for _, s in seen], index=index)
@@ -69,25 +72,34 @@ def test_book_equity_matches_the_backtest_gross_returns_lagged_by_shift(shift):
 
 
 @pytest.mark.parametrize("rules", [
-    StopRules(book=BookStop(max_drawdown=0.05, resume_bars=12, min_flat_bars=3)),
+    StopRules(book=BookStop(max_drawdown=0.05, min_flat_bars=3, reentry=UnstoppedAboveMean(bars=12))),
     StopRules(symbol=SymbolStop(stop_loss=0.03)),
-    StopRules(book=BookStop(max_drawdown=0.05, resume_bars=12), symbol=SymbolStop(stop_loss=0.03)),
+    StopRules(book=BookStop(max_drawdown=0.05, reentry=UnstoppedAboveMean(bars=12)), symbol=SymbolStop(stop_loss=0.03)),
+    StopRules(book=BookStop(max_drawdown=0.05, min_flat_bars=2,
+                            reentry=AllOf((ShadowRebound(0.03), MarketCalm(window=12, ratio=1.2))))),
+    StopRules(book=BookStop(max_drawdown=0.05, min_flat_bars=2, reentry=ShadowRecovered(-0.02), shadow_follow_targets=False)),
+    StopRules(book=BookStop(vol_mult=1.5, vol_bars=30)),
+    StopRules(book=BookStop(vol_mult=1.0, vol_bars=30, reentry=AnyOf((AllOf((ShadowReboundScaled(0.5), MarketCalm(12))), MaxFlat(12))))),
 ])
 def test_only_reduces_risk_and_is_point_in_time(rules):
-    """每一期的实际持仓相对基础仓位（调仓行 = 目标，非调仓行 = 漂移后的持仓）同号且不放大；截掉后面的数据，前面的结果不变。"""
+    """每一期的实际持仓不超过不加止损时此刻会持有的仓位（调仓行 = 目标，非调仓行 = 漂移后的持仓；恢复那一根 = 最近一次
+    目标按决策时刻已知的价格漂移到现在），同号且不放大；截掉后面的数据，前面的结果不变。"""
     close = _market(vol=0.05)
     rebalance, shift = 3, 2
     targets = _targets(close, rebalance)
     controller = StopController(rules, close.shape[1], shift=shift)
     prices, weights = close.to_numpy(), targets.to_numpy()
     returns = close.pct_change().shift(-shift).fillna(0.0).to_numpy()
-    held_prev, ret_prev = np.zeros(close.shape[1]), np.zeros(close.shape[1])
+    realized = close.pct_change().fillna(0.0).to_numpy()
+    held_prev, ret_prev, reference = np.zeros(close.shape[1]), np.zeros(close.shape[1]), np.zeros(close.shape[1])
     for i in range(len(close) - shift):
         drifted = _drift(held_prev, ret_prev)
-        base = weights[i] if i % rebalance == 0 else drifted
-        held = controller.step(close=prices[i], target=weights[i] if i % rebalance == 0 else None, holding=drifted)
-        assert np.all((held == 0) | (np.sign(held) == np.sign(base)))
-        assert np.all(np.abs(held) <= np.abs(base) + 1e-12)
+        trade = i % rebalance == 0
+        reference = weights[i] if trade else _drift(reference, realized[i])
+        allowed = [weights[i] if trade else drifted, reference]
+        held = controller.step(close=prices[i], target=weights[i] if trade else None, holding=drifted)
+        assert any(np.all(((held == 0) | (np.sign(held) == np.sign(b))) & (np.abs(held) <= np.abs(b) + 1e-12))
+                   for b in allowed)
         held_prev, ret_prev = held, returns[i]
     assert controller.events  # 这组参数在这份数据上真的触发过，上面的检查才有意义
 
@@ -104,7 +116,7 @@ def test_book_trip_flattens_everything_and_resumes_after_shadow_recovers():
     path = np.concatenate([np.full(10, 100.0), 100.0 * 0.98 ** np.arange(1, 21), 66.8 * 1.02 ** np.arange(1, 51)])
     close = pd.DataFrame({"A": path, "B": np.full(n, 50.0)}, index=index)
     targets = pd.DataFrame({"A": 1.0, "B": 0.0}, index=index)
-    rules = StopRules(book=BookStop(max_drawdown=0.10, resume_bars=6, min_flat_bars=3))
+    rules = StopRules(book=BookStop(max_drawdown=0.10, min_flat_bars=3, reentry=UnstoppedAboveMean(bars=6)))
     result = _run(close, targets, 1, 1, rules)
     events = result.stop_events
     assert list(events["event"][:2]) == ["book_trip", "book_resume"]
@@ -127,3 +139,121 @@ def test_symbol_stop_locks_until_the_signal_resets():
     events = controller.events_frame()
     assert list(events["event"]) == ["symbol_stop"] and events["time"].iloc[0] == index[2]
     assert events["pnl"].iloc[0] == pytest.approx(-0.09)
+
+
+@pytest.mark.parametrize("shift", [1, 2])
+@pytest.mark.parametrize("follow", [True, False])
+def test_shadow_book_starts_from_the_snapshot_and_books_with_a_shift_lag(shift, follow):
+    """影子组合：开端 = 熔断时的持仓快照，第 shift 步才记上它的第一根收益；之后跟随目标调仓（或冻结快照只漂移）。"""
+    rng = np.random.default_rng(3)
+    realized = rng.normal(0.0, 0.03, size=(12, 3))
+    targets = [None, np.array([0.0, 0.5, -0.5]), None, None] * 3
+    snapshot = np.array([0.5, -0.5, 0.0])
+    shadow = ShadowBook(snapshot, shift=shift, follow_targets=follow)
+    decisions = [snapshot] + [t if follow else None for t in targets]   # 第 k 步的决策（None = 不调仓）
+    weights, ret_prev, equity = np.zeros(3), np.zeros(3), 1.0
+    for i in range(len(targets)):
+        shadow.settle(realized[i])
+        k = i + 1 - shift   # 这一步记账的是第 k 步的决策
+        if k >= 0:
+            weights = decisions[k] if decisions[k] is not None else _drift(weights, ret_prev)
+            equity *= 1.0 + weights @ realized[i]
+            ret_prev = realized[i]
+        assert shadow.equity == pytest.approx(equity, rel=1e-12)
+        shadow.push(targets[i])
+    assert shadow.bars == len(targets)
+    assert shadow.trough == pytest.approx(min(shadow.path)) and shadow.peak == pytest.approx(max(shadow.path))
+
+
+def _crash_and_rebound(n_down: int = 20, n_up: int = 30):
+    n = 10 + n_down + n_up
+    index = pd.date_range("2026-01-01", periods=n, freq="4h", tz="UTC", name="start_time")
+    bottom = 100.0 * 0.98 ** n_down
+    path = np.concatenate([np.full(10, 100.0), 100.0 * 0.98 ** np.arange(1, n_down + 1), bottom * 1.02 ** np.arange(1, n_up + 1)])
+    close = pd.DataFrame({"A": path, "B": np.full(n, 50.0)}, index=index)
+    targets = pd.DataFrame({"A": 1.0, "B": 0.0}, index=index)
+    return close, targets, index[10 + n_down - 1]
+
+
+def test_shadow_rebound_resumes_right_after_the_bottom():
+    """影子从熔断后的最低点反弹 5%（1.02³ ≈ 1.061）就恢复：比"全程净值站上 42 根均值"早得多，且事件里带影子读数。"""
+    close, targets, bottom = _crash_and_rebound()
+    fast = _run(close, targets, 1, 1, StopRules(book=BookStop(max_drawdown=0.10, min_flat_bars=3, reentry=ShadowRebound(0.05))))
+    slow = _run(close, targets, 1, 1, StopRules(book=BookStop(max_drawdown=0.10, min_flat_bars=3, reentry=UnstoppedAboveMean(42))))
+    events = fast.stop_events
+    assert list(events["event"][:2]) == ["book_trip", "book_resume"]
+    trip, resume = events.iloc[0], events.iloc[1]
+    assert trip["shadow_equity"] == 1.0 and trip["flat_bars"] == 0
+    assert resume["shadow_rebound"] >= 0.05 and resume["shadow_equity"] < 1.0   # 影子还没回到开端，但已从底部反弹
+    bars_after_bottom = close.index.get_loc(resume["time"]) - close.index.get_loc(bottom)
+    assert 3 <= bars_after_bottom <= 4
+    slow_resume = slow.stop_events.query("event == 'book_resume'")["time"]
+    assert slow_resume.empty or slow_resume.iloc[0] > resume["time"]
+    assert fast.returns.sum() > slow.returns.sum()
+
+
+def test_market_calm_compares_current_vol_with_vol_at_trip():
+    tape = MarketTape()
+    rng = np.random.default_rng(0)
+    for scale in [0.05] * 20 + [0.01] * 20:   # 熔断时（第 20 根）大盘很乱，之后平静下来
+        tape.append(rng.normal(0.0, scale, size=5), np.ones(5, dtype=bool))
+    shadow = ShadowBook(np.zeros(5), shift=1)
+    calm_now = ReentryContext(shadow=shadow, market=tape, market_at_trip=20, unstopped_path=[1.0])
+    assert MarketCalm(window=10, ratio=0.5).ready(calm_now)
+    assert not MarketCalm(window=10, ratio=0.5).ready(ReentryContext(shadow=shadow, market=tape, market_at_trip=40, unstopped_path=[1.0]))
+    assert MarketCalm(window=10).ready(ReentryContext(shadow=shadow, market=tape, market_at_trip=5, unstopped_path=[1.0]))  # 熔断时数据不够：不拦
+
+
+def test_stop_rules_round_trip_through_dict():
+    rules = StopRules(book=BookStop(max_drawdown=0.12, min_flat_bars=2, shadow_follow_targets=False,
+                                    reentry=AllOf((ShadowRebound(0.04), MarketCalm(window=30, ratio=0.8)))),
+                      symbol=SymbolStop(0.05))
+    assert StopRules.from_dict(rules.to_dict()) == rules
+    assert StopRules.from_dict(StopRules(book=BookStop()).to_dict()).book == BookStop()
+
+
+def test_drawdown_limit_scales_with_recent_volatility():
+    rng = np.random.default_rng(0)
+    returns = list(rng.normal(0.0, 0.01, size=200))
+    assert np.isnan(drawdown_limit(returns[:179], vol_mult=1.5, vol_bars=180))
+    expected = 1.5 * np.std(returns[-180:]) * np.sqrt(180)
+    assert drawdown_limit(returns, vol_mult=1.5, vol_bars=180) == pytest.approx(expected)
+    calm = returns[:20] + [r / 4 for r in returns[20:]]
+    assert drawdown_limit(calm, vol_mult=1.5, vol_bars=180) == pytest.approx(expected / 4, rel=0.05)
+
+
+def test_dynamic_threshold_trips_later_in_a_noisy_book():
+    """同样跌 12%：波动小的组合（阈值低）熔断，波动大的组合（阈值高，1.5 × 30 天波动远超 12%）不熔断。"""
+    def run(noise):
+        n = 260
+        index = pd.date_range("2026-01-01", periods=n, freq="4h", tz="UTC", name="start_time")
+        wiggle = np.where(np.arange(n) % 2 == 0, 1 + noise, 1 / (1 + noise))
+        drop = np.r_[np.ones(220), np.full(10, 0.987), np.ones(30)]
+        close = pd.DataFrame({"A": 100.0 * np.cumprod(wiggle * drop), "B": np.full(n, 50.0)}, index=index)
+        targets = pd.DataFrame({"A": 1.0, "B": 0.0}, index=index)
+        return _run(close, targets, 1, 1, StopRules(book=BookStop(vol_mult=1.5, vol_bars=180, reentry=MaxFlat(1000))))
+    quiet, noisy = run(0.002), run(0.03)
+    assert (quiet.stop_events["event"] == "book_trip").sum() == 1
+    assert quiet.stop_events["threshold"].iloc[0] < 0.12
+    assert noisy.stop_events.empty
+
+
+def test_resume_on_a_non_rebalance_row_goes_straight_back_to_full_position():
+    """每 3 根调仓：熔断每根都判断（不在调仓行也当根清仓）；恢复那根不是调仓行也直接满仓，不等下一个调仓行。"""
+    close, targets, _ = _crash_and_rebound()
+    result = _run(close, targets, 3, 1, StopRules(book=BookStop(max_drawdown=0.10, reentry=ShadowRebound(0.05))))
+    events = result.stop_events
+    trip, resume = events["time"].iloc[0], events["time"].iloc[1]
+    rows = {t: k for k, t in enumerate(result.returns.index)}
+    assert rows[trip] % 3 != 0 or rows[resume] % 3 != 0  # 至少有一次落在非调仓行，检查才有意义
+    assert result.turnover.loc[trip] == pytest.approx(1.0)     # 当根清仓
+    assert result.turnover.loc[resume] == pytest.approx(1.0)   # 当根满仓
+    assert result.returns.loc[resume] > 0
+
+
+def test_high_water_is_recorded_but_never_reset():
+    close, targets, _ = _crash_and_rebound()
+    result = _run(close, targets, 1, 1, StopRules(book=BookStop(max_drawdown=0.10, reentry=ShadowRebound(0.05))))
+    resume = result.stop_events.query("event == 'book_resume'").iloc[0]
+    assert resume["drawdown"] == 0.0                    # 判断熔断用的峰值重置了
+    assert resume["total_drawdown"] <= -0.10            # 相对历史最高点的总回撤还在

@@ -1,6 +1,6 @@
 # 止损控制（stop control）：目标权重路径进、逐期持仓出
 
-代码：[`stop_control.py`](stop_control.py)　单测：[`tests/risk/test_stop_control.py`](../../tests/risk/test_stop_control.py)
+代码：[`stop_control.py`](stop_control.py)（控制器）、[`shadow_book.py`](shadow_book.py)（影子组合）、[`reentry.py`](reentry.py)（恢复入场规则）　单测：[`tests/risk/test_stop_control.py`](../../tests/risk/test_stop_control.py)
 
 ## 1. 第一性原则
 
@@ -31,7 +31,7 @@ alpha 打分 ─► 截面排名 ─► 权重映射（target_path）─► targ
 
 | 约定 | 含义 |
 | --- | --- |
-| **只减风险** | 对每个币，`held` 和基础仓位同号，绝对值不超过基础仓位。调仓行的基础仓位是目标，非调仓行是漂移后的持仓。只会平仓或缩小，不开新仓、不加仓、不反手 |
+| **只减风险** | 对每个币，`held` 和"不加止损时此刻会持有的仓位"同号，绝对值不超过它。这个参照在调仓行是目标，非调仓行是漂移后的持仓；熔断恢复那一根是最近一次目标按决策时刻已知的价格漂移到现在（策略此刻本来就该拿着的仓位）。只会平仓或缩小，不开策略之外的仓、不加仓、不反手 |
 | **因果** | 触发判断只用决策时刻 t 已知的数据：t 的收盘价，以及由它推出来的已实现净值。截掉后面的数据，前面的 `held` 不变 |
 | **规则全空就不干预** | `StopRules()` 或者不传，`held` 等于原来的值：调仓行等于目标，非调仓行等于漂移后的持仓。不加止损的研究结果逐格不变 |
 | **空出来的仓位留现金** | 不重新归一化，也不由下一名递补；总敞口可以小于 1 |
@@ -39,7 +39,7 @@ alpha 打分 ─► 截面排名 ─► 权重映射（target_path）─► targ
 ## 3. 接口
 
 ```python
-rules = StopRules(book=BookStop(max_drawdown=0.10), symbol=None)    # 一套方案，不可变
+rules = StopRules(book=BookStop(vol_mult=1.5, vol_bars=180, reentry=...), symbol=None)    # 一套方案，不可变
 controller = StopController(rules, n_symbols, shift=2)               # 一次回测 / 一条实盘链路一个实例
 held = controller.step(close=..., target=... or None, holding=..., label=t)   # 每根 bar 按时间顺序调一次
 controller.events_frame()                                            # 触发记录
@@ -51,7 +51,7 @@ controller.events_frame()                                            # 触发记
 | 输入 | `target` | (N,) 或 None | 调仓行传目标权重（`target_path` 那一行），非调仓行传 None |
 | 输入 | `holding` | (N,) | 当前漂移后的实际持仓。**只作为非调仓行"保持不动"的基础仓位，不参与判断** |
 | 输出 | `held` | (N,) | 这一期实际持有的权重，口径和 `target` 相同（占资金比例，负数做空） |
-| 记录 | `events_frame()` | 长表 | 每次触发一行：时间、事件（`book_trip` / `book_resume` / `symbol_stop`）、币、当时的净值、回撤、影子净值、浮盈亏 |
+| 记录 | `events_frame()` | 长表 | 每次触发一行：时间、事件（`book_trip` / `book_resume` / `symbol_stop`）、币、当时的净值、回撤、当时的熔断阈值、相对历史最高点的总回撤、不加止损的净值、影子净值 / 反弹 / 熔断后根数（熔断期间才有）、浮盈亏 |
 
 N 是调用方给定的同一组币（列），时间戳只用来给事件打标签。和 `sherpa.risk` 其他模块一样，只依赖 numpy / pandas。
 
@@ -67,10 +67,37 @@ N 是调用方给定的同一组币（列），时间戳只用来给事件打标
   `held[i−shift] · (close[t_i] / close[t_{i−1}] − 1)`。这和向量化回测第 i − shift 行的毛收益逐项相同（单测核对），
   只是晚 shift 步才看到，这正是现实中能看到的时点。不扣成本是为了让触发和成本假设无关，研究线可以保留
   "零成本跑一次、再按成本扣"的做法；
-- **熔断**：净值相对峰值回撤到 `max_drawdown`（默认 10%），当根把全部持仓平掉，之后保持空仓。打分和目标照常计算，只是不执行；
-- **恢复（重新进场）**：看**影子组合**，也就是同一条目标路径、不加任何止损时的组合（alpha 本来会怎样）。
-  熔断满 `min_flat_bars` 根，并且影子净值站上它最近 `resume_bars` 根的均值，就解除熔断，从下一个调仓行起按目标重新建仓。
-  峰值重置为解除时的净值，否则离旧峰值还差 10%，一恢复就会再次熔断；
+- **熔断**：每根 bar 都检查（不管是不是调仓行），净值相对峰值回撤到阈值，当根把全部持仓平掉，之后保持空仓。
+  打分和目标照常计算，只是不执行。阈值两种：
+  - 固定：`max_drawdown`；
+  - 动态（`vol_mult` 不为 None）：`drawdown_limit()` = `vol_mult` × 不加止损的组合最近 `vol_bars` 根逐 bar 毛收益的
+    标准差 × √`vol_bars`，每根重算。用不加止损的组合，是为了不让熔断期间的空仓把波动算低。数据不够 `vol_bars` 根时
+    先用 `max_drawdown`；
+- **影子组合**（[`shadow_book.py`](shadow_book.py) 的 `ShadowBook`）：每次熔断启动一段，恢复入场时结束。
+  开端是熔断那一根被平掉的实际持仓快照（以 1 为起点），之后用和组合净值相同的口径记账（毛净值、晚 shift 根看到）。
+  `BookStop.shadow_follow_targets` 决定开端之后怎么持有：`True`（默认、核心）跟随目标路径调仓（如果没熔断，策略会怎样）；
+  `False`（只留接口）冻结快照、只随价格漂移——被策略抛弃的币会一直拖着影子净值，反映的不再是策略本身，不作为主口径。
+  提供开端以来的涨跌 `change`、相对最低点的反弹 `rebound`、相对最高点的回撤 `drawdown`、净值路径 `path`、熔断后过了几根 `bars`；
+- **恢复（重新进场）**：熔断期间每根 bar 问一次恢复入场规则（[`reentry.py`](reentry.py)），满足就解除熔断，
+  **当根直接满仓**：调仓行按目标，非调仓行按最近一次目标随价格漂移到现在的仓位，不等下一个调仓行。影子组合结束。
+  峰值重置为解除时的净值，否则离旧峰值还差一个阈值，一恢复就会再次熔断。`min_flat_bars`（最短空仓根数）只留接口，
+  默认 0 不起作用。规则只读 `ReentryContext`：这次的影子组合、截面行情统计 `MarketTape`（等权大盘收益、截面分化，
+  全程逐根）、熔断时 `MarketTape` 的位置、这次熔断的阈值、不加止损的全程净值，全部是决策时刻已知的数据：
+
+  | 规则 | 含义 |
+  | --- | --- |
+  | `ShadowReboundScaled(of_threshold)` | 影子从熔断以来的最低点反弹至少 `of_threshold` × 这次熔断的阈值（阈值跟波动走，反弹门槛也跟着走） |
+  | `ShadowRebound(rebound)` | 同上，固定百分比 |
+  | `ShadowRecovered(level)` | 影子相对开端的涨跌不低于 `level`（0 = 收复熔断以来的全部亏损） |
+  | `MarketCalm(window, ratio)` | 最近 `window` 根大盘波动不超过熔断时同窗口波动的 `ratio` 倍 |
+  | `MaxFlat(bars)` | 超时兜底：熔断满 `bars` 根就恢复 |
+  | `UnstoppedAboveMean(bars)` | 不加止损的全程净值站上最近 `bars` 根均值（最初 `book10` 的口径） |
+  | `AllOf(rules)` / `AnyOf(rules)` | 组合 |
+
+  默认 `AllOf(ShadowReboundScaled(0.5), MarketCalm(42, 1.0))`：影子见底回升半个阈值，且引发熔断的剧烈行情已经过去；
+- **总回撤**：另记一个从不重置的历史最高净值 `high_water`，事件里写相对它的总回撤 `total_drawdown`。只记录，不参与逻辑；
+
+  新规则写成 frozen dataclass，带 `name` 和 `ready(ctx)`，用 `@register` 注册，`to_dict` / `from_dict` 才能往返；
 - 熔断期间不计算单币止损，单币状态全部清空。
 
 **单币止损（`SymbolStop`，简单实现，阈值待定）**
@@ -94,8 +121,18 @@ N 是调用方给定的同一组币（列），时间戳只用来给事件打标
 - 止损控制不改变打分，**RankIC 只评价 alpha 本身**；
 - 止损方案评价的是：同一个 alpha、同一个组合，在加和不加止损的情况下，最大回撤和尾部亏损降了多少、净 Sharpe 变了多少、
   多付了多少换手成本、空仓了多久；
-- 方案要事先声明、数量少，挑选只看选择段，不在网格里搜阈值；
+- 方案要事先声明、数量少，不在网格里搜阈值；跟关卡3 同一口径，方案比较以验证段为准，选择段只作样本内参考
+  （ML alpha 的选择段跟训练期重叠，数字偏乐观）；
 - 不能用止损把一个没有排序能力的 alpha 包装成"可用的"。
+
+**对比测试的做法（当前）**：
+
+- 不加止损的版本就是每个 run 已有的 `friction/`，加止损的写到 `friction_stop_<方案>/`，两边同一套网格、同一套成本；
+- 主看默认组合（top10_exit20、每 3 根调仓、吃单成本），再看 39 个组合的吃单中位数；
+- 指标：净 Sharpe、年化、最大回撤、相对历史最高点的最大总回撤、空仓比例、熔断次数；
+- 逐次熔断看"躲掉的亏损 vs 错过的反弹"：熔断期间不加止损的组合涨跌了多少（跌 = 躲掉了，涨 = 错过了）、空仓了多久；
+- 04 表照常输出、不作为判断依据（熔断造成的空仓会让组合被空仓过滤剔掉，这是预期内的）；
+- 研究线成熟后，最终方案的结果再并入 `friction/` 作为摩擦测试的统一呈现位置。
 
 ## 7. 已知的近似和待办
 

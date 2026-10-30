@@ -23,6 +23,7 @@ from __future__ import annotations
 from typing import Any
 
 from sherpa.backtest.cost_model import CostModel, FixedFeeCostModel, ZeroCostModel
+from sherpa.risk.reentry import AllOf, AnyOf, MarketCalm, MaxFlat, ShadowReboundScaled
 from sherpa.risk.stop_control import BookStop, StopRules
 
 from data import MAKER_FEE_BPS, STRESS_SLIPPAGE_BPS, TAKER_FEE_BPS, TAKER_SLIPPAGE_BPS
@@ -86,7 +87,16 @@ MAX_TURNOVER_DECAY: float = 0.40
 # 止损控制方案（`sherpa.risk.stop_control`，`run_friction.py --stop-control <名字>`）：目标权重路径和实际持仓之间加一层，
 # 整套网格再跑一遍，产出写到单独的 `results*/friction_stop_<名字>/`（文件格式同 friction/，04 表同一套判定逻辑），
 # 不加止损的 friction/ 不受影响。方案要事先声明、数量少，不在网格里搜阈值。
+_REENTRY_AE = AllOf((ShadowReboundScaled(of_threshold=0.5), MarketCalm(window=42, ratio=1.0)))
 STOP_CONTROLS: dict[str, StopRules] = {
-    # 组合熔断：毛净值相对峰值回撤 10% 全部平仓；熔断满 1 天、影子净值（不加止损的同一条目标路径）站上最近 7 天均值后恢复
-    "book10": StopRules(book=BookStop(max_drawdown=0.10, resume_bars=42, min_flat_bars=6)),
+    # 组合熔断，阈值 = 1.5 × 不加止损的组合最近 30 天（180 根）的波动（数据不够 30 天时先用 10%），每根 bar 都检查；
+    # 恢复看这次熔断的影子组合（从被平掉的持仓出发、跟随目标调仓）：
+    # A + E：影子从熔断后的最低点反弹到半个熔断阈值，且最近 7 天大盘波动不高于熔断时
+    "vol15_ae": StopRules(book=BookStop(vol_mult=1.5, vol_bars=180, reentry=_REENTRY_AE)),
+    # (A + E) 或 F：再加超时兜底，熔断满 42 根（7 天）不管影子怎样都恢复
+    "vol15_ae_f": StopRules(book=BookStop(vol_mult=1.5, vol_bars=180, reentry=AnyOf((_REENTRY_AE, MaxFlat(bars=42))))),
+    # 对照：只用 A（影子反弹到半个熔断阈值，不看大盘），检验 E 是不是拖慢恢复的那一环
+    "vol15_a": StopRules(book=BookStop(vol_mult=1.5, vol_bars=180, reentry=ShadowReboundScaled(of_threshold=0.5))),
+    # 对照：只用 F（熔断后固定空仓 42 根），检验影子信号相对纯冷却期有没有增量
+    "vol15_f": StopRules(book=BookStop(vol_mult=1.5, vol_bars=180, reentry=MaxFlat(bars=42))),
 }
