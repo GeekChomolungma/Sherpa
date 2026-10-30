@@ -1,0 +1,29 @@
+{
+  "description": "07 = 逐 bar 毛收益，08 = 逐 bar 单边换手；净收益 = 毛收益 − 换手 × cost_bps / 10000；加了止损控制 vol15_e（sherpa.risk.stop_control）",
+  "cost_bps": {
+    "zero": 0.0,
+    "all_maker": 2.0,
+    "all_taker": 8.0,
+    "stress": 15.0
+  },
+  "base_cost": "all_taker",
+  "validation_start": "2024-06-30T00:00:00+00:00",
+  "shift": 2,
+  "columns": "<case> | <weighting> | every<rebalance_every>",
+  "stop_control": {
+    "name": "vol15_e",
+    "book": {
+      "max_drawdown": 0.1,
+      "vol_mult": 1.5,
+      "vol_bars": 180,
+      "min_flat_bars": 0,
+      "reentry": {
+        "rule": "market_calm",
+        "window": 42,
+        "ratio": 1.0
+      },
+      "shadow_follow_targets": true
+    },
+    "symbol": null
+  }
+}
