@@ -159,15 +159,16 @@ class _Prices:
 
 def run_score_backtest(
     targets: pd.DataFrame, close: pd.DataFrame, interval: str, *, shift: int, rebalance_every: int,
-    stop_rules: StopRules | None = None, stop_events: list[pd.DataFrame] | None = None,
+    stop_rules: StopRules | None = None, stop_events: list[pd.DataFrame] | None = None, ic: pd.Series | None = None,
 ) -> tuple[pd.Series, pd.Series]:
     """目标权重路径 → (逐 bar 毛收益, 逐 bar 换手)，零成本。目标权重已经按调仓行算好，回测只做恒等映射。
 
     `stop_rules`：在目标和实际持仓之间加止损控制（`sherpa.risk.stop_control`）。它的触发只看价格和毛净值、跟成本无关，
-    所以"零成本跑一次再按成本扣"照样成立。给了 `stop_events`（list）就把触发记录追加进去。"""
+    所以"零成本跑一次再按成本扣"照样成立。给了 `stop_events`（list）就把触发记录追加进去。`ic`：打分的逐期 RankIC，
+    透传给止损控制的 IC 类恢复规则（见 `run_vectorized_backtest`）。"""
     result = run_vectorized_backtest(
         targets, _Prices(close, interval), lambda row: row, ZeroCostModel(), shift=shift, rebalance_every=rebalance_every,
-        stop_rules=stop_rules,
+        stop_rules=stop_rules, ic=ic,
     )
     if stop_events is not None and result.stop_events is not None:
         stop_events.append(result.stop_events)

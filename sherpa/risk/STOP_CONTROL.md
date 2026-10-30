@@ -41,7 +41,7 @@ alpha 打分 ─► 截面排名 ─► 权重映射（target_path）─► targ
 ```python
 rules = StopRules(book=BookStop(vol_mult=1.5, vol_bars=180, reentry=...), symbol=None)    # 一套方案，不可变
 controller = StopController(rules, n_symbols, shift=2)               # 一次回测 / 一条实盘链路一个实例
-held = controller.step(close=..., target=... or None, holding=..., label=t)   # 每根 bar 按时间顺序调一次
+held = controller.step(close=..., target=... or None, holding=..., label=t, ic=...)   # 每根 bar 按时间顺序调一次
 controller.events_frame()                                            # 触发记录
 ```
 
@@ -50,6 +50,7 @@ controller.events_frame()                                            # 触发记
 | 输入 | `close` | (N,) | 决策时刻 t 的收盘价，NaN 表示没价格。**所有触发判断只用它** |
 | 输入 | `target` | (N,) 或 None | 调仓行传目标权重（`target_path` 那一行），非调仓行传 None |
 | 输入 | `holding` | (N,) | 当前漂移后的实际持仓。**只作为非调仓行"保持不动"的基础仓位，不参与判断** |
+| 输入（可选） | `ic` | 标量 | 第 t 行打分对第 t 行持有期收益的截面 RankIC。含未来信息，控制器跟持仓一起排队、晚 shift 步才读到；只给 IC 类恢复规则用，不用可以不传 |
 | 输出 | `held` | (N,) | 这一期实际持有的权重，口径和 `target` 相同（占资金比例，负数做空） |
 | 记录 | `events_frame()` | 长表 | 每次触发一行：时间、事件（`book_trip` / `book_resume` / `symbol_stop`）、币、当时的净值、回撤、当时的熔断阈值、相对历史最高点的总回撤、不加止损的净值、影子净值 / 反弹 / 熔断后根数（熔断期间才有）、浮盈亏 |
 
@@ -82,15 +83,17 @@ N 是调用方给定的同一组币（列），时间戳只用来给事件打标
   **当根直接满仓**：调仓行按目标，非调仓行按最近一次目标随价格漂移到现在的仓位，不等下一个调仓行。影子组合结束。
   峰值重置为解除时的净值，否则离旧峰值还差一个阈值，一恢复就会再次熔断。`min_flat_bars`（最短空仓根数）只留接口，
   默认 0 不起作用。规则只读 `ReentryContext`：这次的影子组合、截面行情统计 `MarketTape`（等权大盘收益、截面分化，
-  全程逐根）、熔断时 `MarketTape` 的位置、这次熔断的阈值、不加止损的全程净值，全部是决策时刻已知的数据：
+  全程逐根）、熔断时 `MarketTape` 的位置、这次熔断的阈值、不加止损的全程净值、已实现的逐期 RankIC 和熔断时它的位置，
+  全部是决策时刻已知的数据。研究里用简称 A / E / F / IC（见 `reentry.py` 开头）：
 
   | 规则 | 含义 |
   | --- | --- |
-  | `ShadowReboundScaled(of_threshold)` | 影子从熔断以来的最低点反弹至少 `of_threshold` × 这次熔断的阈值（阈值跟波动走，反弹门槛也跟着走） |
+  | `ShadowReboundScaled(of_threshold)`（A） | 影子从熔断以来的最低点反弹至少 `of_threshold` × 这次熔断的阈值（阈值跟波动走，反弹门槛也跟着走） |
   | `ShadowRebound(rebound)` | 同上，固定百分比 |
   | `ShadowRecovered(level)` | 影子相对开端的涨跌不低于 `level`（0 = 收复熔断以来的全部亏损） |
-  | `MarketCalm(window, ratio)` | 最近 `window` 根大盘波动不超过熔断时同窗口波动的 `ratio` 倍 |
-  | `MaxFlat(bars)` | 超时兜底：熔断满 `bars` 根就恢复 |
+  | `MarketCalm(window, ratio)`（E） | 最近 `window` 根大盘波动不超过熔断时同窗口波动的 `ratio` 倍 |
+  | `MaxFlat(bars)`（F） | 超时兜底 / 纯冷却期：熔断满 `bars` 根就恢复 |
+  | `IcRecovered(window, floor)`（IC） | alpha 最近 `window` 根已实现 RankIC 的均值 ≥ max(熔断时同窗口均值, `floor`)；没传 IC 时永不恢复 |
   | `UnstoppedAboveMean(bars)` | 不加止损的全程净值站上最近 `bars` 根均值（最初 `book10` 的口径） |
   | `AllOf(rules)` / `AnyOf(rules)` | 组合 |
 

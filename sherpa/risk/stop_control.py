@@ -3,7 +3,7 @@
 ```text
 alpha 打分 ─► 排名 ─► 目标权重路径 targets（无状态，`score_backtest.target_path`）
                               │
-                              ▼  每根 bar：StopController.step(close, target, holding)
+                              ▼  每根 bar：StopController.step(close, target, holding[, ic])
                          实际持仓 held ─► 回测引擎算换手 / 收益（研究线）、生成调仓意图（Runner）
 ```
 
@@ -12,7 +12,8 @@ alpha 打分 ─► 排名 ─► 目标权重路径 targets（无状态，`scor
 1. **只减风险**：输出不超过"不加止损时这一期会持有的仓位"（调仓行 = 目标，非调仓行 = 最近一次目标随价格漂移到现在），
    同号、绝对值不超过它——只会平仓 / 缩小，不开策略之外的仓、不加仓、不反手。选币永远是 alpha 和权重映射的事；
 2. **因果**：触发判断只用决策时刻 t 已知的价格（`close`）。漂移后的持仓 `holding` 在 `shift > 1` 时已经用到了
-   t 之后的收益（执行时刻的持仓），只当"保持不动"的基础仓位，不参与判断；
+   t 之后的收益（执行时刻的持仓），只当"保持不动"的基础仓位，不参与判断；可选的 `ic`（第 t 行打分对它持有期收益的
+   RankIC）跟持仓一起排队，晚 `shift` 步收益实现了才进入"已知 IC"给恢复规则用；
 3. **规则全空 = 不干预**：输出等于原来的 `held`（调仓行 = 目标，非调仓行 = 漂移后的持仓）。
 
 两类规则，组合熔断优先：
@@ -147,8 +148,8 @@ class StopController:
         n = n_symbols
         self._close_prev: Optional[np.ndarray] = None
         self._return_prev = np.zeros(n)          # 上一步得知的已实现收益（第 i−1−shift 步决策的持有期）
-        # 最近 shift 步的 (实际持仓, 目标或 None)：等收益实现了再拿来记账
-        self._pending: deque[tuple[np.ndarray, Optional[np.ndarray]]] = deque()
+        # 最近 shift 步的 (实际持仓, 目标或 None, 这一行的 RankIC)：等收益实现了再拿来记账
+        self._pending: deque[tuple[np.ndarray, Optional[np.ndarray], float]] = deque()
         self._unstopped = np.zeros(n)            # 已记账的最近一步、不加止损时的持仓
         self.reference = np.zeros(n)             # 不加止损时此刻会持有的仓位：最近一次目标随价格（决策时刻已知）漂移到现在
         self.equity = 1.0                        # 组合毛净值（已实现部分）
@@ -158,10 +159,12 @@ class StopController:
         self.unstopped_path: list[float] = []
         self.unstopped_returns: list[float] = []  # 不加止损的逐 bar 毛收益（动态阈值的波动从这里算）
         self.market = MarketTape()
+        self.ic: list[float] = []                # 已实现的逐期 RankIC（按决策行，晚 shift 步才知道）；没传 IC 时全是 NaN
         self.threshold = rules.book.max_drawdown if rules.book else float("nan")   # 当前的熔断阈值
         self.tripped = False
         self.shadow: Optional[ShadowBook] = None  # 这次熔断的影子组合；不在熔断中为 None
         self._market_at_trip = 0
+        self._ic_at_trip = 0
         self._trip_threshold = float("nan")
         self._step = 0
         # 单币止损的状态
@@ -173,10 +176,12 @@ class StopController:
 
     # ------------------------------------------------------------------------------------------
     def step(
-        self, *, close: np.ndarray, target: Optional[np.ndarray], holding: np.ndarray, label: Hashable = None
+        self, *, close: np.ndarray, target: Optional[np.ndarray], holding: np.ndarray, label: Hashable = None,
+        ic: float = float("nan"),
     ) -> np.ndarray:
         """决策时刻 t：`close` = t 的收盘价（NaN = 没价格）；`target` = 调仓行的目标权重，非调仓行 None；
-        `holding` = 当前（漂移后）的实际持仓。返回这一期实际持有的权重。"""
+        `holding` = 当前（漂移后）的实际持仓；`ic` = 第 t 行打分跟它持有期收益的截面 RankIC（含未来信息，控制器会
+        延后 `shift` 步才使用；不用 IC 类恢复规则时可以不传）。返回这一期实际持有的权重。"""
         close = np.asarray(close, dtype=float)
         holding = np.asarray(holding, dtype=float)
         target = None if target is None else np.asarray(target, dtype=float)
@@ -199,7 +204,7 @@ class StopController:
                 held = self._apply_symbol_stops(close, target, held, label)
         if self.shadow is not None and status != "trip":  # 熔断那一步的决策就是快照，建影子时已经放进去了
             self.shadow.push(target)
-        self._pending.append((held.copy(), None if target is None else target.copy()))
+        self._pending.append((held.copy(), None if target is None else target.copy(), float(ic)))
         self._close_prev = close
         self._step += 1
         return held
@@ -222,7 +227,8 @@ class StopController:
             realized = np.where(valid, realized, 0.0)
         self.market.append(realized, valid)
         if len(self._pending) == self.shift:
-            held, target = self._pending.popleft()
+            held, target, ic = self._pending.popleft()
+            self.ic.append(ic)
             # 不加止损时的持仓 = 同一条目标路径（向量化回测不加止损时的 held）
             self._unstopped = target if target is not None else _drift(self._unstopped, self._return_prev)
             unstopped_return = float(self._unstopped @ realized)
@@ -248,11 +254,13 @@ class StopController:
             self.shadow = ShadowBook(holding, shift=self.shift, follow_targets=rule.shadow_follow_targets, label=label)
             self._market_at_trip = len(self.market)
             self._trip_threshold = self.threshold
+            self._ic_at_trip = len(self.ic)
             self._event(label, "book_trip", drawdown=drawdown)
             return "trip"
         if self.tripped and self.shadow.bars >= rule.min_flat_bars:
             ctx = ReentryContext(shadow=self.shadow, market=self.market, market_at_trip=self._market_at_trip,
-                                 unstopped_path=self.unstopped_path, trip_threshold=self._trip_threshold)
+                                 unstopped_path=self.unstopped_path, trip_threshold=self._trip_threshold,
+                                 ic=self.ic, ic_at_trip=self._ic_at_trip)
             if rule.reentry.ready(ctx):
                 self.tripped = False
                 self.peak = self.equity

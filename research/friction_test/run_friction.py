@@ -377,13 +377,15 @@ def _run_case(
     scored = score.notna().any(axis=1)
     active_start = scored.idxmax() if scored.any() else score.index[-1]
     segments = {name: mask & (mask.index >= active_start) for name, mask in segments.items()}
+    # 止损的 IC 类恢复规则要用：第 t 行打分对第 t 行持有期收益（跟回测同一个 shift 口径）的截面 RankIC，跟组合无关、算一次
+    ic = rank_ic(score, close.pct_change(fill_method=None).shift(-shift)) if stop_rules is not None else None
     for weighting, rebalance in grid:
         # 目标权重路径先按时间顺序算好（缓冲带要参考上一期目标），回测只做恒等映射。
         targets = target_path(score, config.WEIGHTINGS[weighting], rebalance)
         key = {"case": case, "weighting": weighting, "rebalance_every": rebalance}
         combo_events: list[pd.DataFrame] = []
         gross, turnover = run_score_backtest(targets, close, interval, shift=shift, rebalance_every=rebalance,
-                                             stop_rules=stop_rules, stop_events=combo_events)
+                                             stop_rules=stop_rules, stop_events=combo_events, ic=ic)
         events += [e.assign(combo=_label(key)) for e in combo_events if len(e)]
         seg_nets: dict[tuple[str, str], pd.Series] = {}
         rows += [{**key, **row} for row in cost_segment_rows(

@@ -7,7 +7,7 @@ import pytest
 from sherpa.backtest.cost_model import ZeroCostModel
 from sherpa.backtest.score_backtest import target_path
 from sherpa.backtest.vectorized import _drift, run_vectorized_backtest
-from sherpa.risk.reentry import (AllOf, AnyOf, MarketCalm, MarketTape, MaxFlat, ReentryContext, ShadowRebound,
+from sherpa.risk.reentry import (AllOf, AnyOf, IcRecovered, MarketCalm, MarketTape, MaxFlat, ReentryContext, ShadowRebound,
                                  ShadowReboundScaled, ShadowRecovered, UnstoppedAboveMean)
 from sherpa.risk.shadow_book import ShadowBook
 from sherpa.risk.stop_control import BookStop, StopController, StopRules, SymbolStop, drawdown_limit
@@ -204,9 +204,51 @@ def test_market_calm_compares_current_vol_with_vol_at_trip():
     assert MarketCalm(window=10).ready(ReentryContext(shadow=shadow, market=tape, market_at_trip=5, unstopped_path=[1.0]))  # 熔断时数据不够：不拦
 
 
+def test_ic_recovered_needs_the_smoothed_ic_back_to_the_trip_level_and_positive():
+    shadow = ShadowBook(np.zeros(5), shift=1)
+    rule = IcRecovered(window=3, floor=0.0)
+
+    def ctx(ic, at_trip):
+        return ReentryContext(shadow=shadow, market=MarketTape(), market_at_trip=0, unstopped_path=[1.0], ic=ic, ic_at_trip=at_trip)
+
+    assert not rule.ready(ctx([0.05, 0.03, 0.01, -0.02, -0.04, 0.01], 3))   # 熔断时均值 0.03，现在 -0.017
+    assert rule.ready(ctx([0.05, 0.03, 0.01, -0.02, 0.05, 0.08], 3))        # 现在 0.037 ≥ 0.03
+    assert not rule.ready(ctx([-0.05, -0.04, -0.03, -0.04, -0.02, -0.01], 3))  # 回到熔断时的水平了，但还是负的
+    assert rule.ready(ctx([np.nan, 0.02, 0.01, 0.03], 1))                   # 熔断时不够一个窗口：只看 floor；NaN 跳过
+    assert not rule.ready(ctx([np.nan] * 6, 3))                             # 没传 IC：不恢复
+    assert not rule.ready(ctx([0.1, 0.1], 0))                               # 当前不够一个窗口
+
+
+@pytest.mark.parametrize("shift", [1, 2, 3])
+def test_ic_reaches_the_controller_only_after_its_holding_period_is_realized(shift):
+    """第 t 行的 IC 用到了第 t 行持有期的收益，要等第 t + shift 步才能看到：跟毛净值记账同一个延迟。"""
+    close = _market(n_bars=30)
+    controller = StopController(StopRules(book=BookStop(max_drawdown=0.999)), close.shape[1], shift=shift)
+    ic = np.arange(len(close), dtype=float) / 100.0
+    for i in range(len(close)):
+        controller.step(close=close.iloc[i].to_numpy(), target=np.zeros(close.shape[1]), holding=np.zeros(close.shape[1]), ic=ic[i])
+        assert controller.ic == list(ic[: max(i + 1 - shift, 0)])
+
+
+def test_ic_rule_resumes_once_the_alpha_works_again():
+    """熔断后 IC 一直为负就一直空仓；IC 转正、平滑值回到熔断时的水平后恢复。"""
+    close, targets, bottom = _crash_and_rebound()
+    ic = pd.Series(-0.05, index=close.index)
+    turn = close.index.get_loc(bottom) + 10
+    ic.iloc[turn:] = 0.04
+    rules = StopRules(book=BookStop(max_drawdown=0.10, reentry=IcRecovered(window=3)))
+    result = run_vectorized_backtest(targets, panel_from_close(close), lambda row: row, ZeroCostModel(),
+                                     shift=1, rebalance_every=1, stop_rules=rules, ic=ic)
+    events = result.stop_events
+    assert list(events["event"][:2]) == ["book_trip", "book_resume"]
+    resume_at = close.index.get_loc(events.iloc[1]["time"])
+    # 第 turn 行的 IC 晚 1 步（shift）才知道；窗口 3：turn+1 步是 (-0.05, -0.05, 0.04) 均值仍为负，turn+2 步转正
+    assert resume_at == turn + 2
+
+
 def test_stop_rules_round_trip_through_dict():
     rules = StopRules(book=BookStop(max_drawdown=0.12, min_flat_bars=2, shadow_follow_targets=False,
-                                    reentry=AllOf((ShadowRebound(0.04), MarketCalm(window=30, ratio=0.8)))),
+                                    reentry=AllOf((ShadowRebound(0.04), MarketCalm(window=30, ratio=0.8), IcRecovered(42, 0.01)))),
                       symbol=SymbolStop(0.05))
     assert StopRules.from_dict(rules.to_dict()) == rules
     assert StopRules.from_dict(StopRules(book=BookStop()).to_dict()).book == BookStop()

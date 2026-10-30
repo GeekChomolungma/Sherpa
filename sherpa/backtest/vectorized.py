@@ -26,6 +26,7 @@ def run_vectorized_backtest(
     shift: int = 1,
     rebalance_every: int = 1,
     stop_rules: StopRules | None = None,
+    ic: pd.Series | None = None,
 ) -> BacktestResult:
     """`docs/backtest_principle.md` 第二层，向量化版本。
 
@@ -55,7 +56,8 @@ def run_vectorized_backtest(
 
     `stop_rules`：止损控制（`sherpa.risk.stop_control`），插在"目标 / 漂移后的持仓"和实际持仓 `held` 之间，每根 bar
     都检查（非调仓行也能平仓），触发用的是决策时刻 t 的收盘价。不给（或规则全空）时逐格等于不加止损；触发记录在
-    结果的 `stop_events`（time 是决策时刻，symbol 是列名）。
+    结果的 `stop_events`（time 是决策时刻，symbol 是列名）。`ic`：第 t 行打分对第 t 行持有期收益的截面 RankIC
+    （`rank_ic(score, close.pct_change().shift(-shift))`），只给 IC 类恢复规则用，控制器延后 `shift` 步才读到。
     """
     if shift < 1:
         raise ValueError(f"shift 至少是 1（shift=0 等于用决策之前已经实现的收益，是前视），收到 {shift}")
@@ -84,6 +86,8 @@ def run_vectorized_backtest(
     trade = trade_flags.loc[common_index].to_numpy(dtype=bool)
     controller = StopController(stop_rules, len(columns), shift=shift) if stop_rules is not None and stop_rules.active else None
     decision_close = panel.close.loc[common_index].to_numpy(dtype=float) if controller is not None else None
+    ic_values = (ic.reindex(common_index).to_numpy(dtype=float) if ic is not None
+                 else np.full(len(common_index), np.nan))
 
     net_returns = np.empty(len(common_index))
     turnovers = np.empty(len(common_index))
@@ -99,7 +103,7 @@ def run_vectorized_backtest(
         held = weights[i] if trade[i] else drifted  # 不调仓的 bar 直接持有漂移后的仓位
         if controller is not None:
             held = controller.step(close=decision_close[i], target=weights[i] if trade[i] else None, holding=drifted,
-                                   label=common_index[i])
+                                   label=common_index[i], ic=ic_values[i])
         turnover = float(np.abs(held - drifted).sum())
         gross = float(held @ returns[i])
 

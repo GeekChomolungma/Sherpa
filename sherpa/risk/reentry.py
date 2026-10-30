@@ -1,7 +1,19 @@
 """组合熔断后的恢复入场规则：熔断期间每根 bar 问一次"现在可以重新建仓了吗"。
 
 规则只读 `ReentryContext`——这次熔断的影子组合（`shadow_book.ShadowBook`）、截面行情的逐期统计（`MarketTape`）、
-不加止损的全程净值——全部是决策时刻已知的数据，所以规则怎么组合都不会偷看未来。
+不加止损的全程净值、alpha 已实现的逐期 RankIC——全部是决策时刻已知的数据，所以规则怎么组合都不会偷看未来。
+
+研究里用字母称呼的几条规则（`research/friction_test/config.py` 的方案名 `vol15_<字母>` 也按这个来）：
+
+| 简称 | 类 | 含义 |
+|---|---|---|
+| A  | `ShadowReboundScaled` | 影子组合从熔断后的最低点反弹到 `of_threshold` × 这次熔断阈值（策略见底回升了） |
+| E  | `MarketCalm`          | 最近 `window` 根大盘波动不高于熔断时同样窗口的波动（引发熔断的剧烈行情过去了） |
+| F  | `MaxFlat`             | 熔断后空仓满 `bars` 根（纯冷却期 / 超时兜底，不看任何信号） |
+| IC | `IcRecovered`         | alpha 最近 `window` 根的平滑 RankIC 回到熔断时的水平、且不低于 `floor`（信号恢复有效了） |
+
+其余几条（`UnstoppedAboveMean`、`ShadowRebound`、`ShadowRecovered`）是早期口径 / 备用，没有简称。多条规则用
+`AllOf`（都满足）/ `AnyOf`（任一满足）组合。
 
 ```python
 BookStop(vol_mult=1.5, reentry=AllOf((ShadowReboundScaled(0.5), MarketCalm(window=42, ratio=1.0))))
@@ -67,6 +79,8 @@ class ReentryContext:
     market_at_trip: int                 # 熔断那一根时 `market` 的长度：`market.vol(w, end=market_at_trip)` = 熔断时的大盘波动
     unstopped_path: Sequence[float]     # 不加止损的全程毛净值（已记账部分），最后一个是当前值
     trip_threshold: float = float("nan")  # 这次熔断时的回撤阈值（动态阈值时就是当时按波动算出来的那个）
+    ic: Sequence[float] = ()            # alpha 已实现的逐期 RankIC（已经能看到的部分，按决策行排，最后一个是最新的）
+    ic_at_trip: int = 0                 # 熔断那一根时 `ic` 的长度：`ic[:ic_at_trip]` = 熔断时已知的 IC
 
 
 # ---- 规则 ----------------------------------------------------------------------------------------
@@ -170,6 +184,36 @@ class MarketCalm(ReentryRule):
         if not np.isfinite(at_trip) or not np.isfinite(now):
             return True
         return now <= self.ratio * at_trip
+
+
+@register
+@dataclass(frozen=True)
+class IcRecovered(ReentryRule):
+    """alpha 信号恢复有效：最近 `window` 根已实现 RankIC 的均值 ≥ max(熔断时同样窗口的均值, `floor`)。
+
+    熔断时 IC 往往已经很低，只要求"回到熔断时的水平"可能下一根就满足，所以再加一道 `floor`（默认 0：IC 至少为正）。
+    熔断时数据不够一个窗口就只看 `floor`；当前数据不够一个窗口、或窗口里全是 NaN（没传 IC）就不恢复。"""
+
+    name: ClassVar[str] = "ic_recovered"
+    window: int = 42
+    floor: float = 0.0
+
+    def ready(self, ctx: ReentryContext) -> bool:
+        now = _ic_mean(ctx.ic, self.window, len(ctx.ic))
+        if not np.isfinite(now):
+            return False
+        at_trip = _ic_mean(ctx.ic, self.window, ctx.ic_at_trip)
+        bar = self.floor if not np.isfinite(at_trip) else max(at_trip, self.floor)
+        return now >= bar
+
+
+def _ic_mean(ic: Sequence[float], window: int, end: int) -> float:
+    """`ic[end - window:end]` 的均值（跳过 NaN）；不够一个窗口或全是 NaN 返回 NaN。"""
+    if window < 1 or end < window:
+        return float("nan")
+    values = np.asarray(ic[end - window:end], dtype=float)
+    values = values[np.isfinite(values)]
+    return float(values.mean()) if values.size else float("nan")
 
 
 @dataclass(frozen=True)
