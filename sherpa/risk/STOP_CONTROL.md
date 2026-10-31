@@ -91,9 +91,9 @@ N 是调用方给定的同一组币（列），时间戳只用来给事件打标
   | `ShadowReboundScaled(of_threshold)`（A） | 影子从熔断以来的最低点反弹至少 `of_threshold` × 这次熔断的阈值（阈值跟波动走，反弹门槛也跟着走） |
   | `ShadowRebound(rebound)` | 同上，固定百分比 |
   | `ShadowRecovered(level)` | 影子相对开端的涨跌不低于 `level`（0 = 收复熔断以来的全部亏损） |
-  | `MarketCalm(window, ratio)`（E） | 最近 `window` 根大盘波动不超过熔断时同窗口波动的 `ratio` 倍 |
+  | `MarketCalm(window, ratio)`（E） | 熔断后的大盘波动（只用熔断后的数据，最近至多 `window` 根，至少 2 根）不超过熔断前 `window` 根波动的 `ratio` 倍 |
   | `MaxFlat(bars)`（F） | 超时兜底 / 纯冷却期：熔断满 `bars` 根就恢复 |
-  | `IcRecovered(window, floor)`（IC） | alpha 最近 `window` 根已实现 RankIC 的均值 ≥ max(熔断时同窗口均值, `floor`)；没传 IC 时永不恢复 |
+  | `IcRecovered(window, floor)`（IC） | 熔断后已实现 RankIC 的均值（只用熔断后新到的，最近至多 `window` 根）≥ max(熔断前 `window` 根均值, `floor`)，`floor` 默认 0.03；没传 IC 时永不恢复 |
   | `UnstoppedAboveMean(bars)` | 不加止损的全程净值站上最近 `bars` 根均值（最初 `book10` 的口径） |
   | `AllOf(rules)` / `AnyOf(rules)` | 组合 |
 

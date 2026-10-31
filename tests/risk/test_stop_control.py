@@ -192,7 +192,7 @@ def test_shadow_rebound_resumes_right_after_the_bottom():
     assert fast.returns.sum() > slow.returns.sum()
 
 
-def test_market_calm_compares_current_vol_with_vol_at_trip():
+def test_market_calm_compares_post_trip_vol_with_pre_trip_vol():
     tape = MarketTape()
     rng = np.random.default_rng(0)
     for scale in [0.05] * 20 + [0.01] * 20:   # 熔断时（第 20 根）大盘很乱，之后平静下来
@@ -200,23 +200,29 @@ def test_market_calm_compares_current_vol_with_vol_at_trip():
     shadow = ShadowBook(np.zeros(5), shift=1)
     calm_now = ReentryContext(shadow=shadow, market=tape, market_at_trip=20, unstopped_path=[1.0])
     assert MarketCalm(window=10, ratio=0.5).ready(calm_now)
-    assert not MarketCalm(window=10, ratio=0.5).ready(ReentryContext(shadow=shadow, market=tape, market_at_trip=40, unstopped_path=[1.0]))
+    assert not MarketCalm(window=10, ratio=0.5).ready(ReentryContext(shadow=shadow, market=tape, market_at_trip=30, unstopped_path=[1.0]))  # 熔断前后一样平静
+    # 熔断后只用熔断后的数据：刚熔断、新数据不到 2 根时不恢复（不会拿熔断前的窗口凑数）
+    assert not MarketCalm(window=10).ready(ReentryContext(shadow=shadow, market=tape, market_at_trip=39, unstopped_path=[1.0]))
+    assert MarketCalm(window=10).ready(ReentryContext(shadow=shadow, market=tape, market_at_trip=38, unstopped_path=[1.0]))
     assert MarketCalm(window=10).ready(ReentryContext(shadow=shadow, market=tape, market_at_trip=5, unstopped_path=[1.0]))  # 熔断时数据不够：不拦
 
 
-def test_ic_recovered_needs_the_smoothed_ic_back_to_the_trip_level_and_positive():
+def test_ic_recovered_uses_only_post_trip_ic_against_the_pre_trip_level_and_the_floor():
     shadow = ShadowBook(np.zeros(5), shift=1)
-    rule = IcRecovered(window=3, floor=0.0)
+    rule = IcRecovered(window=3, floor=0.03)
 
     def ctx(ic, at_trip):
         return ReentryContext(shadow=shadow, market=MarketTape(), market_at_trip=0, unstopped_path=[1.0], ic=ic, ic_at_trip=at_trip)
 
-    assert not rule.ready(ctx([0.05, 0.03, 0.01, -0.02, -0.04, 0.01], 3))   # 熔断时均值 0.03，现在 -0.017
-    assert rule.ready(ctx([0.05, 0.03, 0.01, -0.02, 0.05, 0.08], 3))        # 现在 0.037 ≥ 0.03
-    assert not rule.ready(ctx([-0.05, -0.04, -0.03, -0.04, -0.02, -0.01], 3))  # 回到熔断时的水平了，但还是负的
-    assert rule.ready(ctx([np.nan, 0.02, 0.01, 0.03], 1))                   # 熔断时不够一个窗口：只看 floor；NaN 跳过
+    assert not rule.ready(ctx([0.05, 0.03, 0.01, -0.02, -0.04, 0.01], 3))   # 熔断前均值 0.03，熔断后 -0.017
+    assert rule.ready(ctx([0.05, 0.03, 0.01, 0.05, 0.08], 3))               # 熔断后才 2 根也能比：0.065 ≥ 0.03
+    assert rule.ready(ctx([0.0, 0.0, 0.0, 0.05], 3))                        # 熔断后 1 根：0.05 ≥ max(0, 0.03)
+    assert not rule.ready(ctx([-0.1, -0.1, -0.1, 0.02, 0.02], 3))           # 回到熔断前水平了，但没过硬门槛 0.03
+    # 隔离：熔断前的高 IC 不能混进熔断后的均值（不隔离时 (0.2 + 0 + 0) / 3 = 0.067 就恢复了）
+    assert not rule.ready(ctx([-0.3, 0.2, 0.2, 0.0, 0.0], 3))
+    assert rule.ready(ctx([0.1, 0.04], 1))                                  # 熔断前不够一个窗口：只看 floor
+    assert not rule.ready(ctx([0.1, 0.1, 0.1], 3))                          # 熔断后还没有新 IC
     assert not rule.ready(ctx([np.nan] * 6, 3))                             # 没传 IC：不恢复
-    assert not rule.ready(ctx([0.1, 0.1], 0))                               # 当前不够一个窗口
 
 
 @pytest.mark.parametrize("shift", [1, 2, 3])
@@ -231,7 +237,7 @@ def test_ic_reaches_the_controller_only_after_its_holding_period_is_realized(shi
 
 
 def test_ic_rule_resumes_once_the_alpha_works_again():
-    """熔断后 IC 一直为负就一直空仓；IC 转正、平滑值回到熔断时的水平后恢复。"""
+    """熔断后 IC 一直为负就一直空仓；IC 转正、熔断后的均值过了硬门槛 0.03 才恢复。"""
     close, targets, bottom = _crash_and_rebound()
     ic = pd.Series(-0.05, index=close.index)
     turn = close.index.get_loc(bottom) + 10
@@ -242,8 +248,9 @@ def test_ic_rule_resumes_once_the_alpha_works_again():
     events = result.stop_events
     assert list(events["event"][:2]) == ["book_trip", "book_resume"]
     resume_at = close.index.get_loc(events.iloc[1]["time"])
-    # 第 turn 行的 IC 晚 1 步（shift）才知道；窗口 3：turn+1 步是 (-0.05, -0.05, 0.04) 均值仍为负，turn+2 步转正
-    assert resume_at == turn + 2
+    # 第 turn 行的 IC 晚 1 步（shift）才知道；窗口 3：turn+1 步 (-0.05, -0.05, 0.04) 为负，turn+2 步 0.01 < 0.03，
+    # turn+3 步 0.04 才过门槛
+    assert resume_at == turn + 3
 
 
 def test_stop_rules_round_trip_through_dict():

@@ -8,12 +8,16 @@
 | 简称 | 类 | 含义 |
 |---|---|---|
 | A  | `ShadowReboundScaled` | 影子组合从熔断后的最低点反弹到 `of_threshold` × 这次熔断阈值（策略见底回升了） |
-| E  | `MarketCalm`          | 最近 `window` 根大盘波动不高于熔断时同样窗口的波动（引发熔断的剧烈行情过去了） |
+| E  | `MarketCalm`          | 熔断后的大盘波动不高于熔断前 `window` 根的波动（引发熔断的剧烈行情过去了） |
 | F  | `MaxFlat`             | 熔断后空仓满 `bars` 根（纯冷却期 / 超时兜底，不看任何信号） |
-| IC | `IcRecovered`         | alpha 最近 `window` 根的平滑 RankIC 回到熔断时的水平、且不低于 `floor`（信号恢复有效了） |
+| IC | `IcRecovered`         | 熔断后的平滑 RankIC 回到熔断前 `window` 根的水平、且不低于 `floor`（信号恢复有效了） |
 
 其余几条（`UnstoppedAboveMean`、`ShadowRebound`、`ShadowRecovered`）是早期口径 / 备用，没有简称。多条规则用
 `AllOf`（都满足）/ `AnyOf`（任一满足）组合。
+
+**熔断前后隔离**（E、IC）："熔断时的水平"用熔断前最近 `window` 根算；"现在的水平"只用熔断之后新到的数据算，
+不够 `window` 根就用已有的几根（`window` 只是最长回看），不混进熔断前的数据——否则两个窗口几乎重叠，熔断后下一根
+就跟熔断时差不多，规则形同虚设。
 
 ```python
 BookStop(vol_mult=1.5, reentry=AllOf((ShadowReboundScaled(0.5), MarketCalm(window=42, ratio=1.0))))
@@ -57,6 +61,11 @@ class MarketTape:
     def vol(self, window: int, end: int | None = None) -> float:
         """截至第 `end` 根（不含，默认最新）最近 `window` 根大盘收益的标准差；数据不够返回 NaN。"""
         return _window_stat(self.market, window, end, np.std)
+
+    def vol_since(self, start: int, window: int) -> float:
+        """第 `start` 根（含）之后的大盘收益里、最近至多 `window` 根的标准差；不到 2 根返回 NaN。"""
+        values = self.market[start:][-window:] if window >= 1 else []
+        return float(np.std(values)) if len(values) >= 2 else float("nan")
 
     def mean_dispersion(self, window: int, end: int | None = None) -> float:
         """截至第 `end` 根（不含）最近 `window` 根截面分化的均值；数据不够返回 NaN。"""
@@ -172,7 +181,9 @@ class ShadowRecovered(ReentryRule):
 @register
 @dataclass(frozen=True)
 class MarketCalm(ReentryRule):
-    """大盘波动回落：最近 `window` 根大盘收益的波动不超过熔断时（同样窗口）的 `ratio` 倍。熔断时数据不够就不拦。"""
+    """大盘波动回落：熔断之后的大盘收益波动（最近至多 `window` 根）不超过熔断前 `window` 根波动的 `ratio` 倍。
+
+    熔断前后隔离：熔断后的波动只用熔断后的数据，至少 2 根才算得出，之前不恢复。熔断前数据不够一个窗口就不拦。"""
 
     name: ClassVar[str] = "market_calm"
     window: int = 42
@@ -180,38 +191,38 @@ class MarketCalm(ReentryRule):
 
     def ready(self, ctx: ReentryContext) -> bool:
         at_trip = ctx.market.vol(self.window, end=ctx.market_at_trip)
-        now = ctx.market.vol(self.window)
-        if not np.isfinite(at_trip) or not np.isfinite(now):
+        if not np.isfinite(at_trip):
             return True
-        return now <= self.ratio * at_trip
+        now = ctx.market.vol_since(ctx.market_at_trip, self.window)
+        return bool(np.isfinite(now)) and now <= self.ratio * at_trip
 
 
 @register
 @dataclass(frozen=True)
 class IcRecovered(ReentryRule):
-    """alpha 信号恢复有效：最近 `window` 根已实现 RankIC 的均值 ≥ max(熔断时同样窗口的均值, `floor`)。
+    """alpha 信号恢复有效：熔断之后已实现 RankIC 的均值（最近至多 `window` 根）≥ max(熔断前 `window` 根的均值, `floor`)。
 
-    熔断时 IC 往往已经很低，只要求"回到熔断时的水平"可能下一根就满足，所以再加一道 `floor`（默认 0：IC 至少为正）。
-    熔断时数据不够一个窗口就只看 `floor`；当前数据不够一个窗口、或窗口里全是 NaN（没传 IC）就不恢复。"""
+    熔断前后隔离：熔断后的均值只用熔断后新到的 IC（晚 `shift` 根才知道），不够 `window` 根就用已有的。`floor` 是硬门槛
+    （默认 0.03）：熔断时 IC 往往已经很低，只要求"回到熔断时的水平"太松。熔断前数据不够一个窗口就只看 `floor`；
+    熔断后还没有新 IC、或全是 NaN（没传 IC）就不恢复。"""
 
     name: ClassVar[str] = "ic_recovered"
     window: int = 42
-    floor: float = 0.0
+    floor: float = 0.03
 
     def ready(self, ctx: ReentryContext) -> bool:
-        now = _ic_mean(ctx.ic, self.window, len(ctx.ic))
+        now = _finite_mean(ctx.ic[ctx.ic_at_trip:][-self.window:]) if self.window >= 1 else float("nan")
         if not np.isfinite(now):
             return False
-        at_trip = _ic_mean(ctx.ic, self.window, ctx.ic_at_trip)
+        before = ctx.ic[ctx.ic_at_trip - self.window:ctx.ic_at_trip] if ctx.ic_at_trip >= self.window >= 1 else []
+        at_trip = _finite_mean(before)
         bar = self.floor if not np.isfinite(at_trip) else max(at_trip, self.floor)
         return now >= bar
 
 
-def _ic_mean(ic: Sequence[float], window: int, end: int) -> float:
-    """`ic[end - window:end]` 的均值（跳过 NaN）；不够一个窗口或全是 NaN 返回 NaN。"""
-    if window < 1 or end < window:
-        return float("nan")
-    values = np.asarray(ic[end - window:end], dtype=float)
+def _finite_mean(values: Sequence[float]) -> float:
+    """均值（跳过 NaN）；空或全是 NaN 返回 NaN。"""
+    values = np.asarray(values, dtype=float)
     values = values[np.isfinite(values)]
     return float(values.mean()) if values.size else float("nan")
 

@@ -88,19 +88,17 @@ MAX_TURNOVER_DECAY: float = 0.40
 # 整套网格再跑一遍，产出写到单独的 `results*/friction_stop_<名字>/`（文件格式同 friction/，04 表同一套判定逻辑），
 # 不加止损的 friction/ 不受影响。方案要事先声明、数量少，不在网格里搜阈值。
 #
-# 熔断一律用动态阈值：组合毛净值相对峰值回撤到 1.5 × 不加止损的组合最近 30 天（180 根）的波动就清仓（数据不够 30 天时
-# 先用 10%），每根 bar 都检查。几套方案只差恢复入场规则，每套只用一条（字母含义见 `sherpa/risk/reentry.py` 开头）：
-def _vol15(reentry: ReentryRule) -> StopRules:
-    return StopRules(book=BookStop(vol_mult=1.5, vol_bars=180, reentry=reentry))
-
-
+# 熔断阈值两种，各配同样四条恢复规则横比（每套只用一条，字母含义见 `sherpa/risk/reentry.py` 开头），每根 bar 都检查：
+# - vol15_*：动态阈值，组合毛净值相对峰值回撤到 1.5 × 不加止损的组合最近 30 天（180 根）的波动（数据不够 30 天时先用 10%）；
+# - fix10_*：固定阈值 10%，对照"阈值跟波动走"有没有用。
+# E、IC 熔断前后隔离：熔断时的水平用熔断前 42 根，熔断后的水平只用熔断后新到的数据（不够 42 根就用已有的）。
+_REENTRY: dict[str, ReentryRule] = {
+    "a": ShadowReboundScaled(of_threshold=0.5),   # A：影子组合从熔断后的最低点反弹到半个熔断阈值
+    "e": MarketCalm(window=42, ratio=1.0),        # E：熔断后的大盘波动不高于熔断前 42 根（7 天）
+    "f": MaxFlat(bars=42),                        # F：熔断满 42 根（7 天）就恢复，纯冷却期
+    "ic": IcRecovered(window=42, floor=0.03),     # IC：熔断后的平滑 RankIC 回到熔断前的水平，且 ≥ 0.03
+}
 STOP_CONTROLS: dict[str, StopRules] = {
-    # A：影子组合（从被平掉的持仓出发、跟随目标调仓）从熔断后的最低点反弹到半个熔断阈值
-    "vol15_a": _vol15(ShadowReboundScaled(of_threshold=0.5)),
-    # E：最近 42 根（7 天）大盘波动不高于熔断时
-    "vol15_e": _vol15(MarketCalm(window=42, ratio=1.0)),
-    # F：熔断满 42 根（7 天）就恢复，纯冷却期
-    "vol15_f": _vol15(MaxFlat(bars=42)),
-    # IC：alpha 最近 42 根的平滑 RankIC 回到熔断时的水平，且为正
-    "vol15_ic": _vol15(IcRecovered(window=42, floor=0.0)),
+    **{f"vol15_{k}": StopRules(book=BookStop(vol_mult=1.5, vol_bars=180, reentry=r)) for k, r in _REENTRY.items()},
+    **{f"fix10_{k}": StopRules(book=BookStop(max_drawdown=0.10, reentry=r)) for k, r in _REENTRY.items()},
 }
